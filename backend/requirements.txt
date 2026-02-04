@@ -1,0 +1,20 @@
+# Flask
+flask==3.1.2
+flask-sqlalchemy==3.1.1
+flask-cors==4.0.0
+python-dotenv==1.0.0
+
+# Google APIs
+google-api-python-client==2.189.0
+google-auth-oauthlib==1.2.4
+google-auth==2.48.0
+google-auth-httplib2
+
+# Anthropic
+anthropic==0.77.1
+
+# File parsing
+openpyxl==3.1.2
+
+# Other
+requests==2.32.5

@@ -1,0 +1,41 @@
+# Secrets - DO NOT COMMIT
+credentials.json
+token.json
+backend/credentials.json
+backend/token.json
+backend/data/app.db
+.env
+
+# Original script (contains API keys)
+outreach.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/node_modules/
+
+# Build
+dist/
+build/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+/tmp/
+
+# Uploads
+backend/data/uploads/
