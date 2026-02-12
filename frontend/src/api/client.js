@@ -49,7 +49,7 @@ export const approveRecipients = (id, recipientIds) =>
   api.post(`/api/campaigns/${id}/approve`, { recipient_ids: recipientIds });
 
 // Campaign Actions
-export const startCampaign = (id) => api.post(`/api/campaigns/${id}/start`);
+export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);
 export const resumeCampaign = (id) => api.post(`/api/campaigns/${id}/resume`);
 export const cancelCampaign = (id) => api.post(`/api/campaigns/${id}/cancel`);

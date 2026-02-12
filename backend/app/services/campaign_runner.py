@@ -67,10 +67,22 @@ class CampaignRunner:
                 if not recipient:
                     continue
 
+                # Skip recipients without generated content
+                if not recipient.personalized_body or not recipient.personalized_body.strip():
+                    recipient.status = 'skipped'
+                    recipient.error_message = 'No personalized content generated'
+                    state.progress['failed'] += 1
+
+                    campaign = Campaign.query.get(state.campaign_id)
+                    if campaign:
+                        campaign.failed_count += 1
+                    db.session.commit()
+                    continue
+
                 # Send email
                 try:
-                    subject = recipient.personalized_subject or 'No subject'
-                    body = recipient.personalized_body or 'No content'
+                    subject = recipient.personalized_subject or recipient.email
+                    body = recipient.personalized_body
 
                     result = gmail.send_email(
                         to=recipient.email,

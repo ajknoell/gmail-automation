@@ -100,7 +100,13 @@ function CampaignDetail() {
   const handleGeneratePreview = async () => {
     setGenerating(true);
     try {
-      await generatePreview(id);
+      const res = await generatePreview(id);
+      const { generated, failed, total, message } = res.data;
+      if (message) {
+        alert(message);
+      } else if (generated !== undefined) {
+        alert(`Generated ${generated} of ${total} emails${failed ? ` (${failed} fell back to template)` : ''}`);
+      }
       loadData();
     } catch (error) {
       alert('Failed to generate previews: ' + (error.response?.data?.error || error.message));
@@ -122,7 +128,23 @@ function CampaignDetail() {
       await startCampaign(id);
       loadData();
     } catch (error) {
-      alert('Failed to start campaign: ' + (error.response?.data?.error || error.message));
+      const data = error.response?.data;
+      if (data?.ungenerated_count) {
+        const proceed = confirm(
+          `${data.ungenerated_count} of ${data.total_approved} recipients do not have generated emails. ` +
+          `These recipients will be skipped.\n\nDo you want to proceed anyway?`
+        );
+        if (proceed) {
+          try {
+            await startCampaign(id, { force: true });
+            loadData();
+          } catch (e) {
+            alert('Failed to start campaign: ' + (e.response?.data?.error || e.message));
+          }
+        }
+      } else {
+        alert('Failed to start campaign: ' + (data?.error || error.message));
+      }
     }
   };
 
@@ -165,6 +187,8 @@ function CampaignDetail() {
   const pendingCount = recipients.filter((r) => r.status === 'pending').length;
   const approvedCount = recipients.filter((r) => r.approved).length;
   const hasPersonalized = recipients.some((r) => r.personalized_body);
+  const generatedCount = recipients.filter((r) => r.personalized_body).length;
+  const ungeneratedCount = recipients.length - generatedCount;
 
   return (
     <div>
@@ -240,9 +264,13 @@ function CampaignDetail() {
                   <button
                     className="btn btn-secondary"
                     onClick={handleGeneratePreview}
-                    disabled={generating}
+                    disabled={generating || ungeneratedCount === 0}
                   >
-                    {generating ? 'Generating...' : '🤖 Generate AI Previews'}
+                    {generating
+                      ? 'Generating...'
+                      : ungeneratedCount > 0
+                        ? `🤖 Generate AI Previews (${ungeneratedCount} remaining)`
+                        : '🤖 All Previews Generated'}
                   </button>
                   <button className="btn btn-secondary" onClick={handleApproveAll}>
                     ✓ Approve All

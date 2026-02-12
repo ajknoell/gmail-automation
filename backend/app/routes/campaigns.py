@@ -157,8 +157,15 @@ def generate_preview(id):
         return jsonify({'error': 'Anthropic API key not configured'}), 400
 
     claude = ClaudeService(api_key)
-    recipients = Recipient.query.filter_by(campaign_id=id, status='pending').limit(10).all()
+    recipients = Recipient.query.filter_by(campaign_id=id, status='pending').filter(
+        (Recipient.personalized_body == None) | (Recipient.personalized_body == '')
+    ).all()
 
+    if not recipients:
+        return jsonify({'success': True, 'generated': 0, 'message': 'All emails already generated'})
+
+    generated = 0
+    failed = 0
     for recipient in recipients:
         try:
             result = claude.personalize_email(
@@ -174,12 +181,15 @@ def generate_preview(id):
             )
             recipient.personalized_subject = result.get('subject', campaign.template.subject)
             recipient.personalized_body = result.get('body', campaign.template.body)
+            generated += 1
         except Exception as e:
             recipient.personalized_subject = campaign.template.subject
             recipient.personalized_body = campaign.template.body
+            failed += 1
+        # Commit after each to preserve progress
+        db.session.commit()
 
-    db.session.commit()
-    return jsonify({'success': True, 'generated': len(recipients)})
+    return jsonify({'success': True, 'generated': generated, 'failed': failed, 'total': len(recipients)})
 
 @campaigns_bp.route('/<int:id>/approve', methods=['POST'])
 def approve_recipients(id):
@@ -212,6 +222,17 @@ def start_campaign(id):
 
     if not recipients:
         return jsonify({'error': 'No approved recipients to send to'}), 400
+
+    # Check for recipients without generated content
+    ungenerated = [r for r in recipients if not r.personalized_body or not r.personalized_body.strip()]
+    if ungenerated:
+        force = request.get_json() and request.get_json().get('force')
+        if not force:
+            return jsonify({
+                'error': f'{len(ungenerated)} of {len(recipients)} approved recipients do not have generated email content. Generate previews first, or start with force=true to skip those recipients.',
+                'ungenerated_count': len(ungenerated),
+                'total_approved': len(recipients)
+            }), 400
 
     campaign.status = 'running'
     campaign.started_at = datetime.utcnow()
