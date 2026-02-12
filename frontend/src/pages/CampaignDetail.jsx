@@ -88,7 +88,9 @@ function CampaignDetail() {
 
     setUploading(true);
     try {
-      await uploadRecipients(id, file);
+      const res = await uploadRecipients(id, file);
+      const { total_recipients, skipped } = res.data;
+      alert(`Imported ${total_recipients} recipients${skipped ? ` (${skipped} rows skipped due to invalid/missing email)` : ''}`);
       loadData();
     } catch (error) {
       alert('Failed to upload file: ' + (error.response?.data?.error || error.message));

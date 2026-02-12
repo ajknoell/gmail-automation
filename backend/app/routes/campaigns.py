@@ -101,13 +101,27 @@ def upload_recipients(id):
         if field_mapping:
             mapping.update(json.loads(field_mapping))
 
+        # Validate that an email column was detected
+        if 'email' not in mapping:
+            return jsonify({
+                'error': f'Could not detect an email column in your file. Found columns: {", ".join(headers)}. '
+                         f'Please ensure your file has a column with "email" in the header name.',
+                'headers': headers,
+                'mapping': mapping
+            }), 400
+
+        if not rows:
+            return jsonify({'error': 'File contains no data rows'}), 400
+
         # Clear existing recipients
         Recipient.query.filter_by(campaign_id=id).delete()
 
         # Import recipients
+        skipped = 0
         for row in rows:
             email = row.get(mapping.get('email', ''), '').strip()
             if not email or '@' not in email:
+                skipped += 1
                 continue
 
             recipient = Recipient(
@@ -124,14 +138,24 @@ def upload_recipients(id):
 
             db.session.add(recipient)
 
+        db.session.commit()
         campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count()
         db.session.commit()
+
+        if campaign.total_recipients == 0:
+            return jsonify({
+                'error': f'No valid email addresses found. {skipped} rows were skipped due to missing or invalid emails. '
+                         f'Email column detected: "{mapping.get("email")}". Please check your file.',
+                'headers': headers,
+                'mapping': mapping
+            }), 400
 
         return jsonify({
             'success': True,
             'headers': headers,
             'mapping': mapping,
-            'total_recipients': campaign.total_recipients
+            'total_recipients': campaign.total_recipients,
+            'skipped': skipped
         })
 
     except Exception as e:
