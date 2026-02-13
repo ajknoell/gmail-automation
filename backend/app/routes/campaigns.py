@@ -389,8 +389,11 @@ def generate_preview(id):
             recipient.personalized_body = result.get('body', campaign.template.body)
             generated += 1
         except Exception as e:
-            recipient.personalized_subject = campaign.template.subject
-            recipient.personalized_body = campaign.template.body
+            # Do NOT set personalized_body on failure — leave the recipient
+            # in the unpersonalized pool so they can be retried next batch.
+            current_app.logger.warning(
+                f"Failed to personalize recipient {recipient.id} ({recipient.email}): {e}"
+            )
             failed += 1
 
     db.session.commit()

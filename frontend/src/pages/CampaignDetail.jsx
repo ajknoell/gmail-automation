@@ -489,10 +489,10 @@ function CampaignDetail() {
                   </button>
                   <button
                     className="btn btn-secondary"
-                    onClick={() => handleGeneratePreview(50)}
+                    onClick={() => handleGeneratePreview(10)}
                     disabled={generating}
                   >
-                    {generating ? 'Generating...' : 'Generate AI Previews'}
+                    {generating ? 'Generating...' : 'Generate 10'}
                   </button>
                   <button
                     className="btn btn-secondary"

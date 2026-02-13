@@ -119,5 +119,15 @@ class WebsiteAnalyzer:
         if not text or len(text) < 50:
             return None
 
-        company = recipient.get('company') or url
+        company = recipient.get('company')
+        if not company:
+            # Extract a readable name from the domain instead of using the raw URL
+            from urllib.parse import urlparse
+            parsed = urlparse(url if '://' in url else f'https://{url}')
+            domain = parsed.hostname or url
+            # Strip common prefixes like 'www.'
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            # Use just the domain name part (e.g. "acmestartup" from "acmestartup.com")
+            company = domain.split('.')[0].capitalize()
         return claude_service.analyze_website(text, company, url)
