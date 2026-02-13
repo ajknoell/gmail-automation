@@ -8,5 +8,5 @@ app = create_app()
 if __name__ == '__main__':
     print("Starting Gmail Automation Backend...")
     print("API running at http://localhost:5001")
-    print("Frontend should run at http://localhost:5173")
+    print("Frontend should run at http://localhost:5174")
     app.run(host='127.0.0.1', port=5001, debug=True)

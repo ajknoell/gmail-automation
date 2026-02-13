@@ -7,6 +7,7 @@ from datetime import datetime
 @dataclass
 class CampaignState:
     campaign_id: int
+    account_id: Optional[int] = None
     thread: Optional[threading.Thread] = None
     pause_event: threading.Event = field(default_factory=threading.Event)
     cancel_event: threading.Event = field(default_factory=threading.Event)
@@ -17,7 +18,7 @@ class CampaignRunner:
     _lock = threading.Lock()
 
     @classmethod
-    def start(cls, campaign_id: int, recipient_ids: List[int], delay: int):
+    def start(cls, campaign_id: int, recipient_ids: List[int], delay: int, account_id: Optional[int] = None):
         """Start a campaign in background thread."""
         with cls._lock:
             if campaign_id in cls._instances:
@@ -25,6 +26,7 @@ class CampaignRunner:
 
             state = CampaignState(
                 campaign_id=campaign_id,
+                account_id=account_id,
                 progress={'sent': 0, 'failed': 0, 'total': len(recipient_ids)}
             )
             state.pause_event.set()  # Start unpaused
@@ -68,16 +70,27 @@ class CampaignRunner:
         from app import db, create_app
         from app.models import Campaign, Recipient, EmailLog
         from app.services.gmail_service import GmailService
+        from app.services.tracking_service import TrackingService
+        import json as json_module
 
         app = create_app()
         with app.app_context():
-            gmail = GmailService()
+            base_url = app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+            gmail = GmailService(account_id=state.account_id)
             if not gmail.connect():
                 cls._finish_campaign(state.campaign_id, 'failed')
                 return
 
-            campaign = Campaign.query.get(state.campaign_id)
-            template = campaign.template if campaign else None
+            # Load campaign and its workspace_id once
+            campaign_obj = Campaign.query.get(state.campaign_id)
+            campaign_workspace_id = campaign_obj.workspace_id if campaign_obj else None
+            template = campaign_obj.template if campaign_obj else None
+            campaign_attachments = None
+            if campaign_obj:
+                att_list = campaign_obj.get_attachments()
+                if att_list:
+                    from app.routes.quick_send import _resolve_attachments
+                    campaign_attachments = _resolve_attachments(att_list) or None
 
             for recipient_id in recipient_ids:
                 # Check for cancellation
@@ -109,10 +122,16 @@ class CampaignRunner:
                     else:
                         body = 'No content'
 
+                    tracking_id = TrackingService.generate_tracking_id()
+
                     result = gmail.send_email(
                         to=recipient.email,
                         subject=subject,
-                        body=body
+                        body=body,
+                        html=True,
+                        tracking_id=tracking_id,
+                        base_url=base_url,
+                        attachments=campaign_attachments,
                     )
 
                     if result.get('success'):
@@ -125,16 +144,32 @@ class CampaignRunner:
                         if campaign:
                             campaign.sent_count += 1
 
-                        # Log
+                        # Log with tracking data
                         log = EmailLog(
+                            workspace_id=campaign_workspace_id,
                             recipient_id=recipient.id,
                             campaign_id=state.campaign_id,
                             gmail_message_id=result.get('message_id'),
+                            gmail_thread_id=result.get('thread_id'),
+                            gmail_account_id=state.account_id,
+                            recipient_email=recipient.email,
+                            tracking_id=tracking_id,
                             subject=subject,
                             body=body,
-                            status='sent'
+                            status='sent',
+                            is_html=True,
+                            link_map=json_module.dumps(result.get('link_map') or {}),
                         )
                         db.session.add(log)
+
+                        # Auto-add/update contact directory
+                        from app.models.contact import Contact
+                        Contact.upsert_from_send(
+                            email=recipient.email,
+                            name=recipient.name,
+                            company=recipient.company,
+                            workspace_id=campaign_workspace_id,
+                        )
                     else:
                         recipient.status = 'failed'
                         recipient.error_message = result.get('error', 'Unknown error')
@@ -145,8 +180,10 @@ class CampaignRunner:
                             campaign.failed_count += 1
 
                         log = EmailLog(
+                            workspace_id=campaign_workspace_id,
                             recipient_id=recipient.id,
                             campaign_id=state.campaign_id,
+                            recipient_email=recipient.email,
                             subject=subject,
                             status='failed',
                             error_details=result.get('error')

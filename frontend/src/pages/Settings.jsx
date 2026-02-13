@@ -1,20 +1,63 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getAuthStatus, getSettings, saveSettings, disconnectGmail, getGmailConnectUrl } from '../api/client';
+import {
+  getAuthStatus,
+  getSettings,
+  saveSettings,
+  getGmailConnectUrl,
+  getGmailAccounts,
+  disconnectGmailAccount,
+  setDefaultGmailAccount,
+  getClaySettings,
+  saveClaySettings,
+  getClayWebhookUrl
+} from '../api/client';
+
+const DEFAULT_WRITING_STYLE = {
+  tone: 'Casual but buttoned up. California-friendly - warm and personable but still professional. NOT a New York finance bro vibe. Approachable and real.',
+  opening_style: 'Start with a warm opening to lighten the mood and see if there\'s a connection. Grab their attention quickly - founders are busy.',
+  value_prop_style: 'Show I understand their business and can connect the dots between our businesses without sounding weird or coming in "too hot." Lead with how I can benefit them.',
+  length: 'Short - 2-4 sentences, concise but complete',
+  closing_style: 'Close casually. Soft ask, not aggressive. Keep it low-pressure.',
+  phrases_to_use: '',
+  phrases_to_avoid: '"I hope this finds you well", corporate jargon, anything too salesy or pushy, generic mass-email language',
+  additional_notes: 'My emails work because I prove I understand their business. I connect the dots without being "too hot." Owners appreciate my casual yet tailored approach - it never feels like a mass email.'
+};
 
 function Settings({ onStatusChange }) {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
-  const [settings, setSettings] = useState({ anthropic_api_key: '' });
+  const [settings, setSettings] = useState({ anthropic_api_key: '', writing_style: null });
+  const [gmailAccounts, setGmailAccounts] = useState([]);
   const [apiKey, setApiKey] = useState('');
+  const [writingStyle, setWritingStyle] = useState(DEFAULT_WRITING_STYLE);
   const [saving, setSaving] = useState(false);
+  const [savingStyle, setSavingStyle] = useState(false);
   const [message, setMessage] = useState('');
+  const [claySettings, setClaySettings] = useState({
+    clay_webhook_secret: '',
+    clay_export_webhook_url: '',
+    clay_export_enabled: false
+  });
+  const [clayWebhookUrl, setClayWebhookUrl] = useState('');
+  const [savingClay, setSavingClay] = useState(false);
+
+  const loadGmailAccounts = async () => {
+    try {
+      const res = await getGmailAccounts();
+      setGmailAccounts(res.data.accounts || []);
+    } catch (error) {
+      console.error('Failed to load Gmail accounts:', error);
+    }
+  };
 
   useEffect(() => {
     // Check for OAuth callback messages
     const gmailStatus = searchParams.get('gmail');
     if (gmailStatus === 'connected') {
-      setMessage('Gmail connected successfully!');
+      setMessage('Gmail account connected successfully!');
+    } else if (gmailStatus === 'updated') {
+      setMessage('Gmail account updated successfully!');
     } else if (gmailStatus === 'error') {
       setMessage('Failed to connect Gmail: ' + (searchParams.get('message') || 'Unknown error'));
     }
@@ -26,8 +69,47 @@ function Settings({ onStatusChange }) {
     });
     getSettings().then((res) => {
       setSettings(res.data);
+      if (res.data.writing_style) {
+        setWritingStyle({ ...DEFAULT_WRITING_STYLE, ...res.data.writing_style });
+      }
     });
+    loadGmailAccounts();
+
+    // Load Clay settings
+    getClaySettings().then((res) => setClaySettings(res.data)).catch(() => {});
+    getClayWebhookUrl().then((res) => setClayWebhookUrl(res.data.webhook_url)).catch(() => {});
+
+    // Reload writing style when workspace changes
+    const handleWsChange = () => {
+      getSettings().then((res) => {
+        setSettings(res.data);
+        if (res.data.writing_style) {
+          setWritingStyle({ ...DEFAULT_WRITING_STYLE, ...res.data.writing_style });
+        } else {
+          setWritingStyle(DEFAULT_WRITING_STYLE);
+        }
+      });
+    };
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, [searchParams, onStatusChange]);
+
+  const handleSaveWritingStyle = async () => {
+    setSavingStyle(true);
+    try {
+      await saveSettings({ writing_style: writingStyle });
+      setMessage('Writing style saved successfully!');
+      const settingsRes = await getSettings();
+      setSettings(settingsRes.data);
+    } catch (error) {
+      setMessage('Failed to save writing style');
+    }
+    setSavingStyle(false);
+  };
+
+  const updateStyleField = (field, value) => {
+    setWritingStyle(prev => ({ ...prev, [field]: value }));
+  };
 
   const handleSaveApiKey = async () => {
     if (!apiKey.trim()) return;
@@ -47,16 +129,38 @@ function Settings({ onStatusChange }) {
     setSaving(false);
   };
 
-  const handleDisconnectGmail = async () => {
-    if (!confirm('Are you sure you want to disconnect Gmail?')) return;
+  const handleSaveClaySettings = async () => {
+    setSavingClay(true);
     try {
-      await disconnectGmail();
+      await saveClaySettings(claySettings);
+      setMessage('Clay settings saved successfully!');
+    } catch (error) {
+      setMessage('Failed to save Clay settings');
+    }
+    setSavingClay(false);
+  };
+
+  const handleDisconnectGmailAccount = async (accountId, email) => {
+    if (!confirm(`Are you sure you want to disconnect ${email}?`)) return;
+    try {
+      await disconnectGmailAccount(accountId);
+      await loadGmailAccounts();
       const statusRes = await getAuthStatus();
       setStatus(statusRes.data);
       onStatusChange(statusRes.data);
-      setMessage('Gmail disconnected');
+      setMessage(`${email} disconnected`);
     } catch (error) {
-      setMessage('Failed to disconnect Gmail');
+      setMessage('Failed to disconnect Gmail account');
+    }
+  };
+
+  const handleSetDefaultAccount = async (accountId) => {
+    try {
+      await setDefaultGmailAccount(accountId);
+      await loadGmailAccounts();
+      setMessage('Default account updated');
+    } catch (error) {
+      setMessage('Failed to set default account');
     }
   };
 
@@ -70,37 +174,75 @@ function Settings({ onStatusChange }) {
         </div>
       )}
 
-      {/* Gmail Connection */}
+      {/* Gmail Accounts */}
       <div className="card mb-4">
-        <h3 className="card-title mb-2">Gmail Connection</h3>
+        <h3 className="card-title mb-2">Gmail Accounts <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
         <p className="text-sm text-light mb-2">
-          Connect your Gmail account to send emails through the Gmail API.
+          Connect multiple Gmail accounts to send emails from different addresses.
         </p>
 
-        {status.gmail_connected ? (
-          <div className="flex items-center gap-2">
-            <span className="badge badge-completed">Connected</span>
-            <button className="btn btn-danger btn-sm" onClick={handleDisconnectGmail}>
-              Disconnect
-            </button>
+        {gmailAccounts.length > 0 ? (
+          <div style={{ marginBottom: '1rem' }}>
+            {gmailAccounts.map((account) => (
+              <div
+                key={account.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '0.75rem',
+                  background: account.is_default ? '#E0F2FE' : '#F9FAFB',
+                  borderRadius: '0.5rem',
+                  marginBottom: '0.5rem'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontWeight: 500 }}>{account.email_address}</span>
+                  {account.is_default && (
+                    <span className="badge badge-completed" style={{ fontSize: '0.7rem' }}>
+                      Default
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {!account.is_default && (
+                    <button
+                      className="btn btn-sm"
+                      style={{ background: '#E5E7EB', color: '#374151' }}
+                      onClick={() => handleSetDefaultAccount(account.id)}
+                    >
+                      Set Default
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-danger btn-sm"
+                    onClick={() => handleDisconnectGmailAccount(account.id, account.email_address)}
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <a href={getGmailConnectUrl()} className="btn btn-primary">
-            Connect Gmail Account
-          </a>
+          <p className="text-sm text-light mb-2">No Gmail accounts connected.</p>
         )}
+
+        <a href={getGmailConnectUrl()} className="btn btn-primary">
+          {gmailAccounts.length > 0 ? 'Connect Another Account' : 'Connect Gmail Account'}
+        </a>
       </div>
 
       {/* Anthropic API Key */}
       <div className="card mb-4">
-        <h3 className="card-title mb-2">Anthropic API Key</h3>
+        <h3 className="card-title mb-2">Anthropic API Key <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
         <p className="text-sm text-light mb-2">
-          Enter your Anthropic API key for AI-powered email personalization.
+          Enter your Anthropic API key for AI-powered email personalization. Shared across all workspaces.
         </p>
 
         {settings.anthropic_api_key && (
           <p className="mb-2">
-            Current key: <code>{settings.anthropic_api_key}</code>
+            Current key: <code>{settings.anthropic_api_key.slice(0, 12)}...{settings.anthropic_api_key.slice(-4)}</code>
           </p>
         )}
 
@@ -121,6 +263,241 @@ function Settings({ onStatusChange }) {
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
+      </div>
+
+      {/* Writing Style Profile */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">✍️ Your Writing Style <span style={{ fontSize: '12px', background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
+        <p className="text-sm text-light mb-4">
+          Train the AI to write emails exactly like you. This style is saved per workspace — each business can have its own voice.
+        </p>
+
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              Tone & Vibe
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              placeholder="e.g., Casual but buttoned up. California-friendly, professional but not corporate. Warm and personable, never stiff."
+              value={writingStyle.tone}
+              onChange={(e) => updateStyleField('tone', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              How You Open Emails
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              placeholder="e.g., Start with a warm opening to lighten the mood. Show I've done my homework on their business. Grab attention quickly."
+              value={writingStyle.opening_style}
+              onChange={(e) => updateStyleField('opening_style', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              How You Present Value
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              placeholder="e.g., Connect the dots between our businesses without being too salesy. Show I understand their business. Lead with how I can benefit them."
+              value={writingStyle.value_prop_style}
+              onChange={(e) => updateStyleField('value_prop_style', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              Email Length
+            </label>
+            <select
+              className="form-input"
+              value={writingStyle.length}
+              onChange={(e) => updateStyleField('length', e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <option value="">Select length preference...</option>
+              <option value="Very short - 1-2 sentences, punchy">Very short (1-2 sentences)</option>
+              <option value="Short - 2-4 sentences, concise but complete">Short (2-4 sentences)</option>
+              <option value="Medium - 1-2 short paragraphs">Medium (1-2 paragraphs)</option>
+              <option value="Longer - detailed but not overwhelming">Longer (detailed)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              How You Close / CTA
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              placeholder="e.g., Close casually. Soft ask, not aggressive. Something like 'Would love to chat if interested' rather than 'Let's book a call this week.'"
+              value={writingStyle.closing_style}
+              onChange={(e) => updateStyleField('closing_style', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              Phrases or Patterns You Like
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              placeholder="e.g., 'Came across your work...', 'Thought this might resonate...', signing off with just my first name"
+              value={writingStyle.phrases_to_use}
+              onChange={(e) => updateStyleField('phrases_to_use', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              Phrases to Avoid
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              placeholder="e.g., 'I hope this finds you well', 'Just following up', 'Circling back', corporate jargon, pushy language"
+              value={writingStyle.phrases_to_avoid}
+              onChange={(e) => updateStyleField('phrases_to_avoid', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+              What Makes Your Emails Work
+            </label>
+            <textarea
+              className="form-input"
+              rows={3}
+              placeholder="e.g., I prove I understand their business. I connect the dots without coming in 'too hot.' Owners appreciate my casual yet tailored approach. I never sound like a mass email."
+              value={writingStyle.additional_notes}
+              onChange={(e) => updateStyleField('additional_notes', e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          <div>
+            <button
+              className="btn btn-primary"
+              onClick={handleSaveWritingStyle}
+              disabled={savingStyle}
+            >
+              {savingStyle ? 'Saving...' : 'Save Writing Style'}
+            </button>
+            {settings.writing_style && (
+              <span className="text-sm text-light" style={{ marginLeft: '1rem' }}>
+                ✓ Style profile saved
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Clay Integration */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Clay Integration</h3>
+        <p className="text-sm text-light mb-4">
+          Connect with Clay to import enriched contacts and export tracking data.
+        </p>
+
+        {/* Inbound Webhook URL */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+            Inbound Webhook URL (for Clay to send contacts)
+          </label>
+          <p className="text-sm text-light mb-1">
+            Add this URL as an HTTP action in Clay to push enriched contacts into campaigns.
+          </p>
+          <div className="flex gap-2" style={{ alignItems: 'center' }}>
+            <code
+              style={{
+                flex: 1,
+                padding: '0.5rem 0.75rem',
+                background: '#F3F4F6',
+                borderRadius: '0.375rem',
+                fontSize: '0.85rem',
+                wordBreak: 'break-all'
+              }}
+            >
+              {clayWebhookUrl || 'Loading...'}
+            </code>
+            <button
+              className="btn btn-sm"
+              style={{ background: '#E5E7EB', color: '#374151', whiteSpace: 'nowrap' }}
+              onClick={() => {
+                navigator.clipboard.writeText(clayWebhookUrl);
+                setMessage('Webhook URL copied!');
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+
+        {/* Webhook Secret */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+            Webhook Secret (optional)
+          </label>
+          <p className="text-sm text-light mb-1">
+            If set, incoming webhooks must include a valid X-Clay-Signature header.
+          </p>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Enter a secret key..."
+            value={claySettings.clay_webhook_secret}
+            onChange={(e) => setClaySettings(prev => ({ ...prev, clay_webhook_secret: e.target.value }))}
+            style={{ width: '100%' }}
+          />
+        </div>
+
+        {/* Outbound Export */}
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+            Export Webhook URL (push tracking data to Clay)
+          </label>
+          <p className="text-sm text-light mb-1">
+            When enabled, opens/clicks/replies are sent to this URL in real-time. You can also manually export full campaign results.
+          </p>
+          <input
+            type="url"
+            className="form-input"
+            placeholder="https://api.clay.com/v1/webhooks/..."
+            value={claySettings.clay_export_webhook_url}
+            onChange={(e) => setClaySettings(prev => ({ ...prev, clay_export_webhook_url: e.target.value }))}
+            style={{ width: '100%', marginBottom: '0.5rem' }}
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={claySettings.clay_export_enabled}
+              onChange={(e) => setClaySettings(prev => ({ ...prev, clay_export_enabled: e.target.checked }))}
+            />
+            <span className="text-sm">Enable real-time tracking export to Clay</span>
+          </label>
+        </div>
+
+        <button
+          className="btn btn-primary"
+          onClick={handleSaveClaySettings}
+          disabled={savingClay}
+        >
+          {savingClay ? 'Saving...' : 'Save Clay Settings'}
+        </button>
       </div>
 
       {/* Setup Instructions */}
