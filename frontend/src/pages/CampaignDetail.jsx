@@ -12,6 +12,7 @@ import {
   cancelCampaign,
   exportCampaign,
   getCampaignProgressUrl,
+  sendIndividual,
 } from '../api/client';
 
 function CampaignDetail() {
@@ -21,6 +22,7 @@ function CampaignDetail() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [sendingIds, setSendingIds] = useState(new Set());
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
 
@@ -97,10 +99,21 @@ function CampaignDetail() {
     fileInputRef.current.value = '';
   };
 
-  const handleGeneratePreview = async () => {
+  const handleGeneratePreview = async (batchSize) => {
     setGenerating(true);
     try {
-      await generatePreview(id);
+      const res = await generatePreview(id, batchSize);
+      const { generated, remaining } = res.data;
+      if (remaining > 0) {
+        const continueGenerating = confirm(
+          `Generated ${generated} emails. ${remaining} recipients remaining.\n\nGenerate the next batch?`
+        );
+        if (continueGenerating) {
+          await loadData();
+          handleGeneratePreview(batchSize);
+          return;
+        }
+      }
       loadData();
     } catch (error) {
       alert('Failed to generate previews: ' + (error.response?.data?.error || error.message));
@@ -152,6 +165,21 @@ function CampaignDetail() {
     } catch (error) {
       alert('Failed to cancel campaign');
     }
+  };
+
+  const handleSendIndividual = async (recipientId) => {
+    setSendingIds((prev) => new Set(prev).add(recipientId));
+    try {
+      await sendIndividual(id, recipientId);
+      loadData();
+    } catch (error) {
+      alert('Failed to send: ' + (error.response?.data?.error || error.message));
+    }
+    setSendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(recipientId);
+      return next;
+    });
   };
 
   if (loading) {
@@ -239,10 +267,18 @@ function CampaignDetail() {
                 <>
                   <button
                     className="btn btn-secondary"
-                    onClick={handleGeneratePreview}
+                    onClick={() => handleGeneratePreview(50)}
                     disabled={generating}
                   >
                     {generating ? 'Generating...' : '🤖 Generate AI Previews'}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleGeneratePreview(0)}
+                    disabled={generating}
+                    title="Generate personalized emails for all recipients at once"
+                  >
+                    {generating ? 'Generating...' : '🤖 Generate All'}
                   </button>
                   <button className="btn btn-secondary" onClick={handleApproveAll}>
                     ✓ Approve All
@@ -303,6 +339,7 @@ function CampaignDetail() {
                   <th>Status</th>
                   <th>Approved</th>
                   <th>Preview</th>
+                  <th>Send</th>
                 </tr>
               </thead>
               <tbody>
@@ -331,8 +368,36 @@ function CampaignDetail() {
                             <p><strong>Subject:</strong> {recipient.personalized_subject}</p>
                             <hr style={{ margin: '0.5rem 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
                             <p style={{ whiteSpace: 'pre-wrap' }}>{recipient.personalized_body}</p>
+                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                              {recipient.status === 'sent' ? (
+                                <span className="btn btn-sm" style={{ color: '#10B981', cursor: 'default' }}>Sent</span>
+                              ) : (
+                                <button
+                                  className="btn btn-success btn-sm"
+                                  onClick={() => handleSendIndividual(recipient.id)}
+                                  disabled={sendingIds.has(recipient.id)}
+                                >
+                                  {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </details>
+                      ) : (
+                        <span className="text-light">-</span>
+                      )}
+                    </td>
+                    <td>
+                      {recipient.status === 'sent' ? (
+                        <span style={{ color: '#10B981' }}>Sent</span>
+                      ) : recipient.personalized_body ? (
+                        <button
+                          className="btn btn-success btn-sm"
+                          onClick={() => handleSendIndividual(recipient.id)}
+                          disabled={sendingIds.has(recipient.id)}
+                        >
+                          {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
+                        </button>
                       ) : (
                         <span className="text-light">-</span>
                       )}

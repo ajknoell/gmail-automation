@@ -165,13 +165,33 @@ def _substitute_template_variables(text, recipient):
 
 @campaigns_bp.route('/<int:id>/generate-preview', methods=['POST'])
 def generate_preview(id):
-    """Generate personalized emails for preview (AI or simple substitution)."""
+    """Generate personalized emails for preview (AI or simple substitution).
+
+    Accepts optional JSON body:
+        batch_size: Number of emails to generate (default 50, 0 for all)
+    """
     campaign = Campaign.query.get_or_404(id)
 
     if not campaign.template:
         return jsonify({'error': 'No template selected'}), 400
 
-    recipients = Recipient.query.filter_by(campaign_id=id, status='pending').limit(10).all()
+    data = request.get_json(silent=True) or {}
+    batch_size = data.get('batch_size', 50)
+
+    # Load all pending recipients, then filter out already-personalized ones in Python
+    # (avoids SQL NULL comparison issues across different DB engines)
+    all_pending = Recipient.query.filter_by(campaign_id=id, status='pending').all()
+    unpersonalized = [r for r in all_pending if not r.personalized_body]
+
+    if batch_size > 0:
+        recipients = unpersonalized[:batch_size]
+    else:
+        recipients = unpersonalized
+
+    remaining = len(unpersonalized) - len(recipients) if batch_size > 0 else 0
+
+    generated = 0
+    failed = 0
 
     if campaign.use_ai_personalization:
         api_key = Settings.get('anthropic_api_key')
@@ -195,12 +215,14 @@ def generate_preview(id):
                 )
                 recipient.personalized_subject = result.get('subject', campaign.template.subject)
                 recipient.personalized_body = result.get('body', campaign.template.body)
+                generated += 1
             except Exception as e:
                 # Fall back to simple variable substitution on AI failure
                 recipient.personalized_subject = _substitute_template_variables(
                     campaign.template.subject, recipient)
                 recipient.personalized_body = _substitute_template_variables(
                     campaign.template.body, recipient)
+                failed += 1
     else:
         # Simple {{variable}} substitution without AI
         for recipient in recipients:
@@ -208,9 +230,80 @@ def generate_preview(id):
                 campaign.template.subject, recipient)
             recipient.personalized_body = _substitute_template_variables(
                 campaign.template.body, recipient)
+            generated += 1
 
     db.session.commit()
-    return jsonify({'success': True, 'generated': len(recipients)})
+    return jsonify({
+        'success': True,
+        'generated': generated,
+        'failed': failed,
+        'remaining': remaining
+    })
+
+@campaigns_bp.route('/<int:id>/send-individual', methods=['POST'])
+def send_individual(id):
+    """Send email to a single recipient."""
+    campaign = Campaign.query.get_or_404(id)
+
+    data = request.get_json()
+    recipient_id = data.get('recipient_id')
+    if not recipient_id:
+        return jsonify({'error': 'recipient_id is required'}), 400
+
+    recipient = Recipient.query.filter_by(id=recipient_id, campaign_id=id).first()
+    if not recipient:
+        return jsonify({'error': 'Recipient not found'}), 404
+
+    if recipient.status == 'sent':
+        return jsonify({'error': 'Email already sent to this recipient'}), 400
+
+    if not recipient.personalized_body:
+        return jsonify({'error': 'No personalized content generated for this recipient'}), 400
+
+    from app.services.gmail_service import GmailService
+    gmail = GmailService()
+    if not gmail.connect():
+        return jsonify({'error': 'Gmail not connected'}), 400
+
+    subject = recipient.personalized_subject or 'No subject'
+    body = recipient.personalized_body
+
+    result = gmail.send_email(to=recipient.email, subject=subject, body=body)
+
+    if result.get('success'):
+        recipient.status = 'sent'
+        recipient.sent_at = datetime.utcnow()
+        campaign.sent_count += 1
+
+        log = EmailLog(
+            recipient_id=recipient.id,
+            campaign_id=id,
+            gmail_message_id=result.get('message_id'),
+            subject=subject,
+            body=body,
+            status='sent'
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({'success': True, 'status': 'sent'})
+    else:
+        error = result.get('error', 'Unknown error')
+        recipient.status = 'failed'
+        recipient.error_message = error
+        campaign.failed_count += 1
+
+        log = EmailLog(
+            recipient_id=recipient.id,
+            campaign_id=id,
+            subject=subject,
+            status='failed',
+            error_details=error
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({'error': f'Failed to send: {error}'}), 500
 
 @campaigns_bp.route('/<int:id>/approve', methods=['POST'])
 def approve_recipients(id):
