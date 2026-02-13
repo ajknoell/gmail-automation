@@ -44,9 +44,12 @@ export const uploadRecipients = (id, file, mapping) => {
   });
 };
 export const getRecipients = (id) => api.get(`/api/campaigns/${id}/recipients`);
-export const generatePreview = (id) => api.post(`/api/campaigns/${id}/generate-preview`);
+export const generatePreview = (id, batchSize) =>
+  api.post(`/api/campaigns/${id}/generate-preview`, batchSize != null ? { batch_size: batchSize } : {});
 export const approveRecipients = (id, recipientIds) =>
   api.post(`/api/campaigns/${id}/approve`, { recipient_ids: recipientIds });
+export const sendIndividual = (campaignId, recipientId) =>
+  api.post(`/api/campaigns/${campaignId}/send-individual`, { recipient_id: recipientId });
 
 // Campaign Actions
 export const startCampaign = (id) => api.post(`/api/campaigns/${id}/start`);
