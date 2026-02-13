@@ -97,10 +97,21 @@ function CampaignDetail() {
     fileInputRef.current.value = '';
   };
 
-  const handleGeneratePreview = async () => {
+  const handleGeneratePreview = async (batchSize) => {
     setGenerating(true);
     try {
-      await generatePreview(id);
+      const res = await generatePreview(id, batchSize);
+      const { generated, remaining } = res.data;
+      if (remaining > 0) {
+        const continueGenerating = confirm(
+          `Generated ${generated} emails. ${remaining} recipients remaining.\n\nGenerate the next batch?`
+        );
+        if (continueGenerating) {
+          await loadData();
+          handleGeneratePreview(batchSize);
+          return;
+        }
+      }
       loadData();
     } catch (error) {
       alert('Failed to generate previews: ' + (error.response?.data?.error || error.message));
@@ -239,10 +250,18 @@ function CampaignDetail() {
                 <>
                   <button
                     className="btn btn-secondary"
-                    onClick={handleGeneratePreview}
+                    onClick={() => handleGeneratePreview(50)}
                     disabled={generating}
                   >
                     {generating ? 'Generating...' : '🤖 Generate AI Previews'}
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleGeneratePreview(0)}
+                    disabled={generating}
+                    title="Generate personalized emails for all recipients at once"
+                  >
+                    {generating ? 'Generating...' : '🤖 Generate All'}
                   </button>
                   <button className="btn btn-secondary" onClick={handleApproveAll}>
                     ✓ Approve All

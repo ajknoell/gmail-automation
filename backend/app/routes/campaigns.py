@@ -146,7 +146,11 @@ def list_recipients(id):
 
 @campaigns_bp.route('/<int:id>/generate-preview', methods=['POST'])
 def generate_preview(id):
-    """Generate AI-personalized emails for preview."""
+    """Generate AI-personalized emails for preview.
+
+    Accepts optional JSON body:
+        batch_size: Number of emails to generate (default 50, 0 for all)
+    """
     campaign = Campaign.query.get_or_404(id)
 
     if not campaign.template:
@@ -156,9 +160,25 @@ def generate_preview(id):
     if not api_key:
         return jsonify({'error': 'Anthropic API key not configured'}), 400
 
-    claude = ClaudeService(api_key)
-    recipients = Recipient.query.filter_by(campaign_id=id, status='pending').limit(10).all()
+    data = request.get_json(silent=True) or {}
+    batch_size = data.get('batch_size', 50)
 
+    claude = ClaudeService(api_key)
+
+    # Only fetch recipients that haven't been personalized yet
+    query = Recipient.query.filter_by(campaign_id=id, status='pending').filter(
+        Recipient.personalized_body.is_(None)
+    )
+
+    if batch_size > 0:
+        recipients = query.limit(batch_size).all()
+    else:
+        recipients = query.all()
+
+    remaining = query.count() - len(recipients) if batch_size > 0 else 0
+
+    generated = 0
+    failed = 0
     for recipient in recipients:
         try:
             result = claude.personalize_email(
@@ -174,12 +194,19 @@ def generate_preview(id):
             )
             recipient.personalized_subject = result.get('subject', campaign.template.subject)
             recipient.personalized_body = result.get('body', campaign.template.body)
+            generated += 1
         except Exception as e:
             recipient.personalized_subject = campaign.template.subject
             recipient.personalized_body = campaign.template.body
+            failed += 1
 
     db.session.commit()
-    return jsonify({'success': True, 'generated': len(recipients)})
+    return jsonify({
+        'success': True,
+        'generated': generated,
+        'failed': failed,
+        'remaining': remaining
+    })
 
 @campaigns_bp.route('/<int:id>/approve', methods=['POST'])
 def approve_recipients(id):
