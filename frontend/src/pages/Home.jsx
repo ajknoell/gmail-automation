@@ -1,19 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getCampaigns, getTemplates } from '../api/client';
+import { getCampaigns, getTemplates, getReplyStats, getInsights } from '../api/client';
 
 function Home({ status }) {
   const [campaigns, setCampaigns] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [stats, setStats] = useState({ sent: 0, campaigns: 0, templates: 0 });
+  const [replyStats, setReplyStats] = useState({ needs_response: 0, total: 0 });
+  const [insightsSummary, setInsightsSummary] = useState(null);
 
-  useEffect(() => {
-    Promise.all([getCampaigns(), getTemplates()])
-      .then(([campaignsRes, templatesRes]) => {
+  const loadData = () => {
+    Promise.all([getCampaigns(), getTemplates(), getReplyStats(), getInsights().catch(() => ({ data: {} }))])
+      .then(([campaignsRes, templatesRes, replyRes, insightsRes]) => {
+        setInsightsSummary(insightsRes.data?.summary || null);
         const campaignData = campaignsRes.data;
         const templateData = templatesRes.data;
         setCampaigns(campaignData.slice(0, 5));
         setTemplates(templateData);
+        setReplyStats(replyRes.data || {});
 
         const totalSent = campaignData.reduce((sum, c) => sum + (c.sent_count || 0), 0);
         setStats({
@@ -23,6 +27,13 @@ function Home({ status }) {
         });
       })
       .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   return (
@@ -30,7 +41,7 @@ function Home({ status }) {
       <h1 className="mb-4">Dashboard</h1>
 
       {/* Stats */}
-      <div className="grid grid-4 mb-4">
+      <div className="grid mb-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
         <div className="card stat-card">
           <div className="stat-value">{stats.sent}</div>
           <div className="stat-label">Emails Sent</div>
@@ -43,12 +54,22 @@ function Home({ status }) {
           <div className="stat-value">{stats.templates}</div>
           <div className="stat-label">Templates</div>
         </div>
-        <div className="card stat-card">
-          <div className="stat-value" style={{ color: status.gmail_connected ? '#10B981' : '#EF4444' }}>
-            {status.gmail_connected ? '✓' : '✗'}
+        <Link to="/replies" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="card stat-card" style={{ cursor: 'pointer' }}>
+            <div className="stat-value" style={{ color: replyStats.needs_response > 0 ? '#F59E0B' : '#10B981' }}>
+              {replyStats.needs_response || 0}
+            </div>
+            <div className="stat-label">Replies Pending</div>
           </div>
-          <div className="stat-label">Gmail Status</div>
-        </div>
+        </Link>
+        <Link to="/insights" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="card stat-card" style={{ cursor: 'pointer' }}>
+            <div className="stat-value" style={{ color: insightsSummary?.reply_rate > 0 ? '#10B981' : undefined }}>
+              {insightsSummary ? `${insightsSummary.reply_rate}%` : '—'}
+            </div>
+            <div className="stat-label">Reply Rate</div>
+          </div>
+        </Link>
       </div>
 
       {/* Quick Actions */}

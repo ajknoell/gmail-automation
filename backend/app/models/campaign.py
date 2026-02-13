@@ -1,31 +1,39 @@
 from app import db
 from datetime import datetime
+import json as _json
 
 class Campaign(db.Model):
     __tablename__ = 'campaigns'
 
     id = db.Column(db.Integer, primary_key=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     template_id = db.Column(db.Integer, db.ForeignKey('templates.id'))
+    gmail_account_id = db.Column(db.Integer, db.ForeignKey('oauth_tokens.id'))
     status = db.Column(db.String(20), default='draft')  # draft, running, paused, completed, cancelled
     total_recipients = db.Column(db.Integer, default=0)
     sent_count = db.Column(db.Integer, default=0)
     failed_count = db.Column(db.Integer, default=0)
     delay_seconds = db.Column(db.Integer, default=30)
     use_ai_personalization = db.Column(db.Boolean, default=True)
-    ai_prompt = db.Column(db.Text)
+    ai_prompt = db.Column(db.Text)  # Special instructions for AI
+    campaign_context = db.Column(db.Text)  # Things to include in every email for this campaign
+    attachments = db.Column(db.Text)  # JSON array of attachment metadata
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     started_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
 
     recipients = db.relationship('Recipient', backref='campaign', lazy='dynamic', cascade='all, delete-orphan')
     email_logs = db.relationship('EmailLog', backref='campaign', lazy='dynamic', cascade='all, delete-orphan')
+    gmail_account = db.relationship('OAuthToken', foreign_keys=[gmail_account_id])
 
     def to_dict(self, include_template=False):
         data = {
             'id': self.id,
             'name': self.name,
             'template_id': self.template_id,
+            'gmail_account_id': self.gmail_account_id,
+            'gmail_account_email': self.gmail_account.email_address if self.gmail_account else None,
             'status': self.status,
             'total_recipients': self.total_recipients,
             'sent_count': self.sent_count,
@@ -33,6 +41,8 @@ class Campaign(db.Model):
             'delay_seconds': self.delay_seconds,
             'use_ai_personalization': self.use_ai_personalization,
             'ai_prompt': self.ai_prompt,
+            'campaign_context': self.campaign_context,
+            'attachments': self.get_attachments(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None
@@ -40,3 +50,16 @@ class Campaign(db.Model):
         if include_template and self.template:
             data['template'] = self.template.to_dict()
         return data
+
+    def get_attachments(self):
+        """Return parsed attachments list or empty list."""
+        if self.attachments:
+            try:
+                return _json.loads(self.attachments)
+            except Exception:
+                pass
+        return []
+
+    def set_attachments(self, att_list):
+        """Store attachments list as JSON."""
+        self.attachments = _json.dumps(att_list) if att_list else None
