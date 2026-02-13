@@ -368,6 +368,19 @@ function CampaignDetail() {
                             <p><strong>Subject:</strong> {recipient.personalized_subject}</p>
                             <hr style={{ margin: '0.5rem 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
                             <p style={{ whiteSpace: 'pre-wrap' }}>{recipient.personalized_body}</p>
+                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                              {recipient.status === 'sent' ? (
+                                <span className="btn btn-sm" style={{ color: '#10B981', cursor: 'default' }}>Sent</span>
+                              ) : (
+                                <button
+                                  className="btn btn-success btn-sm"
+                                  onClick={() => handleSendIndividual(recipient.id)}
+                                  disabled={sendingIds.has(recipient.id)}
+                                >
+                                  {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </details>
                       ) : (
