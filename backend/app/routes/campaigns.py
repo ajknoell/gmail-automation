@@ -208,6 +208,71 @@ def generate_preview(id):
         'remaining': remaining
     })
 
+@campaigns_bp.route('/<int:id>/send-individual', methods=['POST'])
+def send_individual(id):
+    """Send email to a single recipient."""
+    campaign = Campaign.query.get_or_404(id)
+
+    data = request.get_json()
+    recipient_id = data.get('recipient_id')
+    if not recipient_id:
+        return jsonify({'error': 'recipient_id is required'}), 400
+
+    recipient = Recipient.query.filter_by(id=recipient_id, campaign_id=id).first()
+    if not recipient:
+        return jsonify({'error': 'Recipient not found'}), 404
+
+    if recipient.status == 'sent':
+        return jsonify({'error': 'Email already sent to this recipient'}), 400
+
+    if not recipient.personalized_body:
+        return jsonify({'error': 'No personalized content generated for this recipient'}), 400
+
+    from app.services.gmail_service import GmailService
+    gmail = GmailService()
+    if not gmail.connect():
+        return jsonify({'error': 'Gmail not connected'}), 400
+
+    subject = recipient.personalized_subject or 'No subject'
+    body = recipient.personalized_body
+
+    result = gmail.send_email(to=recipient.email, subject=subject, body=body)
+
+    if result.get('success'):
+        recipient.status = 'sent'
+        recipient.sent_at = datetime.utcnow()
+        campaign.sent_count += 1
+
+        log = EmailLog(
+            recipient_id=recipient.id,
+            campaign_id=id,
+            gmail_message_id=result.get('message_id'),
+            subject=subject,
+            body=body,
+            status='sent'
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({'success': True, 'status': 'sent'})
+    else:
+        error = result.get('error', 'Unknown error')
+        recipient.status = 'failed'
+        recipient.error_message = error
+        campaign.failed_count += 1
+
+        log = EmailLog(
+            recipient_id=recipient.id,
+            campaign_id=id,
+            subject=subject,
+            status='failed',
+            error_details=error
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({'error': f'Failed to send: {error}'}), 500
+
 @campaigns_bp.route('/<int:id>/approve', methods=['POST'])
 def approve_recipients(id):
     """Approve recipients for sending."""

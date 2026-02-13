@@ -12,6 +12,7 @@ import {
   cancelCampaign,
   exportCampaign,
   getCampaignProgressUrl,
+  sendIndividual,
 } from '../api/client';
 
 function CampaignDetail() {
@@ -21,6 +22,7 @@ function CampaignDetail() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [sendingIds, setSendingIds] = useState(new Set());
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
 
@@ -163,6 +165,21 @@ function CampaignDetail() {
     } catch (error) {
       alert('Failed to cancel campaign');
     }
+  };
+
+  const handleSendIndividual = async (recipientId) => {
+    setSendingIds((prev) => new Set(prev).add(recipientId));
+    try {
+      await sendIndividual(id, recipientId);
+      loadData();
+    } catch (error) {
+      alert('Failed to send: ' + (error.response?.data?.error || error.message));
+    }
+    setSendingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(recipientId);
+      return next;
+    });
   };
 
   if (loading) {
@@ -322,6 +339,7 @@ function CampaignDetail() {
                   <th>Status</th>
                   <th>Approved</th>
                   <th>Preview</th>
+                  <th>Send</th>
                 </tr>
               </thead>
               <tbody>
@@ -352,6 +370,21 @@ function CampaignDetail() {
                             <p style={{ whiteSpace: 'pre-wrap' }}>{recipient.personalized_body}</p>
                           </div>
                         </details>
+                      ) : (
+                        <span className="text-light">-</span>
+                      )}
+                    </td>
+                    <td>
+                      {recipient.status === 'sent' ? (
+                        <span style={{ color: '#10B981' }}>Sent</span>
+                      ) : recipient.personalized_body ? (
+                        <button
+                          className="btn btn-success btn-sm"
+                          onClick={() => handleSendIndividual(recipient.id)}
+                          disabled={sendingIds.has(recipient.id)}
+                        >
+                          {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
+                        </button>
                       ) : (
                         <span className="text-light">-</span>
                       )}
