@@ -165,17 +165,17 @@ def generate_preview(id):
 
     claude = ClaudeService(api_key)
 
-    # Only fetch recipients that haven't been personalized yet
-    query = Recipient.query.filter_by(campaign_id=id, status='pending').filter(
-        Recipient.personalized_body.is_(None)
-    )
+    # Load all pending recipients, then filter out already-personalized ones in Python
+    # (avoids SQL NULL comparison issues across different DB engines)
+    all_pending = Recipient.query.filter_by(campaign_id=id, status='pending').all()
+    unpersonalized = [r for r in all_pending if not r.personalized_body]
 
     if batch_size > 0:
-        recipients = query.limit(batch_size).all()
+        recipients = unpersonalized[:batch_size]
     else:
-        recipients = query.all()
+        recipients = unpersonalized
 
-    remaining = query.count() - len(recipients) if batch_size > 0 else 0
+    remaining = len(unpersonalized) - len(recipients) if batch_size > 0 else 0
 
     generated = 0
     failed = 0
