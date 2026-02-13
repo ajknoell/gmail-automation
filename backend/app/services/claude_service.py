@@ -3,6 +3,48 @@ from typing import Dict
 import json
 import re
 
+
+def clean_company_name(company: str) -> str:
+    """Extract a human-readable company name from a URL or domain.
+
+    Examples:
+        'blglass.com'                  -> 'Blglass'
+        'https://www.acme-corp.com'    -> 'Acme Corp'
+        'blue-sky.io/about'            -> 'Blue Sky'
+        'Acme Inc.'                    -> 'Acme Inc.' (unchanged, not a URL)
+    """
+    if not company:
+        return company
+
+    cleaned = company.strip()
+    # Strip protocol
+    cleaned = re.sub(r'^https?://', '', cleaned)
+    # Strip www.
+    cleaned = re.sub(r'^www\.', '', cleaned)
+    # Strip path, query, and fragment
+    cleaned = re.sub(r'[/?#].*$', '', cleaned)
+
+    # If it looks like a domain (has a TLD), strip the TLD to get the name
+    domain_match = re.match(
+        r'^([^.]+)\.'
+        r'(com|net|org|io|co|biz|info|us|uk|de|fr|ca|au|gov|edu|dev|app|ai|tech)'
+        r'(\.[a-z]{2,3})?$',
+        cleaned, re.IGNORECASE
+    )
+    if domain_match:
+        cleaned = domain_match.group(1)
+    elif cleaned == company.strip():
+        # Nothing was stripped, not a URL — return as-is
+        return company
+
+    # Make the extracted name readable:
+    # Insert spaces before capitals in camelCase (e.g. "blueGlass" -> "blue Glass")
+    cleaned = re.sub(r'([a-z])([A-Z])', r'\1 \2', cleaned)
+    # Replace hyphens and underscores with spaces
+    cleaned = cleaned.replace('-', ' ').replace('_', ' ')
+    return cleaned.title()
+
+
 class ClaudeService:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
@@ -75,6 +117,8 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         learned_insights: Dict = None
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
+
+        company = clean_company_name(recipient.get('company', '')) or 'their company'
 
         # Build rich context from custom fields
         custom_fields = recipient.get('custom_fields', {})
@@ -255,7 +299,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 RECIPIENT PROFILE:
 - Name: {recipient.get('name') or 'there'}
 - Email: {recipient.get('email')}
-- Company: {recipient.get('company') or 'their company'}
+- Company: {company}
 
 RICH CONTEXT (use this to personalize):
 {rich_context}
@@ -345,11 +389,13 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
     ) -> Dict[str, str]:
         """Generate a completely new email for a recipient."""
 
+        company = clean_company_name(recipient.get('company', '')) or 'their company'
+
         prompt = f"""Write a {tone} outreach email for:
 
 RECIPIENT:
 - Name: {recipient.get('name') or 'there'}
-- Company: {recipient.get('company') or 'their company'}
+- Company: {company}
 - Details: {json.dumps(recipient.get('custom_fields', {}))}
 
 CONTEXT/PURPOSE:

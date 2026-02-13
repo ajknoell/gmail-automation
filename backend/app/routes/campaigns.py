@@ -3,8 +3,9 @@ from app import db
 from app.models import Campaign, Recipient, Template, EmailLog, Settings, OAuthToken
 from app.models.settings import WorkspaceSettings
 from app.services.csv_parser import parse_file, detect_field_mapping
-from app.services.claude_service import ClaudeService
+from app.services.claude_service import ClaudeService, clean_company_name
 from app.services.campaign_runner import CampaignRunner
+import re
 from datetime import datetime
 import json
 import csv
@@ -326,9 +327,27 @@ def regenerate_recipient_preview(id, recipient_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def _substitute_template_variables(text, recipient):
+    """Replace {{variable}} placeholders with recipient data."""
+    variables = {
+        'name': recipient.name or '',
+        'email': recipient.email or '',
+        'company': clean_company_name(recipient.company or '') or '',
+    }
+    custom = recipient.get_custom_fields()
+    if custom:
+        variables.update(custom)
+
+    def replace_var(match):
+        key = match.group(1)
+        return variables.get(key, match.group(0))
+
+    return re.sub(r'\{\{(\w+)\}\}', replace_var, text)
+
+
 @campaigns_bp.route('/<int:id>/generate-preview', methods=['POST'])
 def generate_preview(id):
-    """Generate AI-personalized emails for preview.
+    """Generate personalized emails for preview (AI or simple substitution).
 
     Accepts optional JSON body:
         batch_size: Number of emails to generate (default 50, 0 for all)
@@ -338,16 +357,8 @@ def generate_preview(id):
     if not campaign.template:
         return jsonify({'error': 'No template selected'}), 400
 
-    api_key = Settings.get('anthropic_api_key')
-    if not api_key:
-        return jsonify({'error': 'Anthropic API key not configured'}), 400
-
     data = request.get_json(silent=True) or {}
     batch_size = data.get('batch_size', 50)
-
-    claude = ClaudeService(api_key)
-    writing_style = _get_writing_style()
-    learned_insights = _get_learned_insights()
 
     # Load all pending recipients, then filter out already-personalized ones in Python
     # (avoids SQL NULL comparison issues across different DB engines)
@@ -365,33 +376,54 @@ def generate_preview(id):
 
     generated = 0
     failed = 0
-    for recipient in recipients:
-        try:
-            recipient_dict = {
-                'name': recipient.name,
-                'email': recipient.email,
-                'company': recipient.company,
-                'custom_fields': recipient.get_all_context()
-            }
-            website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict)
 
-            result = claude.personalize_email(
-                template_subject=campaign.template.subject,
-                template_body=campaign.template.body,
-                recipient=recipient_dict,
-                custom_prompt=campaign.ai_prompt,
-                writing_style=writing_style,
-                campaign_context=campaign.campaign_context,
-                website_insights=website_insights,
-                learned_insights=learned_insights
-            )
-            recipient.personalized_subject = result.get('subject', campaign.template.subject)
-            recipient.personalized_body = result.get('body', campaign.template.body)
+    if campaign.use_ai_personalization:
+        api_key = Settings.get('anthropic_api_key')
+        if not api_key:
+            return jsonify({'error': 'Anthropic API key not configured'}), 400
+
+        claude = ClaudeService(api_key)
+        writing_style = _get_writing_style()
+        learned_insights = _get_learned_insights()
+
+        for recipient in recipients:
+            try:
+                recipient_dict = {
+                    'name': recipient.name,
+                    'email': recipient.email,
+                    'company': recipient.company,
+                    'custom_fields': recipient.get_all_context()
+                }
+                website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict)
+
+                result = claude.personalize_email(
+                    template_subject=campaign.template.subject,
+                    template_body=campaign.template.body,
+                    recipient=recipient_dict,
+                    custom_prompt=campaign.ai_prompt,
+                    writing_style=writing_style,
+                    campaign_context=campaign.campaign_context,
+                    website_insights=website_insights,
+                    learned_insights=learned_insights
+                )
+                recipient.personalized_subject = result.get('subject', campaign.template.subject)
+                recipient.personalized_body = result.get('body', campaign.template.body)
+                generated += 1
+            except Exception as e:
+                # Fall back to simple variable substitution on AI failure
+                recipient.personalized_subject = _substitute_template_variables(
+                    campaign.template.subject, recipient)
+                recipient.personalized_body = _substitute_template_variables(
+                    campaign.template.body, recipient)
+                failed += 1
+    else:
+        # Simple {{variable}} substitution without AI
+        for recipient in recipients:
+            recipient.personalized_subject = _substitute_template_variables(
+                campaign.template.subject, recipient)
+            recipient.personalized_body = _substitute_template_variables(
+                campaign.template.body, recipient)
             generated += 1
-        except Exception as e:
-            recipient.personalized_subject = campaign.template.subject
-            recipient.personalized_body = campaign.template.body
-            failed += 1
 
     db.session.commit()
     return jsonify({
