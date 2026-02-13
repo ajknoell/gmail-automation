@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Template
+from app.services.claude_service import clean_company_name
 import re
 
 templates_bp = Blueprint('templates', __name__)
@@ -86,8 +87,9 @@ def preview_template(id):
 
     for key, value in sample_data.items():
         placeholder = '{{' + key + '}}'
-        subject = subject.replace(placeholder, str(value))
-        body = body.replace(placeholder, str(value))
+        cleaned = clean_company_name(str(value)) if key == 'company' else str(value)
+        subject = subject.replace(placeholder, cleaned)
+        body = body.replace(placeholder, cleaned)
 
     return jsonify({
         'subject': subject,
