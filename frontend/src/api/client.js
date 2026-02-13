@@ -1,9 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:5001';
-
 const api = axios.create({
-  baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,7 +11,7 @@ export const getAuthStatus = () => api.get('/auth/status');
 export const getSettings = () => api.get('/auth/settings');
 export const saveSettings = (data) => api.post('/auth/settings', data);
 export const disconnectGmail = () => api.post('/auth/gmail/disconnect');
-export const getGmailConnectUrl = () => `${API_BASE}/auth/gmail/connect`;
+export const getGmailConnectUrl = () => '/auth/gmail/connect';
 
 // Templates
 export const getTemplates = () => api.get('/api/templates');
@@ -53,9 +50,9 @@ export const startCampaign = (id) => api.post(`/api/campaigns/${id}/start`);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);
 export const resumeCampaign = (id) => api.post(`/api/campaigns/${id}/resume`);
 export const cancelCampaign = (id) => api.post(`/api/campaigns/${id}/cancel`);
-export const exportCampaign = (id) => `${API_BASE}/api/campaigns/${id}/export`;
+export const exportCampaign = (id) => `/api/campaigns/${id}/export`;
 
 // SSE Progress
-export const getCampaignProgressUrl = (id) => `${API_BASE}/api/campaigns/${id}/progress`;
+export const getCampaignProgressUrl = (id) => `/api/campaigns/${id}/progress`;
 
 export default api;

@@ -134,7 +134,7 @@ function Settings({ onStatusChange }) {
             <li>Create a new project or select existing</li>
             <li>Enable Gmail API</li>
             <li>Create OAuth 2.0 credentials (Web application type)</li>
-            <li>Add <code>http://localhost:5000/auth/gmail/callback</code> as redirect URI</li>
+            <li>Add <code>http://localhost:5001/auth/gmail/callback</code> as redirect URI</li>
             <li>Download credentials.json to backend folder</li>
             <li>Add your email as a test user in OAuth consent screen</li>
           </ol>

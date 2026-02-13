@@ -39,6 +39,28 @@ class CampaignRunner:
             thread.start()
             return True
 
+    @staticmethod
+    def _substitute_variables(text: str, recipient) -> str:
+        """Replace {{variable}} placeholders with recipient data."""
+        from app.services.claude_service import clean_company_name
+        import re
+
+        variables = {
+            'name': recipient.name or '',
+            'email': recipient.email or '',
+            'company': clean_company_name(recipient.company or '') or '',
+        }
+        # Include custom fields
+        custom = recipient.get_custom_fields()
+        if custom:
+            variables.update(custom)
+
+        def replace_var(match):
+            key = match.group(1)
+            return variables.get(key, match.group(0))
+
+        return re.sub(r'\{\{(\w+)\}\}', replace_var, text)
+
     @classmethod
     def _run_campaign(cls, state: CampaignState, recipient_ids: List[int], delay: int):
         """Run the campaign - send emails one by one."""
@@ -54,6 +76,9 @@ class CampaignRunner:
                 cls._finish_campaign(state.campaign_id, 'failed')
                 return
 
+            campaign = Campaign.query.get(state.campaign_id)
+            template = campaign.template if campaign else None
+
             for recipient_id in recipient_ids:
                 # Check for cancellation
                 if state.cancel_event.is_set():
@@ -67,10 +92,22 @@ class CampaignRunner:
                 if not recipient:
                     continue
 
-                # Send email
+                # Send email: use personalized content if available,
+                # otherwise fall back to template with variable substitution
                 try:
-                    subject = recipient.personalized_subject or 'No subject'
-                    body = recipient.personalized_body or 'No content'
+                    if recipient.personalized_subject:
+                        subject = recipient.personalized_subject
+                    elif template:
+                        subject = cls._substitute_variables(template.subject, recipient)
+                    else:
+                        subject = 'No subject'
+
+                    if recipient.personalized_body:
+                        body = recipient.personalized_body
+                    elif template:
+                        body = cls._substitute_variables(template.body, recipient)
+                    else:
+                        body = 'No content'
 
                     result = gmail.send_email(
                         to=recipient.email,
