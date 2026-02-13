@@ -46,6 +46,8 @@ def detect_field_mapping(headers: List[str]) -> Dict[str, str]:
     email_patterns = ['email', 'e-mail', 'mail', 'email_address', 'emailaddress']
     name_patterns = ['name', 'full_name', 'fullname', 'contact', 'contact_name', 'first_name', 'firstname']
     company_patterns = ['company', 'organization', 'org', 'business', 'company_name', 'companyname']
+    # Exclude columns that contain URL/website data from being mapped as company name
+    url_indicators = ['url', 'website', 'link', 'site', 'domain', 'homepage', 'webpage', 'uri']
 
     for header in headers:
         lower = header.lower().strip()
@@ -57,6 +59,9 @@ def detect_field_mapping(headers: List[str]) -> Dict[str, str]:
                 mapping['name'] = header
         elif any(p == lower or p in lower for p in company_patterns):
             if 'company' not in mapping:
+                # Skip columns that look like URL fields (e.g. company_url, company_website)
+                if any(ind in lower for ind in url_indicators):
+                    continue
                 mapping['company'] = header
 
     return mapping

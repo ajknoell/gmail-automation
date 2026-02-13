@@ -25,6 +25,8 @@ RECIPIENT INFO:
 - Company: {recipient.get('company') or 'their company'}
 - Additional Info: {json.dumps(recipient.get('custom_fields', {}))}
 
+IMPORTANT: When referencing the recipient's company, use only the company name (not a URL or website address). If the company field looks like a URL, extract just the company name from it.
+
 TEMPLATE SUBJECT: {template_subject}
 
 TEMPLATE BODY:
