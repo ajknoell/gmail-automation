@@ -281,6 +281,30 @@ def _get_learned_insights():
             pass
     return None
 
+def _get_learned_website_insights():
+    """Helper to get learned website analysis insights from workspace settings."""
+    raw = WorkspaceSettings.get(g.workspace_id, 'learned_website_insights')
+    if raw:
+        try:
+            return json.loads(raw)
+        except:
+            pass
+    return None
+
+def _log_website_analysis(workspace_id, recipient_id, result):
+    """Log a website analysis result for the learning feedback loop."""
+    from app.models.website_analysis_log import WebsiteAnalysisLog
+    log = WebsiteAnalysisLog(
+        workspace_id=workspace_id,
+        recipient_id=recipient_id,
+        url=result['url'],
+        company=result.get('company'),
+        raw_text_preview=result.get('raw_text_preview'),
+        analysis_result=result['analysis'],
+    )
+    db.session.add(log)
+    return log
+
 @campaigns_bp.route('/<int:id>/recipients/<int:recipient_id>/regenerate', methods=['POST'])
 def regenerate_recipient_preview(id, recipient_id):
     """Regenerate AI preview for a single recipient."""
@@ -301,13 +325,19 @@ def regenerate_recipient_preview(id, recipient_id):
     try:
         # Fetch and analyze recipient's website
         from app.services.website_analyzer import WebsiteAnalyzer
+        learned_website_insights = _get_learned_website_insights()
         recipient_dict = {
             'name': recipient.name,
             'email': recipient.email,
             'company': recipient.company,
             'custom_fields': recipient.get_all_context()
         }
-        website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict)
+        wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+        website_insights = wa_result['analysis'] if wa_result else None
+
+        # Log the analysis for learning
+        if wa_result:
+            _log_website_analysis(g.workspace_id, recipient.id, wa_result)
 
         result = claude.personalize_email(
             template_subject=campaign.template.subject,
@@ -385,6 +415,7 @@ def generate_preview(id):
         claude = ClaudeService(api_key)
         writing_style = _get_writing_style()
         learned_insights = _get_learned_insights()
+        learned_website_insights = _get_learned_website_insights()
 
         for recipient in recipients:
             try:
@@ -394,7 +425,12 @@ def generate_preview(id):
                     'company': recipient.company,
                     'custom_fields': recipient.get_all_context()
                 }
-                website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict)
+                wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+                website_insights = wa_result['analysis'] if wa_result else None
+
+                # Log the analysis for the learning feedback loop
+                if wa_result:
+                    _log_website_analysis(g.workspace_id, recipient.id, wa_result)
 
                 result = claude.personalize_email(
                     template_subject=campaign.template.subject,
@@ -489,6 +525,19 @@ def send_individual(id):
             status='sent'
         )
         db.session.add(log)
+        db.session.flush()  # Get log.id before commit
+
+        # Link website analysis log to this email for the learning loop
+        from app.models.website_analysis_log import WebsiteAnalysisLog
+        wa_log = (
+            WebsiteAnalysisLog.query
+            .filter_by(workspace_id=g.workspace_id, recipient_id=recipient.id, email_log_id=None)
+            .order_by(WebsiteAnalysisLog.created_at.desc())
+            .first()
+        )
+        if wa_log:
+            wa_log.email_log_id = log.id
+
         db.session.commit()
 
         return jsonify({'success': True, 'status': 'sent'})

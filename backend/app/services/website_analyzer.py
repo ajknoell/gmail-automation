@@ -106,10 +106,11 @@ class WebsiteAnalyzer:
         return cls.url_from_email(recipient.get('email', ''))
 
     @classmethod
-    def fetch_and_analyze(cls, claude_service, recipient: dict) -> Optional[str]:
+    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None) -> Optional[dict]:
         """Fetch recipient's website and generate improvement insights.
 
-        Returns a string with 2-4 specific callouts, or None if unavailable.
+        Returns a dict with 'analysis' (the insight text), 'url', 'company',
+        and 'raw_text_preview' for logging, or None if unavailable.
         """
         url = cls.resolve_url(recipient)
         if not url:
@@ -120,4 +121,13 @@ class WebsiteAnalyzer:
             return None
 
         company = recipient.get('company') or url
-        return claude_service.analyze_website(text, company, url)
+        analysis = claude_service.analyze_website(text, company, url, learned_website_insights)
+        if not analysis:
+            return None
+
+        return {
+            'analysis': analysis,
+            'url': url,
+            'company': company,
+            'raw_text_preview': text[:500],
+        }

@@ -49,13 +49,40 @@ class ClaudeService:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
 
-    def analyze_website(self, website_text: str, company_name: str, url: str) -> str:
+    def analyze_website(self, website_text: str, company_name: str, url: str, learned_website_insights: dict = None) -> str:
         """Analyze a website and return 2 specific improvement observations for outreach emails."""
+
+        # Build data-driven guidance from learned patterns
+        learned_guidance = ""
+        if learned_website_insights:
+            parts = []
+            if learned_website_insights.get('observation_types_that_work'):
+                parts.append(f"WHAT WORKS: {learned_website_insights['observation_types_that_work']}")
+            if learned_website_insights.get('observation_types_to_avoid'):
+                parts.append(f"WHAT TO AVOID: {learned_website_insights['observation_types_to_avoid']}")
+            if learned_website_insights.get('framing_patterns'):
+                parts.append(f"FRAMING: {learned_website_insights['framing_patterns']}")
+            if learned_website_insights.get('priority_focus_areas'):
+                parts.append(f"FOCUS AREAS: {learned_website_insights['priority_focus_areas']}")
+            if learned_website_insights.get('personalization_depth'):
+                parts.append(f"PERSONALIZATION: {learned_website_insights['personalization_depth']}")
+            if learned_website_insights.get('length_and_detail'):
+                parts.append(f"DETAIL LEVEL: {learned_website_insights['length_and_detail']}")
+            if learned_website_insights.get('top_recommendation'):
+                parts.append(f"TOP PRIORITY: {learned_website_insights['top_recommendation']}")
+            if parts:
+                confidence = learned_website_insights.get('confidence', 'medium')
+                learned_guidance = (
+                    f"\nDATA-DRIVEN GUIDANCE (learned from analyzing which website observations actually "
+                    f"drive email replies — confidence: {confidence} — apply these patterns):\n"
+                    + "\n".join(parts) + "\n"
+                )
+
         prompt = f"""You're a web designer who genuinely wants to help a potential client. Find 2 opportunities where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong.
 
 COMPANY: {company_name}
 URL: {url}
-
+{learned_guidance}
 SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
 {website_text}
 
