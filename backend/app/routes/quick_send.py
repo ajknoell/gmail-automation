@@ -118,7 +118,7 @@ def generate_quick_email():
                 if key not in ('name', 'email', 'company', 'notes'):
                     recipient_data['custom_fields'][key] = recipient[key]
 
-            # Fetch website insights
+            # Fetch website insights (with health checks + screenshot analysis)
             website_insights = None
             website_status = None
             try:
@@ -126,10 +126,8 @@ def generate_quick_email():
                 url = WebsiteAnalyzer.resolve_url(recipient_data)
                 if url:
                     current_app.logger.info(f'Fetching website: {url}')
-                    text = WebsiteAnalyzer.fetch_website(url)
-                    if text and len(text) >= 50:
-                        company = recipient_data.get('company') or url
-                        website_insights = claude.analyze_website(text, company, url)
+                    website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data)
+                    if website_insights:
                         website_status = 'success'
                         current_app.logger.info(f'Website analysis complete for {url}')
                     else:
