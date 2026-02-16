@@ -304,7 +304,7 @@ class WebsiteAnalyzer:
         return cls.url_from_email(recipient.get('email', ''))
 
     @classmethod
-    def fetch_and_analyze(cls, claude_service, recipient: dict) -> Optional[str]:
+    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None) -> Optional[dict]:
         """Fetch recipient's website and generate improvement insights.
 
         Runs health checks first to detect critical issues (SSL errors,
@@ -312,7 +312,8 @@ class WebsiteAnalyzer:
         visual analysis, falling back to text-only when Playwright is
         unavailable.
 
-        Returns a string with 2 specific callouts, or None if unavailable.
+        Returns a dict with 'analysis' (the insight text), 'url', 'company',
+        and 'raw_text_preview' for logging, or None if unavailable.
         """
         url = cls.resolve_url(recipient)
         if not url:
@@ -355,10 +356,20 @@ class WebsiteAnalyzer:
             return None
 
         company = recipient.get('company') or url
-        return claude_service.analyze_website(
+        analysis = claude_service.analyze_website(
             text,
             company,
             url,
             screenshot_b64=screenshot_b64,
             health_issues=health_issues,
+            learned_website_insights=learned_website_insights,
         )
+        if not analysis:
+            return None
+
+        return {
+            'analysis': analysis,
+            'url': url,
+            'company': company,
+            'raw_text_preview': (text[:500] if text else ''),
+        }

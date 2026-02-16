@@ -161,6 +161,22 @@ class CampaignRunner:
                             link_map=json_module.dumps(result.get('link_map') or {}),
                         )
                         db.session.add(log)
+                        db.session.flush()  # Get log.id
+
+                        # Link website analysis log to this email for learning
+                        from app.models.website_analysis_log import WebsiteAnalysisLog
+                        wa_log = (
+                            WebsiteAnalysisLog.query
+                            .filter_by(
+                                workspace_id=campaign_workspace_id,
+                                recipient_id=recipient.id,
+                                email_log_id=None,
+                            )
+                            .order_by(WebsiteAnalysisLog.created_at.desc())
+                            .first()
+                        )
+                        if wa_log:
+                            wa_log.email_log_id = log.id
 
                         # Auto-add/update contact directory
                         from app.models.contact import Contact

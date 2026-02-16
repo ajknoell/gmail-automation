@@ -12,10 +12,11 @@ from app.models.reply_message import ReplyMessage
 from app.models.monitored_site import MonitoredSite
 from app.models.listing import Listing
 from app.models.deal_criteria import DealCriteria
+from app.models.website_analysis_log import WebsiteAnalysisLog
 
 __all__ = [
     'Workspace', 'Template', 'Campaign', 'Recipient', 'EmailLog',
     'Settings', 'WorkspaceSettings', 'OAuthToken',
     'LinkClick', 'OpenEvent', 'Contact', 'Tag', 'contact_tags', 'ReplyMessage',
-    'MonitoredSite', 'Listing', 'DealCriteria',
+    'MonitoredSite', 'Listing', 'DealCriteria', 'WebsiteAnalysisLog',
 ]

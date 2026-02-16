@@ -56,6 +56,7 @@ class ClaudeService:
         url: str,
         screenshot_b64: str = None,
         health_issues: list = None,
+        learned_website_insights: dict = None,
     ) -> str:
         """Analyze a website and return 2 specific improvement observations for outreach emails.
 
@@ -69,11 +70,42 @@ class ClaudeService:
             return self._analyze_website_visual(
                 screenshot_b64, website_text, company_name, url,
                 health_issues=health_issues,
+                learned_website_insights=learned_website_insights,
             )
         return self._analyze_website_text(
             website_text, company_name, url,
             health_issues=health_issues,
+            learned_website_insights=learned_website_insights,
         )
+
+    @staticmethod
+    def _build_learned_guidance(learned_website_insights: dict = None) -> str:
+        """Build data-driven guidance string from learned website analysis patterns."""
+        if not learned_website_insights:
+            return ""
+        parts = []
+        if learned_website_insights.get('observation_types_that_work'):
+            parts.append(f"WHAT WORKS: {learned_website_insights['observation_types_that_work']}")
+        if learned_website_insights.get('observation_types_to_avoid'):
+            parts.append(f"WHAT TO AVOID: {learned_website_insights['observation_types_to_avoid']}")
+        if learned_website_insights.get('framing_patterns'):
+            parts.append(f"FRAMING: {learned_website_insights['framing_patterns']}")
+        if learned_website_insights.get('priority_focus_areas'):
+            parts.append(f"FOCUS AREAS: {learned_website_insights['priority_focus_areas']}")
+        if learned_website_insights.get('personalization_depth'):
+            parts.append(f"PERSONALIZATION: {learned_website_insights['personalization_depth']}")
+        if learned_website_insights.get('length_and_detail'):
+            parts.append(f"DETAIL LEVEL: {learned_website_insights['length_and_detail']}")
+        if learned_website_insights.get('top_recommendation'):
+            parts.append(f"TOP PRIORITY: {learned_website_insights['top_recommendation']}")
+        if parts:
+            confidence = learned_website_insights.get('confidence', 'medium')
+            return (
+                f"\nDATA-DRIVEN GUIDANCE (learned from analyzing which website observations actually "
+                f"drive email replies — confidence: {confidence} — apply these patterns):\n"
+                + "\n".join(parts) + "\n"
+            )
+        return ""
 
     # ------------------------------------------------------------------
     # Visual (screenshot) analysis — primary path
@@ -86,8 +118,11 @@ class ClaudeService:
         company_name: str,
         url: str,
         health_issues: list = None,
+        learned_website_insights: dict = None,
     ) -> str:
         """Analyze a website screenshot (with optional supplementary text) via vision."""
+
+        learned_guidance = self._build_learned_guidance(learned_website_insights)
 
         text_supplement = ""
         if website_text:
@@ -119,7 +154,7 @@ critical issue OR a design improvement, depending on severity.
 
 COMPANY: {company_name}
 URL: {url}
-{issues_block}{text_supplement}
+{learned_guidance}{issues_block}{text_supplement}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
 PRIORITY ORDER (follow this strictly):
@@ -200,6 +235,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
                 return self._analyze_website_text(
                     website_text, company_name, url,
                     health_issues=health_issues,
+                    learned_website_insights=learned_website_insights,
                 )
             return None
 
@@ -210,8 +246,11 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
     def _analyze_website_text(
         self, website_text: str, company_name: str, url: str,
         health_issues: list = None,
+        learned_website_insights: dict = None,
     ) -> str:
         """Analyze a website from scraped text only (fallback when no screenshot)."""
+
+        learned_guidance = self._build_learned_guidance(learned_website_insights)
 
         # Build the critical-issues block when health checks found problems
         issues_block = ""
@@ -241,7 +280,7 @@ CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see
 
 COMPANY: {company_name}
 URL: {url}
-{issues_block}{text_block}
+{learned_guidance}{issues_block}{text_block}
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
 2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
