@@ -132,15 +132,15 @@ def upload_recipients(id):
         if field_mapping:
             mapping.update(json.loads(field_mapping))
 
-        # Build set of existing emails for duplicate detection
-        existing_emails = {
-            r.email.lower()
+        # Build map of existing emails to recipient objects for duplicate detection
+        existing_recipients = {
+            r.email.lower(): r
             for r in Recipient.query.filter_by(campaign_id=id).all()
         }
 
-        # Import recipients, skipping duplicates
+        # Import recipients, updating duplicates with new data
         added = 0
-        skipped_duplicates = []
+        updated = 0
         skipped_invalid = 0
 
         for row in rows:
@@ -149,27 +149,39 @@ def upload_recipients(id):
                 skipped_invalid += 1
                 continue
 
-            if email.lower() in existing_emails:
-                skipped_duplicates.append(email)
+            name = row.get(mapping.get('name', ''), '')
+            company = row.get(mapping.get('company', ''), '')
+            custom = {k: v for k, v in row.items()
+                     if k not in [mapping.get('email'), mapping.get('name'), mapping.get('company')]}
+
+            existing = existing_recipients.get(email.lower())
+            if existing:
+                # Update existing recipient with new data
+                if name:
+                    existing.name = name
+                if company:
+                    existing.company = company
+                # Merge custom fields (new values override old ones)
+                merged_custom = existing.get_custom_fields()
+                merged_custom.update({k: v for k, v in custom.items() if v})
+                existing.set_custom_fields(merged_custom)
+                updated += 1
                 continue
 
             recipient = Recipient(
                 campaign_id=id,
                 email=email,
-                name=row.get(mapping.get('name', ''), ''),
-                company=row.get(mapping.get('company', ''), '')
+                name=name,
+                company=company,
             )
-
-            # Store all other fields as custom_fields
-            custom = {k: v for k, v in row.items()
-                     if k not in [mapping.get('email'), mapping.get('name'), mapping.get('company')]}
             recipient.set_custom_fields(custom)
 
             db.session.add(recipient)
-            existing_emails.add(email.lower())
+            existing_recipients[email.lower()] = recipient
             added += 1
 
-        campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count() + added
+        # Use count() alone — autoflush ensures newly added recipients are included
+        campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count()
         db.session.commit()
 
         return jsonify({
@@ -178,8 +190,7 @@ def upload_recipients(id):
             'mapping': mapping,
             'total_recipients': campaign.total_recipients,
             'added': added,
-            'duplicates_skipped': len(skipped_duplicates),
-            'duplicate_emails': skipped_duplicates[:20],  # Show first 20
+            'updated': updated,
             'invalid_skipped': skipped_invalid,
         })
 

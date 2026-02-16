@@ -122,17 +122,11 @@ function CampaignDetail() {
     setUploading(true);
     try {
       const res = await uploadRecipients(id, file);
-      const { added, duplicates_skipped, duplicate_emails, invalid_skipped } = res.data;
+      const { added, updated, invalid_skipped } = res.data;
 
       let msg = `Added ${added} recipient${added !== 1 ? 's' : ''}.`;
-      if (duplicates_skipped > 0) {
-        msg += `\n\n${duplicates_skipped} duplicate${duplicates_skipped !== 1 ? 's' : ''} skipped`;
-        if (duplicate_emails && duplicate_emails.length > 0) {
-          msg += `:\n${duplicate_emails.join(', ')}`;
-          if (duplicates_skipped > duplicate_emails.length) {
-            msg += ` and ${duplicates_skipped - duplicate_emails.length} more`;
-          }
-        }
+      if (updated > 0) {
+        msg += `\nUpdated ${updated} existing recipient${updated !== 1 ? 's' : ''}.`;
       }
       if (invalid_skipped > 0) {
         msg += `\n${invalid_skipped} row${invalid_skipped !== 1 ? 's' : ''} skipped (invalid/missing email).`;
