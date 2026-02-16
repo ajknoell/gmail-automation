@@ -153,8 +153,9 @@ function CampaignDetail() {
       const res = await generatePreview(id, batchSize);
       const { generated, remaining } = res.data;
       if (remaining > 0) {
+        const mode = batchSize > 0 ? 'batch preview' : 'generation';
         const continueGenerating = confirm(
-          `Generated ${generated} emails. ${remaining} recipients remaining.\n\nGenerate the next batch?`
+          `Generated ${generated} emails (${mode}). ${remaining} recipients remaining.\n\nGenerate the next batch?`
         );
         if (continueGenerating) {
           await loadData();
@@ -341,6 +342,8 @@ function CampaignDetail() {
   const pendingCount = recipients.filter((r) => r.status === 'pending').length;
   const approvedCount = recipients.filter((r) => r.approved).length;
   const hasPersonalized = recipients.some((r) => r.personalized_body);
+  const generatedCount = recipients.filter((r) => r.personalized_body).length;
+  const ungeneratedCount = recipients.length - generatedCount;
   const hasSentEmails = campaign.sent_count > 0;
 
   return (
@@ -491,17 +494,23 @@ function CampaignDetail() {
                     className="btn btn-secondary"
                     onClick={() => handleGeneratePreview(50)}
                     disabled={generating}
+                    title="Generate a batch of up to 50 previews to review before generating the rest"
                   >
-                    {generating ? 'Generating...' : 'Generate AI Previews'}
+                    {generating ? 'Generating...' : `Preview Batch (50)`}
                   </button>
                   <button
-                    className="btn btn-secondary"
+                    className="btn btn-primary"
                     onClick={() => handleGeneratePreview(0)}
                     disabled={generating}
                     title="Generate personalized emails for all recipients at once"
                   >
-                    {generating ? 'Generating...' : 'Generate All'}
+                    {generating ? 'Generating...' : `Generate All (${ungeneratedCount})`}
                   </button>
+                  {generatedCount > 0 && (
+                    <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
+                      {generatedCount}/{recipients.length} generated
+                    </span>
+                  )}
                   <button className="btn btn-secondary" onClick={handleApproveAll}>
                     Approve All
                   </button>

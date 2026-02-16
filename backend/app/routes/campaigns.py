@@ -454,6 +454,7 @@ def send_individual(id):
         return jsonify({'error': 'No personalized content generated for this recipient'}), 400
 
     from app.services.gmail_service import GmailService
+    from app.services.tracking_service import TrackingService
 
     account_id = campaign.gmail_account_id
     if account_id:
@@ -463,14 +464,32 @@ def send_individual(id):
     if not account:
         return jsonify({'error': 'No Gmail account connected'}), 400
 
-    gmail = GmailService()
-    if not gmail.connect(account_id=account.id):
+    gmail = GmailService(account_id=account.id)
+    if not gmail.connect():
         return jsonify({'error': 'Gmail not connected'}), 400
 
     subject = recipient.personalized_subject or 'No subject'
     body = recipient.personalized_body
 
-    result = gmail.send_email(to=recipient.email, subject=subject, body=body)
+    # Load campaign attachments
+    campaign_attachments = None
+    att_list = campaign.get_attachments()
+    if att_list:
+        from app.routes.quick_send import _resolve_attachments
+        campaign_attachments = _resolve_attachments(att_list) or None
+
+    tracking_id = TrackingService.generate_tracking_id()
+    base_url = current_app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+
+    result = gmail.send_email(
+        to=recipient.email,
+        subject=subject,
+        body=body,
+        html=True,
+        tracking_id=tracking_id,
+        base_url=base_url,
+        attachments=campaign_attachments,
+    )
 
     if result.get('success'):
         recipient.status = 'sent'
@@ -482,11 +501,15 @@ def send_individual(id):
             recipient_id=recipient.id,
             campaign_id=id,
             gmail_message_id=result.get('message_id'),
+            gmail_thread_id=result.get('thread_id'),
             gmail_account_id=account.id,
             recipient_email=recipient.email,
+            tracking_id=tracking_id,
             subject=subject,
             body=body,
-            status='sent'
+            status='sent',
+            is_html=True,
+            link_map=json.dumps(result.get('link_map') or {}),
         )
         db.session.add(log)
         db.session.commit()

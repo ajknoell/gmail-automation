@@ -90,7 +90,7 @@ export const exportCampaign = (id) => `/api/campaigns/${id}/export`;
 export const getCampaignProgressUrl = (id) => `/api/campaigns/${id}/progress`;
 
 // Sample CSV
-export const getSampleCsvUrl = () => `${API_BASE}/api/campaigns/sample-csv`;
+export const getSampleCsvUrl = () => '/api/campaigns/sample-csv';
 
 // Quick Send (one-off emails)
 export const generateQuickEmail = (data) => api.post('/api/quick-send/generate', data);
