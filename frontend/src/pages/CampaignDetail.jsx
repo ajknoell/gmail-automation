@@ -42,6 +42,7 @@ function CampaignDetail() {
   const [checkingReplies, setCheckingReplies] = useState(false);
   const [exportingClay, setExportingClay] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [previewRecipientId, setPreviewRecipientId] = useState(null);
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
 
@@ -70,6 +71,26 @@ function CampaignDetail() {
       }
     };
   }, [campaign?.status]);
+
+  // Keyboard shortcuts for email preview modal
+  useEffect(() => {
+    if (!previewRecipientId) return;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') {
+        setPreviewRecipientId(null);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const previewRecipients = recipients.filter((r) => r.personalized_body);
+        const idx = previewRecipients.findIndex((r) => r.id === previewRecipientId);
+        if (e.key === 'ArrowLeft' && idx > 0) {
+          setPreviewRecipientId(previewRecipients[idx - 1].id);
+        } else if (e.key === 'ArrowRight' && idx < previewRecipients.length - 1) {
+          setPreviewRecipientId(previewRecipients[idx + 1].id);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [previewRecipientId, recipients]);
 
   const loadData = async () => {
     try {
@@ -122,17 +143,11 @@ function CampaignDetail() {
     setUploading(true);
     try {
       const res = await uploadRecipients(id, file);
-      const { added, duplicates_skipped, duplicate_emails, invalid_skipped } = res.data;
+      const { added, updated, invalid_skipped } = res.data;
 
       let msg = `Added ${added} recipient${added !== 1 ? 's' : ''}.`;
-      if (duplicates_skipped > 0) {
-        msg += `\n\n${duplicates_skipped} duplicate${duplicates_skipped !== 1 ? 's' : ''} skipped`;
-        if (duplicate_emails && duplicate_emails.length > 0) {
-          msg += `:\n${duplicate_emails.join(', ')}`;
-          if (duplicates_skipped > duplicate_emails.length) {
-            msg += ` and ${duplicates_skipped - duplicate_emails.length} more`;
-          }
-        }
+      if (updated > 0) {
+        msg += `\nUpdated ${updated} existing recipient${updated !== 1 ? 's' : ''}.`;
       }
       if (invalid_skipped > 0) {
         msg += `\n${invalid_skipped} row${invalid_skipped !== 1 ? 's' : ''} skipped (invalid/missing email).`;
@@ -153,8 +168,9 @@ function CampaignDetail() {
       const res = await generatePreview(id, batchSize);
       const { generated, remaining } = res.data;
       if (remaining > 0) {
+        const mode = batchSize > 0 ? 'batch preview' : 'generation';
         const continueGenerating = confirm(
-          `Generated ${generated} emails. ${remaining} recipients remaining.\n\nGenerate the next batch?`
+          `Generated ${generated} emails (${mode}). ${remaining} recipients remaining.\n\nGenerate the next batch?`
         );
         if (continueGenerating) {
           await loadData();
@@ -341,6 +357,8 @@ function CampaignDetail() {
   const pendingCount = recipients.filter((r) => r.status === 'pending').length;
   const approvedCount = recipients.filter((r) => r.approved).length;
   const hasPersonalized = recipients.some((r) => r.personalized_body);
+  const generatedCount = recipients.filter((r) => r.personalized_body).length;
+  const ungeneratedCount = recipients.length - generatedCount;
   const hasSentEmails = campaign.sent_count > 0;
 
   return (
@@ -491,17 +509,23 @@ function CampaignDetail() {
                     className="btn btn-secondary"
                     onClick={() => handleGeneratePreview(50)}
                     disabled={generating}
+                    title="Generate a batch of up to 50 previews to review before generating the rest"
                   >
-                    {generating ? 'Generating...' : 'Generate AI Previews'}
+                    {generating ? 'Generating...' : `Preview Batch (50)`}
                   </button>
                   <button
-                    className="btn btn-secondary"
+                    className="btn btn-primary"
                     onClick={() => handleGeneratePreview(0)}
                     disabled={generating}
                     title="Generate personalized emails for all recipients at once"
                   >
-                    {generating ? 'Generating...' : 'Generate All'}
+                    {generating ? 'Generating...' : `Generate All (${ungeneratedCount})`}
                   </button>
+                  {generatedCount > 0 && (
+                    <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
+                      {generatedCount}/{recipients.length} generated
+                    </span>
+                  )}
                   <button className="btn btn-secondary" onClick={handleApproveAll}>
                     Approve All
                   </button>
@@ -727,58 +751,12 @@ function CampaignDetail() {
                     )}
                     <td>
                       {recipient.personalized_body ? (
-                        <details>
-                          <summary className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                            View
-                          </summary>
-                          <div style={{ padding: '1rem', background: '#F9FAFB', marginTop: '0.5rem', borderRadius: '0.5rem', minWidth: '400px' }}>
-                            {campaign.status === 'draft' ? (
-                              <>
-                                <div style={{ marginBottom: '0.5rem' }}>
-                                  <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>Subject:</label>
-                                  <input
-                                    type="text"
-                                    defaultValue={recipient.personalized_subject}
-                                    style={{ width: '100%', padding: '0.5rem', fontSize: '0.875rem' }}
-                                    onBlur={(e) => handleUpdatePersonalizedContent(recipient.id, 'personalized_subject', e.target.value)}
-                                  />
-                                </div>
-                                <div style={{ marginBottom: '0.5rem' }}>
-                                  <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>Body:</label>
-                                  <RichTextEditor
-                                    value={recipient.personalized_body}
-                                    onChange={(html) => handleUpdatePersonalizedContent(recipient.id, 'personalized_body', html)}
-                                    minHeight="150px"
-                                    compact
-                                  />
-                                </div>
-                                <div className="flex gap-2" style={{ marginTop: '0.5rem' }}>
-                                  <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => handleRegeneratePreview(recipient.id)}
-                                    disabled={regeneratingId === recipient.id}
-                                  >
-                                    {regeneratingId === recipient.id ? 'Regenerating...' : 'Regenerate'}
-                                  </button>
-                                  {!recipient.approved && (
-                                    <button
-                                      className="btn btn-success btn-sm"
-                                      onClick={() => handleApproveRecipient(recipient.id, true)}
-                                    >
-                                      Approve
-                                    </button>
-                                  )}
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <p><strong>Subject:</strong> {recipient.personalized_subject}</p>
-                                <hr style={{ margin: '0.5rem 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
-                                <div style={{ lineHeight: '1.6' }} dangerouslySetInnerHTML={{ __html: recipient.personalized_body }} />
-                              </>
-                            )}
-                          </div>
-                        </details>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setPreviewRecipientId(recipient.id)}
+                        >
+                          View
+                        </button>
                       ) : (
                         <span className="text-light">-</span>
                       )}
@@ -786,16 +764,15 @@ function CampaignDetail() {
                     <td>
                       {recipient.status === 'sent' ? (
                         <span style={{ color: '#10B981' }}>Sent</span>
-                      ) : recipient.personalized_body ? (
+                      ) : (
                         <button
                           className="btn btn-success btn-sm"
                           onClick={() => handleSendIndividual(recipient.id)}
-                          disabled={sendingIds.has(recipient.id)}
+                          disabled={sendingIds.has(recipient.id) || !recipient.personalized_body}
+                          title={!recipient.personalized_body ? 'Generate AI preview first' : ''}
                         >
                           {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
                         </button>
-                      ) : (
-                        <span className="text-light">-</span>
                       )}
                     </td>
                     {campaign.status === 'draft' && (
@@ -843,6 +820,156 @@ function CampaignDetail() {
           </div>
         </div>
       )}
+
+      {/* Email Preview Modal */}
+      {previewRecipientId && (() => {
+        const recipientIndex = recipients.findIndex((r) => r.id === previewRecipientId);
+        const recipient = recipients[recipientIndex];
+        if (!recipient) return null;
+        const previewRecipients = recipients.filter((r) => r.personalized_body);
+        const previewIndex = previewRecipients.findIndex((r) => r.id === previewRecipientId);
+        const hasPrev = previewIndex > 0;
+        const hasNext = previewIndex < previewRecipients.length - 1;
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 1000, padding: '2rem',
+            }}
+            onClick={(e) => { if (e.target === e.currentTarget) setPreviewRecipientId(null); }}
+          >
+            <div style={{
+              background: '#fff', borderRadius: '0.75rem', width: '100%', maxWidth: '700px',
+              maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '1rem 1.5rem', borderBottom: '1px solid #E5E7EB',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span style={{ fontSize: '0.875rem', color: '#6B7280' }}>
+                    {previewIndex + 1} of {previewRecipients.length}
+                  </span>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={!hasPrev}
+                    onClick={() => setPreviewRecipientId(previewRecipients[previewIndex - 1].id)}
+                    style={{ padding: '0.2rem 0.6rem' }}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    disabled={!hasNext}
+                    onClick={() => setPreviewRecipientId(previewRecipients[previewIndex + 1].id)}
+                    style={{ padding: '0.2rem 0.6rem' }}
+                  >
+                    Next
+                  </button>
+                </div>
+                <button
+                  onClick={() => setPreviewRecipientId(null)}
+                  style={{
+                    background: 'none', border: 'none', fontSize: '1.5rem',
+                    color: '#9CA3AF', cursor: 'pointer', lineHeight: 1,
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* Email content */}
+              <div style={{ overflow: 'auto', padding: '1.5rem', flex: 1 }}>
+                {/* To / recipient info */}
+                <div style={{
+                  padding: '0.75rem 1rem', background: '#F9FAFB', borderRadius: '0.5rem',
+                  marginBottom: '1rem', fontSize: '0.875rem',
+                }}>
+                  <div><strong>To:</strong> {recipient.name ? `${recipient.name} <${recipient.email}>` : recipient.email}</div>
+                  {recipient.company && <div><strong>Company:</strong> {recipient.company}</div>}
+                  <div style={{ marginTop: '0.25rem' }}>
+                    <span className={`badge badge-${recipient.status}`} style={{ fontSize: '0.75rem' }}>{recipient.status}</span>
+                    {recipient.approved && <span style={{ color: '#10B981', marginLeft: '0.5rem', fontSize: '0.75rem' }}>Approved</span>}
+                  </div>
+                </div>
+
+                {/* Subject */}
+                {campaign.status === 'draft' ? (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ fontWeight: 600, display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', color: '#374151' }}>Subject</label>
+                    <input
+                      type="text"
+                      key={recipient.id + '-subject'}
+                      defaultValue={recipient.personalized_subject}
+                      style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.95rem', border: '1px solid #D1D5DB', borderRadius: '0.375rem' }}
+                      onBlur={(e) => handleUpdatePersonalizedContent(recipient.id, 'personalized_subject', e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ fontWeight: 600, display: 'block', marginBottom: '0.25rem', fontSize: '0.875rem', color: '#374151' }}>Subject</label>
+                    <div style={{ fontSize: '0.95rem' }}>{recipient.personalized_subject}</div>
+                  </div>
+                )}
+
+                <hr style={{ margin: '0 0 1rem 0', border: 'none', borderTop: '1px solid #E5E7EB' }} />
+
+                {/* Body */}
+                {campaign.status === 'draft' ? (
+                  <RichTextEditor
+                    key={recipient.id + '-body'}
+                    value={recipient.personalized_body}
+                    onChange={(html) => handleUpdatePersonalizedContent(recipient.id, 'personalized_body', html)}
+                    minHeight="250px"
+                  />
+                ) : (
+                  <div style={{ lineHeight: '1.7', fontSize: '0.95rem' }} dangerouslySetInnerHTML={{ __html: recipient.personalized_body }} />
+                )}
+              </div>
+
+              {/* Footer actions */}
+              {campaign.status === 'draft' && (
+                <div style={{
+                  padding: '1rem 1.5rem', borderTop: '1px solid #E5E7EB',
+                  display: 'flex', gap: '0.5rem', flexShrink: 0,
+                }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => handleRegeneratePreview(recipient.id)}
+                    disabled={regeneratingId === recipient.id}
+                  >
+                    {regeneratingId === recipient.id ? 'Regenerating...' : 'Regenerate'}
+                  </button>
+                  {!recipient.approved ? (
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => handleApproveRecipient(recipient.id, true)}
+                    >
+                      Approve
+                    </button>
+                  ) : (
+                    <span style={{ color: '#10B981', alignSelf: 'center', fontSize: '0.875rem' }}>Approved</span>
+                  )}
+                  {recipient.personalized_body && recipient.status !== 'sent' && (
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => handleSendIndividual(recipient.id)}
+                      disabled={sendingIds.has(recipient.id)}
+                      style={{ marginLeft: 'auto' }}
+                    >
+                      {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

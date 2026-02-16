@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { getTemplates, createTemplate, updateTemplate, deleteTemplate, generateTemplate, refineTemplate } from '../api/client';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { getTemplates, createTemplate, updateTemplate, deleteTemplate, generateTemplate, refineTemplate, getTemplateVariables } from '../api/client';
 import RichTextEditor from '../components/RichTextEditor';
 
 function Templates() {
@@ -30,8 +30,16 @@ function Templates() {
   const [enhancing, setEnhancing] = useState(false);
   const [showEnhance, setShowEnhance] = useState(false);
 
+  // Variable reference state
+  const [variableRef, setVariableRef] = useState({ variables: [], categories: [] });
+  const [showVarRef, setShowVarRef] = useState(false);
+  const [activeField, setActiveField] = useState('body'); // 'subject' or 'body'
+  const subjectRef = useRef(null);
+  const quillRef = useRef(null);
+
   useEffect(() => {
     loadTemplates();
+    getTemplateVariables().then((res) => setVariableRef(res.data)).catch(() => {});
     const handleWsChange = () => loadTemplates();
     window.addEventListener('workspace-changed', handleWsChange);
     return () => window.removeEventListener('workspace-changed', handleWsChange);
@@ -203,6 +211,41 @@ function Templates() {
   };
 
   const isBusy = generating || refining;
+
+  const insertVariable = useCallback((varName) => {
+    const tag = `{{${varName}}}`;
+    if (activeField === 'subject' && subjectRef.current) {
+      const input = subjectRef.current;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? start;
+      const before = input.value.slice(0, start);
+      const after = input.value.slice(end);
+      setForm((prev) => ({ ...prev, subject: before + tag + after }));
+      // Restore cursor after React re-render
+      requestAnimationFrame(() => {
+        input.focus();
+        const pos = start + tag.length;
+        input.setSelectionRange(pos, pos);
+      });
+    } else {
+      // Insert into rich text editor (body)
+      const editor = document.querySelector('.modal .rich-text-editor .ql-editor');
+      if (editor) {
+        // Use Quill's API if available, otherwise append
+        const quill = document.querySelector('.modal .rich-text-editor .ql-container')?.__quill;
+        if (quill) {
+          const range = quill.getSelection(true);
+          const pos = range ? range.index : quill.getLength() - 1;
+          quill.insertText(pos, tag);
+          quill.setSelection(pos + tag.length);
+        } else {
+          setForm((prev) => ({ ...prev, body: prev.body + tag }));
+        }
+      } else {
+        setForm((prev) => ({ ...prev, body: prev.body + tag }));
+      }
+    }
+  }, [activeField]);
 
   // Track mousedown target to prevent closing modal on drag-release
   const mouseDownTarget = useRef(null);
@@ -506,26 +549,108 @@ function Templates() {
                 <div className="form-group">
                   <label className="form-label">Email Subject</label>
                   <input
+                    ref={subjectRef}
                     type="text"
                     className="form-input"
                     value={form.subject}
                     onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                    onFocus={() => setActiveField('subject')}
                     placeholder="e.g., Quick question about {{company}}"
                     required
                   />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email Body</label>
-                  <RichTextEditor
-                    value={form.body}
-                    onChange={(html) => setForm({ ...form, body: html })}
-                    placeholder="Hi {{name}}, I noticed that {{company}} is doing great work in..."
-                    minHeight="200px"
-                  />
+                  <div onFocus={() => setActiveField('body')}>
+                    <RichTextEditor
+                      value={form.body}
+                      onChange={(html) => setForm({ ...form, body: html })}
+                      placeholder="Hi {{name}}, I noticed that {{company}} is doing great work in..."
+                      minHeight="200px"
+                    />
+                  </div>
                 </div>
-                <p className="text-sm text-light mb-3">
-                  Use {'{{variable}}'} syntax for personalization. Common variables: name, company, email, website_insights
-                </p>
+
+                {/* Variable Reference */}
+                <div style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '0.5rem',
+                  marginBottom: '0.75rem',
+                  overflow: 'hidden',
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowVarRef((v) => !v)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.6rem 0.75rem',
+                      background: '#F9FAFB',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      color: '#374151',
+                    }}
+                  >
+                    <span>{showVarRef ? 'Hide' : 'Show'} Available Variables</span>
+                    <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
+                      Click a variable to insert it into {activeField === 'subject' ? 'subject' : 'body'}
+                    </span>
+                  </button>
+
+                  {showVarRef && variableRef.categories.length > 0 && (
+                    <div style={{ padding: '0.75rem' }}>
+                      {variableRef.categories.map((cat) => {
+                        const vars = variableRef.variables.filter((v) => v.category === cat.id);
+                        if (vars.length === 0) return null;
+                        return (
+                          <div key={cat.id} style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#4B5563', marginBottom: '0.25rem' }}>
+                              {cat.label}
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: '#6B7280', marginBottom: '0.4rem' }}>
+                              {cat.description}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                              {vars.map((v) => (
+                                <button
+                                  key={v.name}
+                                  type="button"
+                                  onClick={() => insertVariable(v.name)}
+                                  title={`${v.description}\nExample: ${v.example}\n${v.source}`}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    padding: '0.25rem 0.5rem',
+                                    fontSize: '0.75rem',
+                                    fontFamily: 'monospace',
+                                    background: cat.id === 'core' ? '#DBEAFE' : cat.id === 'special' ? '#EDE9FE' : '#FEF3C7',
+                                    color: cat.id === 'core' ? '#1E40AF' : cat.id === 'special' ? '#5B21B6' : '#92400E',
+                                    border: '1px solid',
+                                    borderColor: cat.id === 'core' ? '#93C5FD' : cat.id === 'special' ? '#C4B5FD' : '#FDE68A',
+                                    borderRadius: '0.375rem',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'scale(1.03)'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)'; }}
+                                >
+                                  {`{{${v.name}}}`}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginTop: '0.25rem', borderTop: '1px solid #E5E7EB', paddingTop: '0.5rem' }}>
+                        You can also use any custom CSV column as a variable: {'{{your_column_name}}'}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Enhance with AI */}
                 {!showEnhance ? (

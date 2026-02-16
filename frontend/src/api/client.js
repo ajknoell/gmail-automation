@@ -46,6 +46,7 @@ export const previewTemplate = (id, sampleData) =>
   api.post(`/api/templates/${id}/preview`, { sample_data: sampleData });
 export const generateTemplate = (data) => api.post('/api/templates/generate', data);
 export const refineTemplate = (data) => api.post('/api/templates/refine', data);
+export const getTemplateVariables = () => api.get('/api/templates/variables');
 
 // Campaigns
 export const getCampaigns = () => api.get('/api/campaigns');
@@ -90,7 +91,7 @@ export const exportCampaign = (id) => `/api/campaigns/${id}/export`;
 export const getCampaignProgressUrl = (id) => `/api/campaigns/${id}/progress`;
 
 // Sample CSV
-export const getSampleCsvUrl = () => `${API_BASE}/api/campaigns/sample-csv`;
+export const getSampleCsvUrl = () => '/api/campaigns/sample-csv';
 
 // Quick Send (one-off emails)
 export const generateQuickEmail = (data) => api.post('/api/quick-send/generate', data);
