@@ -480,11 +480,11 @@ def generate_preview(id):
                 recipient.personalized_body = result.get('body', campaign.template.body)
                 generated += 1
             except Exception as e:
-                # Fall back to simple variable substitution on AI failure
-                recipient.personalized_subject = _substitute_template_variables(
-                    campaign.template.subject, recipient)
-                recipient.personalized_body = _substitute_template_variables(
-                    campaign.template.body, recipient)
+                # Do NOT set personalized_body on failure — leave the recipient
+                # in the unpersonalized pool so they can be retried next batch.
+                current_app.logger.warning(
+                    f"Failed to personalize recipient {recipient.id} ({recipient.email}): {e}"
+                )
                 failed += 1
             # Commit after each to preserve progress
             db.session.commit()

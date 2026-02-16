@@ -526,11 +526,11 @@ function CampaignDetail() {
                   </button>
                   <button
                     className="btn btn-secondary"
-                    onClick={() => handleGeneratePreview(50)}
+                    onClick={() => handleGeneratePreview(10)}
                     disabled={generating || ungeneratedCount === 0}
-                    title="Generate a batch of up to 50 previews to review before generating the rest"
+                    title="Generate a batch of up to 10 previews to review before generating the rest"
                   >
-                    {generating ? 'Generating...' : ungeneratedCount > 0 ? `Preview Batch (50)` : 'All Previews Generated'}
+                    {generating ? 'Generating...' : ungeneratedCount > 0 ? `Preview Batch (10)` : 'All Previews Generated'}
                   </button>
                   <button
                     className="btn btn-primary"
