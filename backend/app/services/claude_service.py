@@ -55,18 +55,25 @@ class ClaudeService:
         company_name: str,
         url: str,
         screenshot_b64: str = None,
+        health_issues: list = None,
     ) -> str:
         """Analyze a website and return 2 specific improvement observations for outreach emails.
 
-        When a screenshot is provided, uses Claude's vision capabilities for
-        accurate visual analysis.  Falls back to text-only analysis otherwise.
+        When ``health_issues`` are provided they take priority — the first
+        observation will address the critical issue.  When a screenshot is
+        provided, uses Claude's vision capabilities for accurate visual
+        analysis.  Falls back to text-only analysis otherwise.
         """
 
         if screenshot_b64:
             return self._analyze_website_visual(
-                screenshot_b64, website_text, company_name, url
+                screenshot_b64, website_text, company_name, url,
+                health_issues=health_issues,
             )
-        return self._analyze_website_text(website_text, company_name, url)
+        return self._analyze_website_text(
+            website_text, company_name, url,
+            health_issues=health_issues,
+        )
 
     # ------------------------------------------------------------------
     # Visual (screenshot) analysis — primary path
@@ -78,12 +85,12 @@ class ClaudeService:
         website_text: str,
         company_name: str,
         url: str,
+        health_issues: list = None,
     ) -> str:
         """Analyze a website screenshot (with optional supplementary text) via vision."""
 
         text_supplement = ""
         if website_text:
-            # Include a trimmed version of the text as supplementary context
             trimmed = website_text[:2000]
             text_supplement = f"""
 SUPPLEMENTARY TEXT (scraped from the HTML source — use ONLY to catch details
@@ -93,12 +100,32 @@ visitors actually see):
 {trimmed}
 """
 
+        # Build the critical-issues block when health checks found problems
+        issues_block = ""
+        if health_issues:
+            formatted = "\n".join(f"  - {issue}" for issue in health_issues)
+            issues_block = f"""
+CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
+that visitors experience RIGHT NOW — they MUST be your #1 priority):
+{formatted}
+
+IMPORTANT: Your first observation (1.) MUST address the most critical issue
+above. Frame it helpfully — show the impact on their business and how fixing
+it would help. Your second observation (2.) can address either another
+critical issue OR a design improvement, depending on severity.
+"""
+
         prompt = f"""You're a web designer reviewing a potential client's website. You are looking at a SCREENSHOT of their live site — this is exactly what a visitor sees.
 
 COMPANY: {company_name}
 URL: {url}
-{text_supplement}
+{issues_block}{text_supplement}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
+
+PRIORITY ORDER (follow this strictly):
+1. CRITICAL ISSUES FIRST: SSL errors, security warnings, site not loading, server errors, parked/placeholder pages — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
+3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
 
 CRITICAL RULES — READ CAREFULLY:
 1. ONLY suggest improvements for things that are ACTUALLY absent or weak on the site.
@@ -110,24 +137,17 @@ CRITICAL RULES — READ CAREFULLY:
 2. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
 3. Frame each suggestion as a BENEFIT they'd gain, not a problem they have:
+   - Good: "Fixing the security warning would instantly restore visitor trust and stop losing potential customers at the door"
    - Good: "A quick-quote calculator could turn browsing visitors into real leads"
+   - Bad: "Your SSL certificate is expired"
    - Bad: "You're missing a quote calculator"
 
 4. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
 
-WHAT TO LOOK FOR (only if genuinely absent):
-- Social proof (reviews, testimonials, trust badges, certifications)
-- Visual storytelling (project galleries, before/after photos, team photos)
-- Clear conversion paths (prominent phone numbers, contact forms, CTAs)
-- Mobile optimization clues
-- Speed/loading indicators
-- Content freshness (outdated copyright years, stale blog posts)
-- Local SEO signals (Google Maps, service area info)
-
 TONE:
 - Helpful neighbor who happens to be a web designer
 - Lead with the benefit, paint the picture of what's possible
-- Never critical, never condescending
+- Never critical, never condescending — even for serious issues, be helpful not alarming
 - One sentence each, max 25 words
 - Warm and conversational
 
@@ -161,8 +181,11 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         except Exception as e:
             print(f"Visual website analysis error: {e}")
             # Fall back to text-only if vision call fails
-            if website_text:
-                return self._analyze_website_text(website_text, company_name, url)
+            if website_text or health_issues:
+                return self._analyze_website_text(
+                    website_text, company_name, url,
+                    health_issues=health_issues,
+                )
             return None
 
     # ------------------------------------------------------------------
@@ -170,19 +193,44 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
     # ------------------------------------------------------------------
 
     def _analyze_website_text(
-        self, website_text: str, company_name: str, url: str
+        self, website_text: str, company_name: str, url: str,
+        health_issues: list = None,
     ) -> str:
         """Analyze a website from scraped text only (fallback when no screenshot)."""
+
+        # Build the critical-issues block when health checks found problems
+        issues_block = ""
+        if health_issues:
+            formatted = "\n".join(f"  - {issue}" for issue in health_issues)
+            issues_block = f"""
+CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
+that visitors experience RIGHT NOW — they MUST be your #1 priority):
+{formatted}
+
+IMPORTANT: Your first observation (1.) MUST address the most critical issue
+above. Frame it helpfully — show the impact on their business and how fixing
+it would help. Your second observation (2.) can address either another
+critical issue OR a design improvement, depending on severity.
+"""
+
+        text_block = ""
+        if website_text:
+            text_block = f"""
+SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
+{website_text}
+
+CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see the actual visual design, layout, or images. Be cautious about suggesting things that may already exist on the site visually but aren't captured in the raw text.
+"""
 
         prompt = f"""You're a web designer who genuinely wants to help a potential client. Find 2 opportunities where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong.
 
 COMPANY: {company_name}
 URL: {url}
-
-SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
-{website_text}
-
-CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see the actual visual design, layout, or images. Be cautious about suggesting things that may already exist on the site visually but aren't captured in the raw text.
+{issues_block}{text_block}
+PRIORITY ORDER (follow this strictly):
+1. CRITICAL ISSUES FIRST: SSL errors, security warnings, site not loading, server errors, parked/placeholder pages — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
+3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
 
 IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If the text mentions reviews, testimonials, ratings, or social proof, the site likely ALREADY has them — do NOT suggest adding them.
@@ -190,20 +238,20 @@ IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
 - Focus on things you CAN determine from text: content clarity, messaging strength, calls-to-action, SEO signals, content freshness.
 
-RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST):
+RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST, even without health-check data):
 - Counters or stats showing "0" — means the JavaScript animations never fire, so the page isn't rendering properly
 - A jumble of navigation labels, headings, and body text all mashed together with no clear page structure — means the layout isn't loading
 - Content that reads like a template dump (every section present but no visual hierarchy) — the site framework exists but isn't working
 - If you see these signs, the #1 issue is: the site isn't loading properly for visitors. Frame it helpfully, not harshly.
 
-IF THE SITE APPEARS FUNCTIONAL, then look for:
+IF THE SITE APPEARS FUNCTIONAL AND NO CRITICAL ISSUES WERE DETECTED, then look for:
 - Value opportunities: "Adding X could help you convert more visitors into calls" — always tie back to business results
-- Quick wins that paint a picture: "A gallery showcasing your best work could help homeowners feel confident hiring you"
+- Quick wins that paint a picture
 - Frame each point as a BENEFIT they'd gain, not a problem they have
 
 TONE:
 - Helpful and respectful — like a neighbor who happens to be a web designer
-- ALWAYS lead with the benefit: "Imagine if visitors could see your best projects right when they land" — paint the picture of what's possible
+- ALWAYS lead with the benefit — even for critical issues: "Getting that security certificate sorted out would instantly restore visitor trust and stop you from losing customers at the door"
 - Never just name a problem — name the OUTCOME of fixing it: more calls, more trust, more customers
 - Avoid words like "broken", "failing", "terrible", "nobody", "zero", "missing", "lacking"
 - Show you see the potential in their business and want to help them unlock it
