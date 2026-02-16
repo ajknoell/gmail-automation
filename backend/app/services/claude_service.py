@@ -123,9 +123,14 @@ URL: {url}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
 2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
+
+SCAM/MALWARE DETECTION — CHECK THE SCREENSHOT FOR THESE:
+- If you see fake antivirus warnings (McAfee, Norton, Windows Defender), pop-up alerts about "viruses detected", or "your computer is infected" messages — this is a CRITICAL issue. The business owner likely doesn't know this is happening.
+- Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business — that's scaring away every potential customer"
+- This is the #1 most urgent thing to flag — it's actively driving away customers AND could damage their reputation.
 
 CRITICAL RULES — READ CAREFULLY:
 1. ONLY suggest improvements for things that are ACTUALLY absent or weak on the site.

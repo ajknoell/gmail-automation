@@ -140,6 +140,33 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
                     issues.append(f'PARKED_OR_PLACEHOLDER: The site appears to be a placeholder page ("{phrase}" detected) — visitors don\'t see a real business website.')
                     break
 
+            # Check for scam/malware/scareware content
+            scam_phrases = [
+                'your pc is infected',
+                'your computer is infected',
+                'virus detected',
+                'viruses found',
+                'your system is heavily damaged',
+                'your pc has been compromised',
+                'immediate action required',
+                'mcafee total protection',
+                'norton security warning',
+                'windows defender alert',
+                'call microsoft support',
+                'your subscription has expired',
+                'renew your antivirus',
+                'click here to protect',
+                'scan your computer',
+                'threats detected',
+                'your device is at risk',
+            ]
+            for phrase in scam_phrases:
+                if phrase in body_lower:
+                    issues.append(
+                        'SCAM_OR_MALWARE: The website is showing fake virus warnings or scam popups instead of business content — visitors see a scary fake alert and leave immediately (or worse, get scammed). The domain may be compromised or hijacked by malicious ads.'
+                    )
+                    break
+
             # Check for "not secure" / mixed-content hints in page title
             title_match = re.search(r'<title[^>]*>(.*?)</title>', body_lower)
             if title_match:
