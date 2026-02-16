@@ -123,7 +123,7 @@ URL: {url}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: SSL errors, security warnings, site not loading, server errors, parked/placeholder pages — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
 2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
 
@@ -137,12 +137,22 @@ CRITICAL RULES — READ CAREFULLY:
 2. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
 3. Frame each suggestion as a BENEFIT they'd gain, not a problem they have:
-   - Good: "Fixing the security warning would instantly restore visitor trust and stop losing potential customers at the door"
+   - Good: "Right now visitors see a warning before your site loads — fixing that would instantly restore trust and stop losing potential customers at the door"
    - Good: "A quick-quote calculator could turn browsing visitors into real leads"
-   - Bad: "Your SSL certificate is expired"
-   - Bad: "You're missing a quote calculator"
+   - Bad: "Your SSL certificate is expired" (too technical — describe what visitors experience)
+   - Bad: "You're missing a quote calculator" (names the problem, not the benefit)
 
 4. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
+
+LANGUAGE RULE — NO TECH JARGON:
+- The recipient is a business owner, NOT a web developer. Write like you're explaining to a friend.
+- NEVER use terms like: "parked domain", "SSL certificate", "DNS", "redirect loop", "server error", "placeholder page", "meta tags", "SEO", "rendering", "viewport", "responsive", "CMS", "hosting"
+- INSTEAD translate to plain English:
+  - "parked domain" → "your web address isn't showing your actual business yet — visitors just see a generic page"
+  - "SSL certificate expired" → "visitors get a scary security warning before they can even see your site"
+  - "site not loading" → "when people go to your website, nothing comes up"
+  - "placeholder page" → "your website shows a generic template instead of your actual business"
+- Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
 - Helpful neighbor who happens to be a web designer
@@ -228,7 +238,7 @@ COMPANY: {company_name}
 URL: {url}
 {issues_block}{text_block}
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: SSL errors, security warnings, site not loading, server errors, parked/placeholder pages — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
 2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
 
@@ -249,9 +259,19 @@ IF THE SITE APPEARS FUNCTIONAL AND NO CRITICAL ISSUES WERE DETECTED, then look f
 - Quick wins that paint a picture
 - Frame each point as a BENEFIT they'd gain, not a problem they have
 
+LANGUAGE RULE — NO TECH JARGON:
+- The recipient is a business owner, NOT a web developer. Write like you're explaining to a friend.
+- NEVER use terms like: "parked domain", "SSL certificate", "DNS", "redirect loop", "server error", "placeholder page", "meta tags", "SEO", "rendering", "viewport", "responsive", "CMS", "hosting"
+- INSTEAD translate to plain English:
+  - "parked domain" → "your web address isn't showing your actual business yet — visitors just see a generic page"
+  - "SSL certificate expired" → "visitors get a scary security warning before they can even see your site"
+  - "site not loading" → "when people go to your website, nothing comes up"
+  - "placeholder page" → "your website shows a generic template instead of your actual business"
+- Always describe the VISITOR EXPERIENCE, not the technical cause
+
 TONE:
 - Helpful and respectful — like a neighbor who happens to be a web designer
-- ALWAYS lead with the benefit — even for critical issues: "Getting that security certificate sorted out would instantly restore visitor trust and stop you from losing customers at the door"
+- ALWAYS lead with the benefit — even for critical issues: "Getting that security warning sorted out would instantly restore visitor trust and stop you from losing customers at the door"
 - Never just name a problem — name the OUTCOME of fixing it: more calls, more trust, more customers
 - Avoid words like "broken", "failing", "terrible", "nobody", "zero", "missing", "lacking"
 - Show you see the potential in their business and want to help them unlock it
@@ -522,6 +542,12 @@ HUMILITY RULE:
 - NEVER contradict what their website clearly states (e.g. don't say "visitors won't know what you do" if the site explains it)
 - Show you've done homework, but stay humble — they're the expert
 - Keep observations respectful and accurate. When in doubt, acknowledge what they're doing well before suggesting opportunities
+
+NO TECH JARGON RULE:
+- Write for a business owner, NOT a developer. Zero technical terms.
+- NEVER say: "parked domain", "SSL", "DNS", "redirect", "server error", "placeholder", "meta tags", "SEO", "rendering", "responsive", "CMS", "hosting"
+- Describe problems as the VISITOR EXPERIENCE: "when someone visits your site, they see a generic page instead of your business" — not "your domain is parked"
+- If the website observations contain technical language, REWRITE them in plain English in the final email
 
 {("WEBSITE OBSERVATIONS (these came from reviewing their site — insert them exactly where the website_insights content appears in the template, do NOT move them to another section. Each observation should show the VALUE of improving — tie it to more customers, more trust, or a stronger online presence. We're showing what's possible, not criticizing what exists):" + chr(10) + website_insights) if website_insights else ""}
 
@@ -829,6 +855,7 @@ ABSOLUTE RULES:
 - NEVER fabricate facts, meetings, or connections not in the notes
 - NEVER claim expertise in their industry — stay humble and curious
 - NEVER just point out a problem — always pair it with the benefit of fixing it
+- NEVER use tech jargon — no "parked domain", "SSL", "DNS", "server error", "placeholder", "SEO", "rendering", "CMS". Describe what a VISITOR experiences in plain English: "your web address shows a generic page instead of your business" not "your domain is parked"
 - If context is limited, keep it genuine but general
 - Better to be vague than to lie
 
