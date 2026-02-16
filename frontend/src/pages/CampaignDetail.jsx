@@ -764,16 +764,15 @@ function CampaignDetail() {
                     <td>
                       {recipient.status === 'sent' ? (
                         <span style={{ color: '#10B981' }}>Sent</span>
-                      ) : recipient.personalized_body ? (
+                      ) : (
                         <button
                           className="btn btn-success btn-sm"
                           onClick={() => handleSendIndividual(recipient.id)}
-                          disabled={sendingIds.has(recipient.id)}
+                          disabled={sendingIds.has(recipient.id) || !recipient.personalized_body}
+                          title={!recipient.personalized_body ? 'Generate AI preview first' : ''}
                         >
                           {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
                         </button>
-                      ) : (
-                        <span className="text-light">-</span>
                       )}
                     </td>
                     {campaign.status === 'draft' && (
