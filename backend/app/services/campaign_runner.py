@@ -106,7 +106,8 @@ class CampaignRunner:
                     continue
 
                 # Send email: use personalized content if available,
-                # otherwise fall back to template with variable substitution
+                # otherwise fall back to template with variable substitution.
+                # Skip recipients that have no content and no template fallback.
                 try:
                     if recipient.personalized_subject:
                         subject = recipient.personalized_subject
@@ -120,7 +121,16 @@ class CampaignRunner:
                     elif template:
                         body = cls._substitute_variables(template.body, recipient)
                     else:
-                        body = 'No content'
+                        # No content and no template — skip this recipient
+                        recipient.status = 'skipped'
+                        recipient.error_message = 'No personalized content generated and no template available'
+                        state.progress['failed'] += 1
+
+                        campaign = Campaign.query.get(state.campaign_id)
+                        if campaign:
+                            campaign.failed_count += 1
+                        db.session.commit()
+                        continue
 
                     tracking_id = TrackingService.generate_tracking_id()
 

@@ -132,6 +132,18 @@ def upload_recipients(id):
         if field_mapping:
             mapping.update(json.loads(field_mapping))
 
+        # Validate that an email column was detected
+        if 'email' not in mapping:
+            return jsonify({
+                'error': f'Could not detect an email column in your file. Found columns: {", ".join(headers)}. '
+                         f'Please ensure your file has a column with "email" in the header name.',
+                'headers': headers,
+                'mapping': mapping
+            }), 400
+
+        if not rows:
+            return jsonify({'error': 'File contains no data rows'}), 400
+
         # Build map of existing emails to recipient objects for duplicate detection
         existing_recipients = {
             r.email.lower(): r
@@ -183,6 +195,14 @@ def upload_recipients(id):
         # Use count() alone — autoflush ensures newly added recipients are included
         campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count()
         db.session.commit()
+
+        if campaign.total_recipients == 0:
+            return jsonify({
+                'error': f'No valid email addresses found. {skipped_invalid} rows were skipped due to missing or invalid emails. '
+                         f'Email column detected: "{mapping.get("email")}". Please check your file.',
+                'headers': headers,
+                'mapping': mapping
+            }), 400
 
         return jsonify({
             'success': True,
@@ -406,6 +426,9 @@ def generate_preview(id):
     all_pending = Recipient.query.filter_by(campaign_id=id, status='pending').all()
     unpersonalized = [r for r in all_pending if not r.personalized_body]
 
+    if not unpersonalized:
+        return jsonify({'success': True, 'generated': 0, 'failed': 0, 'remaining': 0, 'message': 'All emails already generated'})
+
     if batch_size > 0:
         recipients = unpersonalized[:batch_size]
     else:
@@ -463,6 +486,8 @@ def generate_preview(id):
                 recipient.personalized_body = _substitute_template_variables(
                     campaign.template.body, recipient)
                 failed += 1
+            # Commit after each to preserve progress
+            db.session.commit()
     else:
         # Simple {{variable}} substitution without AI
         for recipient in recipients:
@@ -471,8 +496,8 @@ def generate_preview(id):
             recipient.personalized_body = _substitute_template_variables(
                 campaign.template.body, recipient)
             generated += 1
+        db.session.commit()
 
-    db.session.commit()
     return jsonify({
         'success': True,
         'generated': generated,
@@ -626,6 +651,17 @@ def start_campaign(id):
 
     if not recipients:
         return jsonify({'error': 'No approved recipients to send to'}), 400
+
+    # Check for recipients without generated content
+    ungenerated = [r for r in recipients if not r.personalized_body or not r.personalized_body.strip()]
+    if ungenerated:
+        force = request.get_json() and request.get_json().get('force')
+        if not force:
+            return jsonify({
+                'error': f'{len(ungenerated)} of {len(recipients)} approved recipients do not have generated email content. Generate previews first, or start with force=true to skip those recipients.',
+                'ungenerated_count': len(ungenerated),
+                'total_approved': len(recipients)
+            }), 400
 
     # Verify Gmail account is available
     account_id = campaign.gmail_account_id

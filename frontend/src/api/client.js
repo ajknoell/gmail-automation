@@ -81,7 +81,7 @@ export const regenerateRecipientPreview = (campaignId, recipientId) =>
   api.post(`/api/campaigns/${campaignId}/recipients/${recipientId}/regenerate`);
 
 // Campaign Actions
-export const startCampaign = (id) => api.post(`/api/campaigns/${id}/start`);
+export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);
 export const resumeCampaign = (id) => api.post(`/api/campaigns/${id}/resume`);
 export const cancelCampaign = (id) => api.post(`/api/campaigns/${id}/cancel`);

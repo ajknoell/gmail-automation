@@ -166,12 +166,15 @@ function CampaignDetail() {
     setGenerating(true);
     try {
       const res = await generatePreview(id, batchSize);
-      const { generated, remaining } = res.data;
-      if (remaining > 0) {
+      const { generated, failed, remaining, message } = res.data;
+      if (message) {
+        alert(message);
+      } else if (remaining > 0) {
         const mode = batchSize > 0 ? 'batch preview' : 'generation';
-        const continueGenerating = confirm(
-          `Generated ${generated} emails (${mode}). ${remaining} recipients remaining.\n\nGenerate the next batch?`
-        );
+        let statusMsg = `Generated ${generated} emails (${mode})`;
+        if (failed > 0) statusMsg += ` (${failed} fell back to template)`;
+        statusMsg += `. ${remaining} recipients remaining.\n\nGenerate the next batch?`;
+        const continueGenerating = confirm(statusMsg);
         if (continueGenerating) {
           await loadData();
           handleGeneratePreview(batchSize);
@@ -298,7 +301,23 @@ function CampaignDetail() {
       await startCampaign(id);
       loadData();
     } catch (error) {
-      alert('Failed to start campaign: ' + (error.response?.data?.error || error.message));
+      const data = error.response?.data;
+      if (data?.ungenerated_count) {
+        const proceed = confirm(
+          `${data.ungenerated_count} of ${data.total_approved} recipients do not have generated emails. ` +
+          `These recipients will be skipped.\n\nDo you want to proceed anyway?`
+        );
+        if (proceed) {
+          try {
+            await startCampaign(id, { force: true });
+            loadData();
+          } catch (e) {
+            alert('Failed to start campaign: ' + (e.response?.data?.error || e.message));
+          }
+        }
+      } else {
+        alert('Failed to start campaign: ' + (data?.error || error.message));
+      }
     }
   };
 
@@ -508,18 +527,18 @@ function CampaignDetail() {
                   <button
                     className="btn btn-secondary"
                     onClick={() => handleGeneratePreview(50)}
-                    disabled={generating}
+                    disabled={generating || ungeneratedCount === 0}
                     title="Generate a batch of up to 50 previews to review before generating the rest"
                   >
-                    {generating ? 'Generating...' : `Preview Batch (50)`}
+                    {generating ? 'Generating...' : ungeneratedCount > 0 ? `Preview Batch (50)` : 'All Previews Generated'}
                   </button>
                   <button
                     className="btn btn-primary"
                     onClick={() => handleGeneratePreview(0)}
-                    disabled={generating}
+                    disabled={generating || ungeneratedCount === 0}
                     title="Generate personalized emails for all recipients at once"
                   >
-                    {generating ? 'Generating...' : `Generate All (${ungeneratedCount})`}
+                    {generating ? 'Generating...' : ungeneratedCount > 0 ? `Generate All (${ungeneratedCount})` : 'All Generated'}
                   </button>
                   {generatedCount > 0 && (
                     <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
