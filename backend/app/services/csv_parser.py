@@ -4,10 +4,26 @@ from typing import List, Dict, Tuple
 
 def parse_csv(file_content: bytes) -> Tuple[List[str], List[Dict]]:
     """Parse CSV file and return headers and rows."""
-    text = file_content.decode('utf-8')
+    # Handle BOM and different encodings
+    for encoding in ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']:
+        try:
+            text = file_content.decode(encoding)
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    else:
+        text = file_content.decode('utf-8', errors='replace')
+
     reader = csv.DictReader(io.StringIO(text))
     headers = reader.fieldnames or []
-    rows = list(reader)
+    # Strip whitespace from headers
+    headers = [h.strip() for h in headers]
+    # Re-parse with cleaned headers
+    reader = csv.DictReader(io.StringIO(text))
+    rows = []
+    for row in reader:
+        cleaned = {k.strip(): v for k, v in row.items() if k}
+        rows.append(cleaned)
     return headers, rows
 
 def parse_excel(file_content: bytes) -> Tuple[List[str], List[Dict]]:
@@ -43,20 +59,28 @@ def parse_file(file_content: bytes, filename: str) -> Tuple[List[str], List[Dict
 def detect_field_mapping(headers: List[str]) -> Dict[str, str]:
     """Auto-detect common field mappings."""
     mapping = {}
-    email_patterns = ['email', 'e-mail', 'mail', 'email_address', 'emailaddress']
-    name_patterns = ['name', 'full_name', 'fullname', 'contact', 'contact_name', 'first_name', 'firstname']
-    company_patterns = ['company', 'organization', 'org', 'business', 'company_name', 'companyname']
+    email_patterns = ['email', 'e-mail', 'mail', 'email_address', 'emailaddress', 'e_mail', 'recipient']
+    name_patterns = ['name', 'full_name', 'fullname', 'contact', 'contact_name', 'first_name', 'firstname', 'person']
+    company_patterns = ['company', 'organization', 'org', 'business', 'company_name', 'companyname', 'employer']
+    # Exclude columns that contain URL/website data from being mapped as company name
+    url_indicators = ['url', 'website', 'link', 'site', 'domain', 'homepage', 'webpage', 'uri']
 
+    # Normalize headers for matching: strip whitespace, remove special chars for comparison
     for header in headers:
         lower = header.lower().strip()
-        if any(p == lower or p in lower for p in email_patterns):
+        # Also create a normalized version without special chars for matching
+        normalized = lower.replace('-', '_').replace(' ', '_')
+        if any(p == lower or p == normalized or p in lower for p in email_patterns):
             if 'email' not in mapping:
                 mapping['email'] = header
-        elif any(p == lower or p in lower for p in name_patterns):
+        elif any(p == lower or p == normalized or p in lower for p in name_patterns):
             if 'name' not in mapping:
                 mapping['name'] = header
-        elif any(p == lower or p in lower for p in company_patterns):
+        elif any(p == lower or p == normalized or p in lower for p in company_patterns):
             if 'company' not in mapping:
+                # Skip columns that look like URL fields (e.g. company_url, company_website)
+                if any(ind in lower for ind in url_indicators):
+                    continue
                 mapping['company'] = header
 
     return mapping

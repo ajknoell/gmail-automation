@@ -1,9 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:5001';
-
 const api = axios.create({
-  baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -32,7 +29,7 @@ export const getAuthStatus = () => api.get('/auth/status');
 export const getSettings = () => api.get('/auth/settings');
 export const saveSettings = (data) => api.post('/auth/settings', data);
 export const disconnectGmail = () => api.post('/auth/gmail/disconnect');
-export const getGmailConnectUrl = () => `${API_BASE}/auth/gmail/connect`;
+export const getGmailConnectUrl = () => '/auth/gmail/connect';
 
 // Gmail Accounts
 export const getGmailAccounts = () => api.get('/auth/gmail/accounts');
@@ -49,6 +46,7 @@ export const previewTemplate = (id, sampleData) =>
   api.post(`/api/templates/${id}/preview`, { sample_data: sampleData });
 export const generateTemplate = (data) => api.post('/api/templates/generate', data);
 export const refineTemplate = (data) => api.post('/api/templates/refine', data);
+export const getTemplateVariables = () => api.get('/api/templates/variables');
 
 // Campaigns
 export const getCampaigns = () => api.get('/api/campaigns');
@@ -83,17 +81,17 @@ export const regenerateRecipientPreview = (campaignId, recipientId) =>
   api.post(`/api/campaigns/${campaignId}/recipients/${recipientId}/regenerate`);
 
 // Campaign Actions
-export const startCampaign = (id) => api.post(`/api/campaigns/${id}/start`);
+export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);
 export const resumeCampaign = (id) => api.post(`/api/campaigns/${id}/resume`);
 export const cancelCampaign = (id) => api.post(`/api/campaigns/${id}/cancel`);
-export const exportCampaign = (id) => `${API_BASE}/api/campaigns/${id}/export`;
+export const exportCampaign = (id) => `/api/campaigns/${id}/export`;
 
 // SSE Progress
-export const getCampaignProgressUrl = (id) => `${API_BASE}/api/campaigns/${id}/progress`;
+export const getCampaignProgressUrl = (id) => `/api/campaigns/${id}/progress`;
 
 // Sample CSV
-export const getSampleCsvUrl = () => `${API_BASE}/api/campaigns/sample-csv`;
+export const getSampleCsvUrl = () => '/api/campaigns/sample-csv';
 
 // Quick Send (one-off emails)
 export const generateQuickEmail = (data) => api.post('/api/quick-send/generate', data);

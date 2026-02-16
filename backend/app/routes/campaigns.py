@@ -3,8 +3,9 @@ from app import db
 from app.models import Campaign, Recipient, Template, EmailLog, Settings, OAuthToken
 from app.models.settings import WorkspaceSettings
 from app.services.csv_parser import parse_file, detect_field_mapping
-from app.services.claude_service import ClaudeService
+from app.services.claude_service import ClaudeService, clean_company_name
 from app.services.campaign_runner import CampaignRunner
+import re
 from datetime import datetime
 import json
 import csv
@@ -131,15 +132,27 @@ def upload_recipients(id):
         if field_mapping:
             mapping.update(json.loads(field_mapping))
 
-        # Build set of existing emails for duplicate detection
-        existing_emails = {
-            r.email.lower()
+        # Validate that an email column was detected
+        if 'email' not in mapping:
+            return jsonify({
+                'error': f'Could not detect an email column in your file. Found columns: {", ".join(headers)}. '
+                         f'Please ensure your file has a column with "email" in the header name.',
+                'headers': headers,
+                'mapping': mapping
+            }), 400
+
+        if not rows:
+            return jsonify({'error': 'File contains no data rows'}), 400
+
+        # Build map of existing emails to recipient objects for duplicate detection
+        existing_recipients = {
+            r.email.lower(): r
             for r in Recipient.query.filter_by(campaign_id=id).all()
         }
 
-        # Import recipients, skipping duplicates
+        # Import recipients, updating duplicates with new data
         added = 0
-        skipped_duplicates = []
+        updated = 0
         skipped_invalid = 0
 
         for row in rows:
@@ -148,28 +161,48 @@ def upload_recipients(id):
                 skipped_invalid += 1
                 continue
 
-            if email.lower() in existing_emails:
-                skipped_duplicates.append(email)
+            name = row.get(mapping.get('name', ''), '')
+            company = row.get(mapping.get('company', ''), '')
+            custom = {k: v for k, v in row.items()
+                     if k not in [mapping.get('email'), mapping.get('name'), mapping.get('company')]}
+
+            existing = existing_recipients.get(email.lower())
+            if existing:
+                # Update existing recipient with new data
+                if name:
+                    existing.name = name
+                if company:
+                    existing.company = company
+                # Merge custom fields (new values override old ones)
+                merged_custom = existing.get_custom_fields()
+                merged_custom.update({k: v for k, v in custom.items() if v})
+                existing.set_custom_fields(merged_custom)
+                updated += 1
                 continue
 
             recipient = Recipient(
                 campaign_id=id,
                 email=email,
-                name=row.get(mapping.get('name', ''), ''),
-                company=row.get(mapping.get('company', ''), '')
+                name=name,
+                company=company,
             )
-
-            # Store all other fields as custom_fields
-            custom = {k: v for k, v in row.items()
-                     if k not in [mapping.get('email'), mapping.get('name'), mapping.get('company')]}
             recipient.set_custom_fields(custom)
 
             db.session.add(recipient)
-            existing_emails.add(email.lower())
+            existing_recipients[email.lower()] = recipient
             added += 1
 
-        campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count() + added
+        # Use count() alone — autoflush ensures newly added recipients are included
+        campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count()
         db.session.commit()
+
+        if campaign.total_recipients == 0:
+            return jsonify({
+                'error': f'No valid email addresses found. {skipped_invalid} rows were skipped due to missing or invalid emails. '
+                         f'Email column detected: "{mapping.get("email")}". Please check your file.',
+                'headers': headers,
+                'mapping': mapping
+            }), 400
 
         return jsonify({
             'success': True,
@@ -177,8 +210,7 @@ def upload_recipients(id):
             'mapping': mapping,
             'total_recipients': campaign.total_recipients,
             'added': added,
-            'duplicates_skipped': len(skipped_duplicates),
-            'duplicate_emails': skipped_duplicates[:20],  # Show first 20
+            'updated': updated,
             'invalid_skipped': skipped_invalid,
         })
 
@@ -280,6 +312,30 @@ def _get_learned_insights():
             pass
     return None
 
+def _get_learned_website_insights():
+    """Helper to get learned website analysis insights from workspace settings."""
+    raw = WorkspaceSettings.get(g.workspace_id, 'learned_website_insights')
+    if raw:
+        try:
+            return json.loads(raw)
+        except:
+            pass
+    return None
+
+def _log_website_analysis(workspace_id, recipient_id, result):
+    """Log a website analysis result for the learning feedback loop."""
+    from app.models.website_analysis_log import WebsiteAnalysisLog
+    log = WebsiteAnalysisLog(
+        workspace_id=workspace_id,
+        recipient_id=recipient_id,
+        url=result['url'],
+        company=result.get('company'),
+        raw_text_preview=result.get('raw_text_preview'),
+        analysis_result=result['analysis'],
+    )
+    db.session.add(log)
+    return log
+
 @campaigns_bp.route('/<int:id>/recipients/<int:recipient_id>/regenerate', methods=['POST'])
 def regenerate_recipient_preview(id, recipient_id):
     """Regenerate AI preview for a single recipient."""
@@ -300,13 +356,19 @@ def regenerate_recipient_preview(id, recipient_id):
     try:
         # Fetch and analyze recipient's website
         from app.services.website_analyzer import WebsiteAnalyzer
+        learned_website_insights = _get_learned_website_insights()
         recipient_dict = {
             'name': recipient.name,
             'email': recipient.email,
             'company': recipient.company,
             'custom_fields': recipient.get_all_context()
         }
-        website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict)
+        wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+        website_insights = wa_result['analysis'] if wa_result else None
+
+        # Log the analysis for learning
+        if wa_result:
+            _log_website_analysis(g.workspace_id, recipient.id, wa_result)
 
         result = claude.personalize_email(
             template_subject=campaign.template.subject,
@@ -326,9 +388,27 @@ def regenerate_recipient_preview(id, recipient_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def _substitute_template_variables(text, recipient):
+    """Replace {{variable}} placeholders with recipient data."""
+    variables = {
+        'name': recipient.name or '',
+        'email': recipient.email or '',
+        'company': clean_company_name(recipient.company or '') or '',
+    }
+    custom = recipient.get_custom_fields()
+    if custom:
+        variables.update(custom)
+
+    def replace_var(match):
+        key = match.group(1)
+        return variables.get(key, match.group(0))
+
+    return re.sub(r'\{\{(\w+)\}\}', replace_var, text)
+
+
 @campaigns_bp.route('/<int:id>/generate-preview', methods=['POST'])
 def generate_preview(id):
-    """Generate AI-personalized emails for preview.
+    """Generate personalized emails for preview (AI or simple substitution).
 
     Accepts optional JSON body:
         batch_size: Number of emails to generate (default 50, 0 for all)
@@ -338,21 +418,16 @@ def generate_preview(id):
     if not campaign.template:
         return jsonify({'error': 'No template selected'}), 400
 
-    api_key = Settings.get('anthropic_api_key')
-    if not api_key:
-        return jsonify({'error': 'Anthropic API key not configured'}), 400
-
     data = request.get_json(silent=True) or {}
     batch_size = data.get('batch_size', 50)
-
-    claude = ClaudeService(api_key)
-    writing_style = _get_writing_style()
-    learned_insights = _get_learned_insights()
 
     # Load all pending recipients, then filter out already-personalized ones in Python
     # (avoids SQL NULL comparison issues across different DB engines)
     all_pending = Recipient.query.filter_by(campaign_id=id, status='pending').all()
     unpersonalized = [r for r in all_pending if not r.personalized_body]
+
+    if not unpersonalized:
+        return jsonify({'success': True, 'generated': 0, 'failed': 0, 'remaining': 0, 'message': 'All emails already generated'})
 
     if batch_size > 0:
         recipients = unpersonalized[:batch_size]
@@ -365,38 +440,64 @@ def generate_preview(id):
 
     generated = 0
     failed = 0
-    for recipient in recipients:
-        try:
-            recipient_dict = {
-                'name': recipient.name,
-                'email': recipient.email,
-                'company': recipient.company,
-                'custom_fields': recipient.get_all_context()
-            }
-            website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict)
 
-            result = claude.personalize_email(
-                template_subject=campaign.template.subject,
-                template_body=campaign.template.body,
-                recipient=recipient_dict,
-                custom_prompt=campaign.ai_prompt,
-                writing_style=writing_style,
-                campaign_context=campaign.campaign_context,
-                website_insights=website_insights,
-                learned_insights=learned_insights
-            )
-            recipient.personalized_subject = result.get('subject', campaign.template.subject)
-            recipient.personalized_body = result.get('body', campaign.template.body)
+    if campaign.use_ai_personalization:
+        api_key = Settings.get('anthropic_api_key')
+        if not api_key:
+            return jsonify({'error': 'Anthropic API key not configured'}), 400
+
+        claude = ClaudeService(api_key)
+        writing_style = _get_writing_style()
+        learned_insights = _get_learned_insights()
+        learned_website_insights = _get_learned_website_insights()
+
+        for recipient in recipients:
+            try:
+                recipient_dict = {
+                    'name': recipient.name,
+                    'email': recipient.email,
+                    'company': recipient.company,
+                    'custom_fields': recipient.get_all_context()
+                }
+                wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+                website_insights = wa_result['analysis'] if wa_result else None
+
+                # Log the analysis for the learning feedback loop
+                if wa_result:
+                    _log_website_analysis(g.workspace_id, recipient.id, wa_result)
+
+                result = claude.personalize_email(
+                    template_subject=campaign.template.subject,
+                    template_body=campaign.template.body,
+                    recipient=recipient_dict,
+                    custom_prompt=campaign.ai_prompt,
+                    writing_style=writing_style,
+                    campaign_context=campaign.campaign_context,
+                    website_insights=website_insights,
+                    learned_insights=learned_insights
+                )
+                recipient.personalized_subject = result.get('subject', campaign.template.subject)
+                recipient.personalized_body = result.get('body', campaign.template.body)
+                generated += 1
+            except Exception as e:
+                # Do NOT set personalized_body on failure — leave the recipient
+                # in the unpersonalized pool so they can be retried next batch.
+                current_app.logger.warning(
+                    f"Failed to personalize recipient {recipient.id} ({recipient.email}): {e}"
+                )
+                failed += 1
+            # Commit after each to preserve progress
+            db.session.commit()
+    else:
+        # Simple {{variable}} substitution without AI
+        for recipient in recipients:
+            recipient.personalized_subject = _substitute_template_variables(
+                campaign.template.subject, recipient)
+            recipient.personalized_body = _substitute_template_variables(
+                campaign.template.body, recipient)
             generated += 1
-        except Exception as e:
-            # Do NOT set personalized_body on failure — leave the recipient
-            # in the unpersonalized pool so they can be retried next batch.
-            current_app.logger.warning(
-                f"Failed to personalize recipient {recipient.id} ({recipient.email}): {e}"
-            )
-            failed += 1
+        db.session.commit()
 
-    db.session.commit()
     return jsonify({
         'success': True,
         'generated': generated,
@@ -425,6 +526,7 @@ def send_individual(id):
         return jsonify({'error': 'No personalized content generated for this recipient'}), 400
 
     from app.services.gmail_service import GmailService
+    from app.services.tracking_service import TrackingService
 
     account_id = campaign.gmail_account_id
     if account_id:
@@ -434,14 +536,32 @@ def send_individual(id):
     if not account:
         return jsonify({'error': 'No Gmail account connected'}), 400
 
-    gmail = GmailService()
-    if not gmail.connect(account_id=account.id):
+    gmail = GmailService(account_id=account.id)
+    if not gmail.connect():
         return jsonify({'error': 'Gmail not connected'}), 400
 
     subject = recipient.personalized_subject or 'No subject'
     body = recipient.personalized_body
 
-    result = gmail.send_email(to=recipient.email, subject=subject, body=body)
+    # Load campaign attachments
+    campaign_attachments = None
+    att_list = campaign.get_attachments()
+    if att_list:
+        from app.routes.quick_send import _resolve_attachments
+        campaign_attachments = _resolve_attachments(att_list) or None
+
+    tracking_id = TrackingService.generate_tracking_id()
+    base_url = current_app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+
+    result = gmail.send_email(
+        to=recipient.email,
+        subject=subject,
+        body=body,
+        html=True,
+        tracking_id=tracking_id,
+        base_url=base_url,
+        attachments=campaign_attachments,
+    )
 
     if result.get('success'):
         recipient.status = 'sent'
@@ -453,13 +573,30 @@ def send_individual(id):
             recipient_id=recipient.id,
             campaign_id=id,
             gmail_message_id=result.get('message_id'),
+            gmail_thread_id=result.get('thread_id'),
             gmail_account_id=account.id,
             recipient_email=recipient.email,
+            tracking_id=tracking_id,
             subject=subject,
             body=body,
-            status='sent'
+            status='sent',
+            is_html=True,
+            link_map=json.dumps(result.get('link_map') or {}),
         )
         db.session.add(log)
+        db.session.flush()  # Get log.id before commit
+
+        # Link website analysis log to this email for the learning loop
+        from app.models.website_analysis_log import WebsiteAnalysisLog
+        wa_log = (
+            WebsiteAnalysisLog.query
+            .filter_by(workspace_id=g.workspace_id, recipient_id=recipient.id, email_log_id=None)
+            .order_by(WebsiteAnalysisLog.created_at.desc())
+            .first()
+        )
+        if wa_log:
+            wa_log.email_log_id = log.id
+
         db.session.commit()
 
         return jsonify({'success': True, 'status': 'sent'})
@@ -514,6 +651,17 @@ def start_campaign(id):
 
     if not recipients:
         return jsonify({'error': 'No approved recipients to send to'}), 400
+
+    # Check for recipients without generated content
+    ungenerated = [r for r in recipients if not r.personalized_body or not r.personalized_body.strip()]
+    if ungenerated:
+        force = request.get_json() and request.get_json().get('force')
+        if not force:
+            return jsonify({
+                'error': f'{len(ungenerated)} of {len(recipients)} approved recipients do not have generated email content. Generate previews first, or start with force=true to skip those recipients.',
+                'ungenerated_count': len(ungenerated),
+                'total_approved': len(recipients)
+            }), 400
 
     # Verify Gmail account is available
     account_id = campaign.gmail_account_id

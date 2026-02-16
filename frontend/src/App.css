@@ -186,6 +186,15 @@ body {
   color: white;
 }
 
+.btn-warning {
+  background: var(--warning);
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #D97706;
+}
+
 .btn-danger {
   background: var(--error);
   color: white;

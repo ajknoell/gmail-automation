@@ -16,5 +16,9 @@ anthropic==0.77.1
 # File parsing
 openpyxl==3.1.2
 
+# Website screenshots (optional — text-only fallback if unavailable)
+playwright==1.50.0
+Pillow==11.1.0
+
 # Other
 requests==2.32.5

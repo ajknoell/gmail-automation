@@ -3,36 +3,319 @@ from typing import Dict
 import json
 import re
 
+
+def clean_company_name(company: str) -> str:
+    """Extract a human-readable company name from a URL or domain.
+
+    Examples:
+        'blglass.com'                  -> 'Blglass'
+        'https://www.acme-corp.com'    -> 'Acme Corp'
+        'blue-sky.io/about'            -> 'Blue Sky'
+        'Acme Inc.'                    -> 'Acme Inc.' (unchanged, not a URL)
+    """
+    if not company:
+        return company
+
+    cleaned = company.strip()
+    # Strip protocol
+    cleaned = re.sub(r'^https?://', '', cleaned)
+    # Strip www.
+    cleaned = re.sub(r'^www\.', '', cleaned)
+    # Strip path, query, and fragment
+    cleaned = re.sub(r'[/?#].*$', '', cleaned)
+
+    # If it looks like a domain (has a TLD), strip the TLD to get the name
+    domain_match = re.match(
+        r'^([^.]+)\.'
+        r'(com|net|org|io|co|biz|info|us|uk|de|fr|ca|au|gov|edu|dev|app|ai|tech)'
+        r'(\.[a-z]{2,3})?$',
+        cleaned, re.IGNORECASE
+    )
+    if domain_match:
+        cleaned = domain_match.group(1)
+    elif cleaned == company.strip():
+        # Nothing was stripped, not a URL — return as-is
+        return company
+
+    # Make the extracted name readable:
+    # Insert spaces before capitals in camelCase (e.g. "blueGlass" -> "blue Glass")
+    cleaned = re.sub(r'([a-z])([A-Z])', r'\1 \2', cleaned)
+    # Replace hyphens and underscores with spaces
+    cleaned = cleaned.replace('-', ' ').replace('_', ' ')
+    return cleaned.title()
+
+
 class ClaudeService:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
 
-    def analyze_website(self, website_text: str, company_name: str, url: str) -> str:
-        """Analyze a website and return 2 specific improvement observations for outreach emails."""
+    def analyze_website(
+        self,
+        website_text: str,
+        company_name: str,
+        url: str,
+        screenshot_b64: str = None,
+        health_issues: list = None,
+        learned_website_insights: dict = None,
+    ) -> str:
+        """Analyze a website and return 2 specific improvement observations for outreach emails.
+
+        When ``health_issues`` are provided they take priority — the first
+        observation will address the critical issue.  When a screenshot is
+        provided, uses Claude's vision capabilities for accurate visual
+        analysis.  Falls back to text-only analysis otherwise.
+        """
+
+        if screenshot_b64:
+            return self._analyze_website_visual(
+                screenshot_b64, website_text, company_name, url,
+                health_issues=health_issues,
+                learned_website_insights=learned_website_insights,
+            )
+        return self._analyze_website_text(
+            website_text, company_name, url,
+            health_issues=health_issues,
+            learned_website_insights=learned_website_insights,
+        )
+
+    @staticmethod
+    def _build_learned_guidance(learned_website_insights: dict = None) -> str:
+        """Build data-driven guidance string from learned website analysis patterns."""
+        if not learned_website_insights:
+            return ""
+        parts = []
+        if learned_website_insights.get('observation_types_that_work'):
+            parts.append(f"WHAT WORKS: {learned_website_insights['observation_types_that_work']}")
+        if learned_website_insights.get('observation_types_to_avoid'):
+            parts.append(f"WHAT TO AVOID: {learned_website_insights['observation_types_to_avoid']}")
+        if learned_website_insights.get('framing_patterns'):
+            parts.append(f"FRAMING: {learned_website_insights['framing_patterns']}")
+        if learned_website_insights.get('priority_focus_areas'):
+            parts.append(f"FOCUS AREAS: {learned_website_insights['priority_focus_areas']}")
+        if learned_website_insights.get('personalization_depth'):
+            parts.append(f"PERSONALIZATION: {learned_website_insights['personalization_depth']}")
+        if learned_website_insights.get('length_and_detail'):
+            parts.append(f"DETAIL LEVEL: {learned_website_insights['length_and_detail']}")
+        if learned_website_insights.get('top_recommendation'):
+            parts.append(f"TOP PRIORITY: {learned_website_insights['top_recommendation']}")
+        if parts:
+            confidence = learned_website_insights.get('confidence', 'medium')
+            return (
+                f"\nDATA-DRIVEN GUIDANCE (learned from analyzing which website observations actually "
+                f"drive email replies — confidence: {confidence} — apply these patterns):\n"
+                + "\n".join(parts) + "\n"
+            )
+        return ""
+
+    # ------------------------------------------------------------------
+    # Visual (screenshot) analysis — primary path
+    # ------------------------------------------------------------------
+
+    def _analyze_website_visual(
+        self,
+        screenshot_b64: str,
+        website_text: str,
+        company_name: str,
+        url: str,
+        health_issues: list = None,
+        learned_website_insights: dict = None,
+    ) -> str:
+        """Analyze a website screenshot (with optional supplementary text) via vision."""
+
+        learned_guidance = self._build_learned_guidance(learned_website_insights)
+
+        text_supplement = ""
+        if website_text:
+            trimmed = website_text[:2000]
+            text_supplement = f"""
+SUPPLEMENTARY TEXT (scraped from the HTML source — use ONLY to catch details
+that might not be visible in the screenshot, such as meta descriptions or
+hidden content.  The screenshot is the primary source of truth for what
+visitors actually see):
+{trimmed}
+"""
+
+        # Build the critical-issues block when health checks found problems
+        issues_block = ""
+        if health_issues:
+            formatted = "\n".join(f"  - {issue}" for issue in health_issues)
+            issues_block = f"""
+CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
+that visitors experience RIGHT NOW — they MUST be your #1 priority):
+{formatted}
+
+IMPORTANT: Your first observation (1.) MUST address the most critical issue
+above. Frame it helpfully — show the impact on their business and how fixing
+it would help. Your second observation (2.) can address either another
+critical issue OR a design improvement, depending on severity.
+"""
+
+        prompt = f"""You're a web designer reviewing a potential client's website. You are looking at a SCREENSHOT of their live site — this is exactly what a visitor sees.
+
+COMPANY: {company_name}
+URL: {url}
+{learned_guidance}{issues_block}{text_supplement}
+YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
+
+PRIORITY ORDER (follow this strictly):
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
+3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
+
+SCAM/MALWARE DETECTION — CHECK THE SCREENSHOT FOR THESE:
+- If you see fake antivirus warnings (McAfee, Norton, Windows Defender), pop-up alerts about "viruses detected", or "your computer is infected" messages — this is a CRITICAL issue. The business owner likely doesn't know this is happening.
+- Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business — that's scaring away every potential customer"
+- This is the #1 most urgent thing to flag — it's actively driving away customers AND could damage their reputation.
+
+CRITICAL RULES — READ CAREFULLY:
+1. ONLY suggest improvements for things that are ACTUALLY absent or weak on the site.
+   - If the site already has customer reviews/testimonials visible, do NOT suggest adding reviews.
+   - If the site already has a photo gallery, do NOT suggest adding a gallery.
+   - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
+   - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
+
+2. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
+
+3. Frame each suggestion as a BENEFIT they'd gain, not a problem they have:
+   - Good: "Right now visitors see a warning before your site loads — fixing that would instantly restore trust and stop losing potential customers at the door"
+   - Good: "A quick-quote calculator could turn browsing visitors into real leads"
+   - Bad: "Your SSL certificate is expired" (too technical — describe what visitors experience)
+   - Bad: "You're missing a quote calculator" (names the problem, not the benefit)
+
+4. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
+
+LANGUAGE RULE — NO TECH JARGON:
+- The recipient is a business owner, NOT a web developer. Write like you're explaining to a friend.
+- NEVER use terms like: "parked domain", "SSL certificate", "DNS", "redirect loop", "server error", "placeholder page", "meta tags", "SEO", "rendering", "viewport", "responsive", "CMS", "hosting"
+- INSTEAD translate to plain English:
+  - "parked domain" → "your web address isn't showing your actual business yet — visitors just see a generic page"
+  - "SSL certificate expired" → "visitors get a scary security warning before they can even see your site"
+  - "site not loading" → "when people go to your website, nothing comes up"
+  - "placeholder page" → "your website shows a generic template instead of your actual business"
+- Always describe the VISITOR EXPERIENCE, not the technical cause
+
+TONE:
+- Helpful neighbor who happens to be a web designer
+- Lead with the benefit, paint the picture of what's possible
+- Never critical, never condescending — even for serious issues, be helpful not alarming
+- One sentence each, max 25 words
+- Warm and conversational
+
+YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
+1.
+2. """
+
+        try:
+            message = self.client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=200,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/png",
+                                "data": screenshot_b64,
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": prompt,
+                        },
+                    ],
+                }],
+            )
+            return self._parse_two_observations(message.content[0].text)
+        except Exception as e:
+            print(f"Visual website analysis error: {e}")
+            # Fall back to text-only if vision call fails
+            if website_text or health_issues:
+                return self._analyze_website_text(
+                    website_text, company_name, url,
+                    health_issues=health_issues,
+                    learned_website_insights=learned_website_insights,
+                )
+            return None
+
+    # ------------------------------------------------------------------
+    # Text-only analysis — fallback path
+    # ------------------------------------------------------------------
+
+    def _analyze_website_text(
+        self, website_text: str, company_name: str, url: str,
+        health_issues: list = None,
+        learned_website_insights: dict = None,
+    ) -> str:
+        """Analyze a website from scraped text only (fallback when no screenshot)."""
+
+        learned_guidance = self._build_learned_guidance(learned_website_insights)
+
+        # Build the critical-issues block when health checks found problems
+        issues_block = ""
+        if health_issues:
+            formatted = "\n".join(f"  - {issue}" for issue in health_issues)
+            issues_block = f"""
+CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
+that visitors experience RIGHT NOW — they MUST be your #1 priority):
+{formatted}
+
+IMPORTANT: Your first observation (1.) MUST address the most critical issue
+above. Frame it helpfully — show the impact on their business and how fixing
+it would help. Your second observation (2.) can address either another
+critical issue OR a design improvement, depending on severity.
+"""
+
+        text_block = ""
+        if website_text:
+            text_block = f"""
+SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
+{website_text}
+
+CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see the actual visual design, layout, or images. Be cautious about suggesting things that may already exist on the site visually but aren't captured in the raw text.
+"""
+
         prompt = f"""You're a web designer who genuinely wants to help a potential client. Find 2 opportunities where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong.
 
 COMPANY: {company_name}
 URL: {url}
+{learned_guidance}{issues_block}{text_block}
+PRIORITY ORDER (follow this strictly):
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
+2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
+3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
 
-SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
-{website_text}
+IMPORTANT — AVOID FALSE SUGGESTIONS:
+- If the text mentions reviews, testimonials, ratings, or social proof, the site likely ALREADY has them — do NOT suggest adding them.
+- If the text mentions galleries, portfolios, or project showcases, the site likely ALREADY has them — do NOT suggest adding them.
+- If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
+- Focus on things you CAN determine from text: content clarity, messaging strength, calls-to-action, SEO signals, content freshness.
 
-CRITICAL CONTEXT: This text was scraped from the raw HTML source. Many sites use JavaScript to render, so the raw text may look content-rich even when the actual site is completely broken for visitors. You must read between the lines.
-
-RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST):
+RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST, even without health-check data):
 - Counters or stats showing "0" — means the JavaScript animations never fire, so the page isn't rendering properly
 - A jumble of navigation labels, headings, and body text all mashed together with no clear page structure — means the layout isn't loading
 - Content that reads like a template dump (every section present but no visual hierarchy) — the site framework exists but isn't working
 - If you see these signs, the #1 issue is: the site isn't loading properly for visitors. Frame it helpfully, not harshly.
 
-IF THE SITE APPEARS FUNCTIONAL, then look for:
+IF THE SITE APPEARS FUNCTIONAL AND NO CRITICAL ISSUES WERE DETECTED, then look for:
 - Value opportunities: "Adding X could help you convert more visitors into calls" — always tie back to business results
-- Quick wins that paint a picture: "A gallery showcasing your best work could help homeowners feel confident hiring you"
+- Quick wins that paint a picture
 - Frame each point as a BENEFIT they'd gain, not a problem they have
+
+LANGUAGE RULE — NO TECH JARGON:
+- The recipient is a business owner, NOT a web developer. Write like you're explaining to a friend.
+- NEVER use terms like: "parked domain", "SSL certificate", "DNS", "redirect loop", "server error", "placeholder page", "meta tags", "SEO", "rendering", "viewport", "responsive", "CMS", "hosting"
+- INSTEAD translate to plain English:
+  - "parked domain" → "your web address isn't showing your actual business yet — visitors just see a generic page"
+  - "SSL certificate expired" → "visitors get a scary security warning before they can even see your site"
+  - "site not loading" → "when people go to your website, nothing comes up"
+  - "placeholder page" → "your website shows a generic template instead of your actual business"
+- Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
 - Helpful and respectful — like a neighbor who happens to be a web designer
-- ALWAYS lead with the benefit: "Imagine if visitors could see your best projects right when they land" — paint the picture of what's possible
+- ALWAYS lead with the benefit — even for critical issues: "Getting that security warning sorted out would instantly restore visitor trust and stop you from losing customers at the door"
 - Never just name a problem — name the OUTCOME of fixing it: more calls, more trust, more customers
 - Avoid words like "broken", "failing", "terrible", "nobody", "zero", "missing", "lacking"
 - Show you see the potential in their business and want to help them unlock it
@@ -49,19 +332,27 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw = message.content[0].text.strip()
-            # Parse out the 2 numbered items, rebuilding cleanly
-            lines = [l.strip() for l in raw.split('\n') if l.strip()]
-            result_lines = []
-            for l in lines:
-                if l.startswith('1.') or l.startswith('2.'):
-                    result_lines.append(l)
-            if len(result_lines) >= 2:
-                return result_lines[0] + '\n' + result_lines[1]
-            return raw
+            return self._parse_two_observations(message.content[0].text)
         except Exception as e:
             print(f"Website analysis error: {e}")
             return None
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_two_observations(raw_text: str) -> str:
+        """Extract exactly 2 numbered observations from model output."""
+        raw = raw_text.strip()
+        lines = [l.strip() for l in raw.split('\n') if l.strip()]
+        result_lines = []
+        for l in lines:
+            if l.startswith('1.') or l.startswith('2.'):
+                result_lines.append(l)
+        if len(result_lines) >= 2:
+            return result_lines[0] + '\n' + result_lines[1]
+        return raw
 
     def personalize_email(
         self,
@@ -75,6 +366,8 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         learned_insights: Dict = None
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
+
+        company = clean_company_name(recipient.get('company', '')) or 'their company'
 
         # Build rich context from custom fields
         custom_fields = recipient.get('custom_fields', {})
@@ -255,7 +548,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 RECIPIENT PROFILE:
 - Name: {recipient.get('name') or 'there'}
 - Email: {recipient.get('email')}
-- Company: {recipient.get('company') or 'their company'}
+- Company: {company}
 
 RICH CONTEXT (use this to personalize):
 {rich_context}
@@ -293,6 +586,12 @@ HUMILITY RULE:
 - NEVER contradict what their website clearly states (e.g. don't say "visitors won't know what you do" if the site explains it)
 - Show you've done homework, but stay humble — they're the expert
 - Keep observations respectful and accurate. When in doubt, acknowledge what they're doing well before suggesting opportunities
+
+NO TECH JARGON RULE:
+- Write for a business owner, NOT a developer. Zero technical terms.
+- NEVER say: "parked domain", "SSL", "DNS", "redirect", "server error", "placeholder", "meta tags", "SEO", "rendering", "responsive", "CMS", "hosting"
+- Describe problems as the VISITOR EXPERIENCE: "when someone visits your site, they see a generic page instead of your business" — not "your domain is parked"
+- If the website observations contain technical language, REWRITE them in plain English in the final email
 
 {("WEBSITE OBSERVATIONS (these came from reviewing their site — insert them exactly where the website_insights content appears in the template, do NOT move them to another section. Each observation should show the VALUE of improving — tie it to more customers, more trust, or a stronger online presence. We're showing what's possible, not criticizing what exists):" + chr(10) + website_insights) if website_insights else ""}
 
@@ -345,11 +644,13 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
     ) -> Dict[str, str]:
         """Generate a completely new email for a recipient."""
 
+        company = clean_company_name(recipient.get('company', '')) or 'their company'
+
         prompt = f"""Write a {tone} outreach email for:
 
 RECIPIENT:
 - Name: {recipient.get('name') or 'there'}
-- Company: {recipient.get('company') or 'their company'}
+- Company: {company}
 - Details: {json.dumps(recipient.get('custom_fields', {}))}
 
 CONTEXT/PURPOSE:
@@ -598,6 +899,7 @@ ABSOLUTE RULES:
 - NEVER fabricate facts, meetings, or connections not in the notes
 - NEVER claim expertise in their industry — stay humble and curious
 - NEVER just point out a problem — always pair it with the benefit of fixing it
+- NEVER use tech jargon — no "parked domain", "SSL", "DNS", "server error", "placeholder", "SEO", "rendering", "CMS". Describe what a VISITOR experiences in plain English: "your web address shows a generic page instead of your business" not "your domain is parked"
 - If context is limited, keep it genuine but general
 - Better to be vague than to lie
 
