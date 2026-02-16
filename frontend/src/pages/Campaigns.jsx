@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCampaigns, createCampaign, deleteCampaign, getTemplates } from '../api/client';
 
@@ -9,8 +9,20 @@ function Campaigns() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', template_id: '', delay_seconds: 30 });
 
+  const mouseDownTarget = useRef(null);
+  const handleOverlayMouseDown = (e) => { mouseDownTarget.current = e.target; };
+  const handleOverlayClick = (e, closeFn) => {
+    if (e.target === e.currentTarget && mouseDownTarget.current === e.currentTarget) {
+      closeFn();
+    }
+    mouseDownTarget.current = null;
+  };
+
   useEffect(() => {
     loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   const loadData = () => {
@@ -143,8 +155,8 @@ function Campaigns() {
 
       {/* Create Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onMouseDown={handleOverlayMouseDown} onClick={(e) => handleOverlayClick(e, () => setShowModal(false))}>
+          <div className="modal">
             <div className="modal-header">
               <h3 className="modal-title">New Campaign</h3>
               <button className="modal-close" onClick={() => setShowModal(false)}>×</button>

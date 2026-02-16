@@ -6,6 +6,7 @@ class Template(db.Model):
     __tablename__ = 'templates'
 
     id = db.Column(db.Integer, primary_key=True)
+    workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     subject = db.Column(db.String(200), nullable=False)
     body = db.Column(db.Text, nullable=False)

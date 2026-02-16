@@ -4,6 +4,7 @@ token.json
 backend/credentials.json
 backend/token.json
 backend/data/app.db
+backend/gmail_automation.db
 .env
 
 # Original script (contains API keys)
