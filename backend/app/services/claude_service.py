@@ -45,6 +45,24 @@ def clean_company_name(company: str) -> str:
     return cleaned.title()
 
 
+def _strip_ai_dashes(text: str) -> str:
+    """Replace em dashes, en dashes, and double hyphens with commas.
+
+    These punctuation marks are a telltale sign of AI-generated text
+    and should never appear in outreach emails.
+    """
+    if not text:
+        return text
+    # Em dash (—) and en dash (–) → comma
+    text = text.replace('\u2014', ',')   # em dash
+    text = text.replace('\u2013', ',')   # en dash
+    # Double hyphen (--) → comma
+    text = re.sub(r'(?<!\-)--(?!\-)', ',', text)
+    # Clean up any double commas or comma-space issues from replacements
+    text = re.sub(r',\s*,', ',', text)
+    return text
+
+
 class ClaudeService:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
@@ -55,6 +73,7 @@ class ClaudeService:
         company_name: str,
         url: str,
         screenshot_b64: str = None,
+        mobile_screenshot_b64: str = None,
         health_issues: list = None,
         learned_website_insights: dict = None,
     ) -> str:
@@ -69,6 +88,7 @@ class ClaudeService:
         if screenshot_b64:
             return self._analyze_website_visual(
                 screenshot_b64, website_text, company_name, url,
+                mobile_screenshot_b64=mobile_screenshot_b64,
                 health_issues=health_issues,
                 learned_website_insights=learned_website_insights,
             )
@@ -117,6 +137,7 @@ class ClaudeService:
         website_text: str,
         company_name: str,
         url: str,
+        mobile_screenshot_b64: str = None,
         health_issues: list = None,
         learned_website_insights: dict = None,
     ) -> str:
@@ -126,7 +147,7 @@ class ClaudeService:
 
         text_supplement = ""
         if website_text:
-            trimmed = website_text[:2000]
+            trimmed = website_text[:3000]
             text_supplement = f"""
 SUPPLEMENTARY TEXT (scraped from the HTML source — use ONLY to catch details
 that might not be visible in the screenshot, such as meta descriptions or
@@ -150,7 +171,11 @@ it would help. Your second observation (2.) can address either another
 critical issue OR a design improvement, depending on severity.
 """
 
-        prompt = f"""You're a web designer reviewing a potential client's website. You are looking at a SCREENSHOT of their live site — this is exactly what a visitor sees.
+        mobile_note = ""
+        if mobile_screenshot_b64:
+            mobile_note = "\nYou are also seeing a MOBILE SCREENSHOT — compare the desktop and mobile views. If the mobile layout is broken, unusable, or missing key content, that's a strong observation."
+
+        prompt = f"""You're a web designer reviewing a potential client's website. You are looking at a SCREENSHOT of their live site — this is exactly what a visitor sees.{mobile_note}
 
 COMPANY: {company_name}
 URL: {url}
@@ -200,34 +225,46 @@ TONE:
 - Never critical, never condescending — even for serious issues, be helpful not alarming
 - One sentence each, max 25 words
 - Warm and conversational
+- NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
 YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 1.
 2. """
 
         try:
+            content_blocks = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": screenshot_b64,
+                    },
+                },
+            ]
+            if mobile_screenshot_b64:
+                content_blocks.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": mobile_screenshot_b64,
+                    },
+                })
+            content_blocks.append({
+                "type": "text",
+                "text": prompt,
+            })
+
             message = self.client.messages.create(
                 model="claude-sonnet-4-5-20250929",
                 max_tokens=200,
                 messages=[{
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": screenshot_b64,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": prompt,
-                        },
-                    ],
+                    "content": content_blocks,
                 }],
             )
-            return self._parse_two_observations(message.content[0].text)
+            return _strip_ai_dashes(self._parse_two_observations(message.content[0].text))
         except Exception as e:
             print(f"Visual website analysis error: {e}")
             # Fall back to text-only if vision call fails
@@ -321,6 +358,7 @@ TONE:
 - Show you see the potential in their business and want to help them unlock it
 - One sentence each, max 25 words
 - Warm and conversational
+- NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
 YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 1.
@@ -332,7 +370,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return self._parse_two_observations(message.content[0].text)
+            return _strip_ai_dashes(self._parse_two_observations(message.content[0].text))
         except Exception as e:
             print(f"Website analysis error: {e}")
             return None
@@ -575,6 +613,7 @@ STYLE REQUIREMENTS:
 4. Lead with VALUE — show what's possible for their business, not what's wrong with it
 5. Every observation should tie back to a business benefit (more customers, more trust, stronger brand)
 6. Close casually, not with aggressive sales language
+7. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 ABSOLUTE RULE - NEVER FABRICATE:
 - ONLY reference facts explicitly provided in the context above
@@ -617,8 +656,8 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
             if json_match:
                 result = json.loads(json_match.group())
                 return {
-                    'subject': result.get('subject', resolved_subject),
-                    'body': result.get('body', resolved_body)
+                    'subject': _strip_ai_dashes(result.get('subject', resolved_subject)),
+                    'body': _strip_ai_dashes(result.get('body', resolved_body))
                 }
 
             # Fallback if JSON parsing fails — return resolved template (variables filled in)
@@ -656,6 +695,10 @@ RECIPIENT:
 CONTEXT/PURPOSE:
 {context}
 
+IMPORTANT STYLE RULES:
+- NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
+- Sound human and natural, not AI-generated.
+
 Return ONLY valid JSON:
 {{"subject": "email subject", "body": "email body"}}
 """
@@ -670,9 +713,13 @@ Return ONLY valid JSON:
             response_text = message.content[0].text.strip()
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                return {
+                    'subject': _strip_ai_dashes(result.get('subject', '')),
+                    'body': _strip_ai_dashes(result.get('body', ''))
+                }
 
-            return {'subject': 'Hello', 'body': response_text}
+            return {'subject': 'Hello', 'body': _strip_ai_dashes(response_text)}
 
         except Exception as e:
             print(f"Claude API error: {e}")
@@ -714,6 +761,7 @@ TEMPLATE REQUIREMENTS:
 7. Lead with genuine interest in them — show you care about their work
 8. Frame any suggestions as opportunities, not problems
 9. End with a clear but soft call to action — friendly, not pushy
+10. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 Return ONLY valid JSON in this exact format:
 {{"name": "template name (2-4 words)", "subject": "email subject line with {{{{company}}}} variable if relevant", "body": "email body with {{{{name}}}} and {{{{company}}}} variables"}}
@@ -732,11 +780,11 @@ Return ONLY valid JSON in this exact format:
                 result = json.loads(json_match.group())
                 return {
                     'name': result.get('name', 'Generated Template'),
-                    'subject': result.get('subject', ''),
-                    'body': result.get('body', '')
+                    'subject': _strip_ai_dashes(result.get('subject', '')),
+                    'body': _strip_ai_dashes(result.get('body', ''))
                 }
 
-            return {'name': 'Generated Template', 'subject': '', 'body': response_text}
+            return {'name': 'Generated Template', 'subject': '', 'body': _strip_ai_dashes(response_text)}
 
         except Exception as e:
             print(f"Claude API error: {e}")
@@ -772,6 +820,7 @@ RULES:
 4. If the feedback is about length, adjust accordingly
 5. If the feedback asks to add/remove content, do exactly that
 6. Keep the template feeling personal and human
+7. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 Return ONLY valid JSON in this exact format:
 {{"name": "template name", "subject": "updated subject line", "body": "updated email body"}}
@@ -790,8 +839,8 @@ Return ONLY valid JSON in this exact format:
                 result = json.loads(json_match.group())
                 return {
                     'name': result.get('name', current_name),
-                    'subject': result.get('subject', current_subject),
-                    'body': result.get('body', current_body)
+                    'subject': _strip_ai_dashes(result.get('subject', current_subject)),
+                    'body': _strip_ai_dashes(result.get('body', current_body))
                 }
 
             return {'name': current_name, 'subject': current_subject, 'body': current_body}
@@ -888,6 +937,7 @@ CRITICAL REQUIREMENTS:
 5. Lead with genuine interest in THEIR work — acknowledge what they're building
 6. Show the VALUE you can bring — paint a picture of how their business benefits (more customers, stronger online presence, more trust from visitors)
 7. Close casually and warmly, not aggressively
+8. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 TONE GUIDANCE:
 - Be friendly and respectful — you're reaching out to help them grow, not to point out problems
@@ -917,9 +967,13 @@ Return ONLY valid JSON:
             response_text = message.content[0].text.strip()
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                return {
+                    'subject': _strip_ai_dashes(result.get('subject', '')),
+                    'body': _strip_ai_dashes(result.get('body', ''))
+                }
 
-            return {'subject': 'Quick note', 'body': response_text}
+            return {'subject': 'Quick note', 'body': _strip_ai_dashes(response_text)}
 
         except Exception as e:
             print(f"Claude API error: {e}")
@@ -1019,6 +1073,7 @@ YOUR RESPONSE MUST NOT:
 - Say "I understand" then pivot to another angle
 - Use phrases like "just in case", "when you're ready", "circle back"
 - Sound like a sales playbook — sound like a human being
+- Use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 THE GOAL: If they read your reply, they should think "that was actually really nice" — not "they're still trying to sell me."
 
@@ -1035,9 +1090,13 @@ Return ONLY valid JSON:
             response_text = message.content[0].text.strip()
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                return {
+                    'subject': _strip_ai_dashes(result.get('subject', f'Re: {original_subject}')),
+                    'body': _strip_ai_dashes(result.get('body', ''))
+                }
 
-            return {'subject': f'Re: {original_subject}', 'body': response_text}
+            return {'subject': f'Re: {original_subject}', 'body': _strip_ai_dashes(response_text)}
 
         except Exception as e:
             print(f"Rebuttal generation error: {e}")
@@ -1106,6 +1165,7 @@ YOUR RESPONSE MUST NOT:
 - List times in a rigid/robotic format
 - Sound overly excited or desperate
 - Use corporate phrases like "let's find synergies" or "I'd love to explore"
+- Use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 Return ONLY valid JSON:
 {{"subject": "Re: {original_subject}", "body": "your response"}}"""
@@ -1120,9 +1180,13 @@ Return ONLY valid JSON:
             response_text = message.content[0].text.strip()
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                return {
+                    'subject': _strip_ai_dashes(result.get('subject', f'Re: {original_subject}')),
+                    'body': _strip_ai_dashes(result.get('body', ''))
+                }
 
-            return {'subject': f'Re: {original_subject}', 'body': response_text}
+            return {'subject': f'Re: {original_subject}', 'body': _strip_ai_dashes(response_text)}
 
         except Exception as e:
             print(f"Meeting followup generation error: {e}")
@@ -1180,6 +1244,7 @@ YOUR FOLLOW-UP MUST NOT:
 - Be longer than the original email
 - Include multiple questions or CTAs
 - Use guilt language ("I noticed you didn't respond", "still haven't heard back")
+- Use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 THE GOAL: They should feel like this is a helpful nudge from someone genuine, not another automated follow-up. If they're going to reply to anything, make it this.
 
@@ -1196,9 +1261,13 @@ Return ONLY valid JSON:
             response_text = message.content[0].text.strip()
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                result = json.loads(json_match.group())
+                return {
+                    'subject': _strip_ai_dashes(result.get('subject', f'Re: {original_subject}')),
+                    'body': _strip_ai_dashes(result.get('body', ''))
+                }
 
-            return {'subject': f'Re: {original_subject}', 'body': response_text}
+            return {'subject': f'Re: {original_subject}', 'body': _strip_ai_dashes(response_text)}
 
         except Exception as e:
             print(f"Follow-up generation error: {e}")

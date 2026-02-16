@@ -5,6 +5,7 @@ from app.models.settings import WorkspaceSettings
 from app.services.csv_parser import parse_file, detect_field_mapping
 from app.services.claude_service import ClaudeService, clean_company_name
 from app.services.campaign_runner import CampaignRunner
+from app.services.spam_checker import check_spam_score
 import re
 from datetime import datetime
 import json
@@ -268,6 +269,11 @@ def list_recipients(id):
                 'bounced_at': log.bounced_at.isoformat() if log.bounced_at else None,
                 'bounce_reason': log.bounce_reason,
             }
+        # Include per-recipient spam check when content exists
+        if r.personalized_body:
+            data['spam_check'] = check_spam_score(
+                r.personalized_subject or '', r.personalized_body
+            )
         result.append(data)
 
     return jsonify(result)
@@ -384,7 +390,12 @@ def regenerate_recipient_preview(id, recipient_id):
         recipient.personalized_body = result.get('body', campaign.template.body)
         recipient.approved = False  # Reset approval after regeneration
         db.session.commit()
-        return jsonify(recipient.to_dict())
+
+        resp = recipient.to_dict()
+        resp['spam_check'] = check_spam_score(
+            recipient.personalized_subject, recipient.personalized_body
+        )
+        return jsonify(resp)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -451,6 +462,10 @@ def generate_preview(id):
         learned_insights = _get_learned_insights()
         learned_website_insights = _get_learned_website_insights()
 
+        # Cache website analysis by resolved URL so recipients at the same
+        # domain don't trigger duplicate fetches / screenshots / API calls.
+        website_analysis_cache = {}
+
         for recipient in recipients:
             try:
                 recipient_dict = {
@@ -459,7 +474,16 @@ def generate_preview(id):
                     'company': recipient.company,
                     'custom_fields': recipient.get_all_context()
                 }
-                wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+
+                # Domain-level caching for website analysis
+                resolved_url = WebsiteAnalyzer.resolve_url(recipient_dict)
+                cache_key = (resolved_url or '').lower().rstrip('/')
+                if cache_key and cache_key in website_analysis_cache:
+                    wa_result = website_analysis_cache[cache_key]
+                else:
+                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+                    if cache_key:
+                        website_analysis_cache[cache_key] = wa_result
                 website_insights = wa_result['analysis'] if wa_result else None
 
                 # Log the analysis for the learning feedback loop
@@ -498,11 +522,22 @@ def generate_preview(id):
             generated += 1
         db.session.commit()
 
+    # Run spam check on all generated recipients and flag any issues
+    spam_warnings = 0
+    for recipient in recipients:
+        if recipient.personalized_body:
+            sc = check_spam_score(
+                recipient.personalized_subject or '', recipient.personalized_body
+            )
+            if sc['level'] in ('medium', 'high'):
+                spam_warnings += 1
+
     return jsonify({
         'success': True,
         'generated': generated,
         'failed': failed,
-        'remaining': remaining
+        'remaining': remaining,
+        'spam_warnings': spam_warnings,
     })
 
 @campaigns_bp.route('/<int:id>/send-individual', methods=['POST'])

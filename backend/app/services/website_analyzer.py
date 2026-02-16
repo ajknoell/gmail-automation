@@ -88,6 +88,14 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
         issues.append(f'CONNECTION_ERROR: Could not connect to the website. Detail: {e}')
         return issues
 
+    # --- Page speed check ---
+    load_time = resp.elapsed.total_seconds()
+    if load_time > 3:
+        issues.append(
+            f'SLOW_LOAD: The website took {load_time:.1f} seconds to respond '
+            f'— visitors expect pages to load in under 3 seconds and may leave before the site appears.'
+        )
+
     # --- HTTP status code check ---
     if resp.status_code >= 500:
         issues.append(f'SERVER_ERROR: The website returns a {resp.status_code} server error — visitors see an error page.')
@@ -167,6 +175,20 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
                     )
                     break
 
+            # Check for outdated copyright year
+            from datetime import datetime as _dt
+            copyright_years = re.findall(
+                r'(?:©|\(c\)|copyright)\s*(\d{4})', body_lower
+            )
+            if copyright_years:
+                newest_year = max(int(y) for y in copyright_years)
+                current_year = _dt.now().year
+                if current_year - newest_year >= 2:
+                    issues.append(
+                        f'OUTDATED_COPYRIGHT: The website\'s copyright year is {newest_year} '
+                        f'— the site may not be actively maintained, which can make the business look inactive or outdated to visitors.'
+                    )
+
             # Check for "not secure" / mixed-content hints in page title
             title_match = re.search(r'<title[^>]*>(.*?)</title>', body_lower)
             if title_match:
@@ -233,6 +255,63 @@ def _capture_screenshot(
         return None
 
 
+def _capture_mobile_screenshot(
+    url: str, timeout: int = 20, ignore_ssl: bool = False
+) -> Optional[str]:
+    """Capture a mobile-viewport screenshot (375x812, iPhone-style).
+
+    Returns base64 PNG or None if Playwright is unavailable / capture fails.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+
+    try:
+        with sync_playwright() as p:
+            launch_args = []
+            if ignore_ssl:
+                launch_args.append('--ignore-certificate-errors')
+            browser = p.chromium.launch(headless=True, args=launch_args)
+            page = browser.new_page(
+                viewport={'width': 375, 'height': 812},
+                user_agent=(
+                    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
+                    'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+                    'Version/17.0 Mobile/15E148 Safari/604.1'
+                ),
+            )
+            try:
+                page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
+            except Exception:
+                pass
+            page.wait_for_timeout(2000)
+            screenshot_bytes = page.screenshot(full_page=True)
+            browser.close()
+
+        # Resize if too large
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(screenshot_bytes))
+            max_width = 375
+            max_height = 2000
+            if img.width > max_width or img.height > max_height:
+                ratio = min(max_width / img.width, max_height / img.height)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                img = img.resize(new_size, Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format='PNG', optimize=True)
+                screenshot_bytes = buf.getvalue()
+        except ImportError:
+            pass
+
+        return base64.b64encode(screenshot_bytes).decode('utf-8')
+    except Exception as e:
+        print(f"Mobile screenshot capture failed for {url}: {e}")
+        return None
+
+
 class WebsiteAnalyzer:
 
     @staticmethod
@@ -290,6 +369,66 @@ class WebsiteAnalyzer:
         return f'https://{domain}'
 
     @classmethod
+    def fetch_inner_pages(cls, base_url: str, max_chars: int = 1500) -> Optional[str]:
+        """Fetch key inner pages (/about, /services, /contact) and return combined text.
+
+        Skips pages that redirect back to the homepage or return errors.
+        Returns None if no meaningful inner-page content was found.
+        """
+        from urllib.parse import urlparse, urljoin
+
+        if not base_url.startswith(('http://', 'https://')):
+            base_url = 'https://' + base_url
+
+        # Normalise: ensure trailing slash for urljoin
+        if not base_url.endswith('/'):
+            base_url += '/'
+
+        homepage_path = urlparse(base_url).path
+        inner_paths = ['/about', '/about-us', '/services', '/contact']
+        parts: List[str] = []
+
+        for path in inner_paths:
+            page_url = urljoin(base_url, path)
+            try:
+                resp = requests.get(
+                    page_url,
+                    timeout=5,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (compatible; email-outreach-bot/1.0)',
+                        'Accept': 'text/html',
+                    },
+                    allow_redirects=True,
+                )
+                if not resp.ok:
+                    continue
+
+                # Skip if it redirected back to the homepage
+                final_path = urlparse(resp.url).path.rstrip('/')
+                if final_path == homepage_path.rstrip('/') or final_path == '':
+                    continue
+
+                content_type = resp.headers.get('content-type', '')
+                if 'text/html' not in content_type:
+                    continue
+
+                extractor = _TextExtractor()
+                extractor.feed(resp.text)
+                text = extractor.get_text()
+                if text and len(text) > 50:
+                    parts.append(f'--- {path} ---\n{text[:800]}')
+            except Exception:
+                continue
+
+        if not parts:
+            return None
+
+        combined = '\n\n'.join(parts)
+        if len(combined) > max_chars:
+            combined = combined[:max_chars] + '\n[...truncated]'
+        return combined
+
+    @classmethod
     def resolve_url(cls, recipient: dict) -> Optional[str]:
         """Get website URL from custom fields or email domain."""
         custom_fields = recipient.get('custom_fields', {})
@@ -331,10 +470,13 @@ class WebsiteAnalyzer:
             for tag in ('SSL_', 'SECURITY_WARNING')
         )
 
-        # --- Step 2: Capture screenshot ---
+        # --- Step 2: Capture screenshots (desktop + mobile) ---
         # If there's an SSL issue, capture with ignore_ssl so we see what
         # the browser actually shows (the warning page).
         screenshot_b64 = _capture_screenshot(
+            screenshot_url, ignore_ssl=has_ssl_issue
+        )
+        mobile_screenshot_b64 = _capture_mobile_screenshot(
             screenshot_url, ignore_ssl=has_ssl_issue
         )
 
@@ -349,6 +491,15 @@ class WebsiteAnalyzer:
                     text = None
             except Exception:
                 text = None
+
+            # --- Step 3b: Fetch key inner pages for richer context ---
+            if text:
+                try:
+                    inner_text = cls.fetch_inner_pages(url)
+                    if inner_text:
+                        text = text + '\n\n' + inner_text
+                except Exception:
+                    pass
 
         # Need at least one data source (issues alone count — they tell us
         # plenty about what visitors experience)
@@ -371,6 +522,7 @@ class WebsiteAnalyzer:
             company,
             url,
             screenshot_b64=screenshot_b64,
+            mobile_screenshot_b64=mobile_screenshot_b64,
             health_issues=health_issues,
             learned_website_insights=learned_website_insights,
         )

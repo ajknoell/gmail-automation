@@ -6,6 +6,7 @@ from app.models.settings import WorkspaceSettings
 from app.services.claude_service import ClaudeService
 from app.services.gmail_service import GmailService
 from app.services.tracking_service import TrackingService
+from app.services.spam_checker import check_spam_score
 import json
 
 quick_send_bp = Blueprint('quick_send', __name__)
@@ -126,8 +127,9 @@ def generate_quick_email():
                 url = WebsiteAnalyzer.resolve_url(recipient_data)
                 if url:
                     current_app.logger.info(f'Fetching website: {url}')
-                    website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data)
-                    if website_insights:
+                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data)
+                    if wa_result:
+                        website_insights = wa_result['analysis']
                         website_status = 'success'
                         current_app.logger.info(f'Website analysis complete for {url}')
                     else:
@@ -153,6 +155,9 @@ def generate_quick_email():
                 learned_insights=learned_insights
             )
             result['website_status'] = website_status
+            result['spam_check'] = check_spam_score(
+                result.get('subject', ''), result.get('body', '')
+            )
             return jsonify(result)
         else:
             # Freeform generation (no template)
@@ -161,6 +166,9 @@ def generate_quick_email():
                 context=context,
                 writing_style=writing_style_raw,
                 learned_insights=learned_insights
+            )
+            result['spam_check'] = check_spam_score(
+                result.get('subject', ''), result.get('body', '')
             )
             return jsonify(result)
     except Exception as e:
