@@ -642,10 +642,14 @@ class WebsiteAnalyzer:
         if not url:
             return None
 
-        # Ensure URL has a scheme
-        screenshot_url = url
-        if not screenshot_url.startswith(('http://', 'https://')):
-            screenshot_url = 'https://' + screenshot_url
+        # Always use HTTPS — that's what browsers default to and what
+        # visitors will hit.  If the site has an SSL issue on HTTPS we need
+        # to catch it even when the CSV stored an http:// URL.
+        from urllib.parse import urlparse
+        _parsed = urlparse(url if '://' in url else f'https://{url}')
+        screenshot_url = f'https://{_parsed.hostname}{_parsed.path}'.rstrip('/')
+        if _parsed.query:
+            screenshot_url += f'?{_parsed.query}'
 
         # --- Step 1: Pre-flight health checks ---
         health_issues = _check_website_health(screenshot_url)
@@ -660,8 +664,8 @@ class WebsiteAnalyzer:
 
         # --- Step 3: Fetch text as supplementary context ---
         text = None
-        # Skip text fetch if the site has connection-level issues
-        connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP')
+        # Skip text fetch if the site has connection-level or SSL issues
+        connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP', 'SSL_')
         if not any(tag in issue for issue in health_issues for tag in connection_failures):
             try:
                 text = cls.fetch_website(url)
