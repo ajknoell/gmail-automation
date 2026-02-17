@@ -44,16 +44,20 @@ class CampaignRunner:
     @staticmethod
     def _substitute_variables(text: str, recipient) -> str:
         """Replace {{variable}} placeholders with recipient data."""
-        from app.services.claude_service import clean_company_name
+        from app.services.claude_service import clean_company_name, resolve_recipient_fields
         import re
 
+        custom = recipient.get_custom_fields() or {}
+        name, company = resolve_recipient_fields(
+            recipient.name, clean_company_name(recipient.company or ''),
+            recipient.email, custom,
+        )
         variables = {
-            'name': recipient.name or '',
+            'name': name or 'there',
             'email': recipient.email or '',
-            'company': clean_company_name(recipient.company or '') or '',
+            'company': company or '',
         }
         # Include custom fields
-        custom = recipient.get_custom_fields()
         if custom:
             variables.update(custom)
 

@@ -183,14 +183,15 @@ function CampaignDetail() {
     setGenerating(true);
     try {
       const res = await generatePreview(id, batchSize);
-      const { generated, failed, remaining, message } = res.data;
+      const { generated, failed, remaining, message, spam_warnings } = res.data;
       if (message) {
         alert(message);
       } else if (remaining > 0) {
         const mode = batchSize > 0 ? 'batch preview' : 'generation';
         let statusMsg = `Generated ${generated} emails (${mode})`;
         if (failed > 0) statusMsg += ` (${failed} fell back to template)`;
-        statusMsg += `. ${remaining} recipients remaining.\n\nGenerate the next batch?`;
+        if (spam_warnings > 0) statusMsg += `\n\nSpam warning: ${spam_warnings} email(s) may trigger spam filters. Check the status dots for details.`;
+        statusMsg += `\n\n${remaining} recipients remaining.\n\nGenerate the next batch?`;
         const continueGenerating = confirm(statusMsg);
         if (continueGenerating) {
           await loadData();
@@ -210,6 +211,21 @@ function CampaignDetail() {
     try {
       await sendIndividual(id, recipientId);
       loadData();
+
+      // Auto-advance: move to next unsent preview or close the modal
+      if (previewRecipientId === recipientId) {
+        const unsent = recipients.filter(
+          (r) => r.personalized_body && r.status !== 'sent' && r.id !== recipientId
+        );
+        if (unsent.length > 0) {
+          // Find next one after current position, or wrap to first
+          const curIdx = recipients.findIndex((r) => r.id === recipientId);
+          const nextUnsent = unsent.find((r) => recipients.indexOf(r) > curIdx) || unsent[0];
+          setPreviewRecipientId(nextUnsent.id);
+        } else {
+          setPreviewRecipientId(null);
+        }
+      }
     } catch (error) {
       alert('Failed to send: ' + (error.response?.data?.error || error.message));
     }
@@ -809,6 +825,34 @@ function CampaignDetail() {
                     </td>
                     <td>
                       <span className={`badge badge-${recipient.status}`}>{recipient.status}</span>
+                      {recipient.content_warnings && recipient.content_warnings.length > 0 && (
+                        <span
+                          title={`Content warning:\n${recipient.content_warnings.join('\n')}`}
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: '0.35rem',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: '#F59E0B',
+                            cursor: 'help',
+                          }}
+                        />
+                      )}
+                      {recipient.spam_check && recipient.spam_check.level !== 'low' && (
+                        <span
+                          title={`Spam risk: ${recipient.spam_check.level} (${recipient.spam_check.score}/100)\n${recipient.spam_check.reasons.join('\n')}`}
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: '0.35rem',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: recipient.spam_check.level === 'high' ? '#EF4444' : '#F59E0B',
+                            cursor: 'help',
+                          }}
+                        />
+                      )}
                     </td>
                     <td>
                       {campaign.status === 'draft' && recipient.personalized_body ? (
@@ -1029,6 +1073,50 @@ function CampaignDetail() {
                     {recipient.approved && <span style={{ color: '#10B981', marginLeft: '0.5rem', fontSize: '0.75rem' }}>Approved</span>}
                   </div>
                 </div>
+
+                {/* Content warnings (e.g. missing website insights) */}
+                {recipient.content_warnings && recipient.content_warnings.length > 0 && (
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    background: '#FFFBEB',
+                    border: '1px solid #FDE68A',
+                    borderRadius: '0.5rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.85rem',
+                  }}>
+                    <div style={{ fontWeight: 600, color: '#D97706', marginBottom: '0.25rem' }}>
+                      Content Warning
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#6B7280' }}>
+                      {recipient.content_warnings.map((warning, i) => (
+                        <li key={i}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Spam warning */}
+                {recipient.spam_check && recipient.spam_check.level !== 'low' && (
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    background: recipient.spam_check.level === 'high' ? '#FEF2F2' : '#FFFBEB',
+                    border: `1px solid ${recipient.spam_check.level === 'high' ? '#FECACA' : '#FDE68A'}`,
+                    borderRadius: '0.5rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.85rem',
+                  }}>
+                    <div style={{ fontWeight: 600, color: recipient.spam_check.level === 'high' ? '#DC2626' : '#D97706', marginBottom: '0.25rem' }}>
+                      Spam Risk: {recipient.spam_check.level.toUpperCase()} (score: {recipient.spam_check.score}/100)
+                    </div>
+                    {recipient.spam_check.reasons.length > 0 && (
+                      <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#6B7280' }}>
+                        {recipient.spam_check.reasons.map((reason, i) => (
+                          <li key={i}>{reason}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
 
                 {/* Subject */}
                 {campaign.status === 'draft' ? (

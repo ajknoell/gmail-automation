@@ -16,6 +16,7 @@ from datetime import datetime
 from app.models.website_analysis_log import WebsiteAnalysisLog
 from app.models.email_log import EmailLog
 from app.models.reply_message import ReplyMessage
+from app.models.campaign import Campaign
 from app.models.settings import WorkspaceSettings
 from app.services.claude_service import ClaudeService
 
@@ -43,7 +44,7 @@ class WebsiteInsightsService:
                 "metadata": { ... } | None,
             }
         """
-        scored = self._score_analyses(workspace_id)
+        scored, campaign_contexts = self._score_analyses(workspace_id)
 
         if len(scored) < MIN_ANALYSES_FOR_LEARNING:
             return {
@@ -65,7 +66,9 @@ class WebsiteInsightsService:
         winner_sample = _sample(winners, MAX_SAMPLES_PER_TIER)
         loser_sample = _sample(losers, MAX_SAMPLES_PER_TIER)
 
-        prompt = self._build_analysis_prompt(winner_sample, loser_sample, len(scored))
+        prompt = self._build_analysis_prompt(
+            winner_sample, loser_sample, len(scored), campaign_contexts
+        )
         insights = self._run_analysis(prompt)
 
         if not insights:
@@ -139,7 +142,7 @@ class WebsiteInsightsService:
         )
 
         if not analyses:
-            return []
+            return [], set()
 
         # Batch-load email logs
         log_ids = [a.email_log_id for a in analyses if a.email_log_id]
@@ -156,11 +159,29 @@ class WebsiteInsightsService:
         for r in replies:
             replies_by_log.setdefault(r.email_log_id, []).append(r)
 
+        # Batch-load campaigns for business context
+        campaign_ids = {el.campaign_id for el in email_logs.values() if el.campaign_id}
+        campaigns = {}
+        if campaign_ids:
+            campaigns = {
+                c.id: c
+                for c in Campaign.query.filter(Campaign.id.in_(campaign_ids)).all()
+            }
+
         scored = []
+        campaign_contexts = set()
         for analysis in analyses:
             el = email_logs.get(analysis.email_log_id)
             if not el:
                 continue
+
+            # Collect campaign context for business understanding
+            if el.campaign_id and el.campaign_id in campaigns:
+                camp = campaigns[el.campaign_id]
+                if camp.campaign_context:
+                    campaign_contexts.add(camp.campaign_context.strip())
+                if camp.ai_prompt:
+                    campaign_contexts.add(camp.ai_prompt.strip())
 
             score = 0.0
             engagement = []
@@ -203,7 +224,7 @@ class WebsiteInsightsService:
             })
 
         scored.sort(key=lambda x: x['score'], reverse=True)
-        return scored
+        return scored, campaign_contexts
 
     def _split_winners_losers(self, scored, percentile=0.30):
         """Split into top-performing and bottom-performing analyses."""
@@ -218,7 +239,7 @@ class WebsiteInsightsService:
 
         return winners, losers
 
-    def _build_analysis_prompt(self, winners, losers, total_count):
+    def _build_analysis_prompt(self, winners, losers, total_count, campaign_contexts=None):
         """Build the Claude comparison prompt for website analysis patterns."""
 
         def _fmt(entry, idx):
@@ -233,13 +254,34 @@ Website observations used in email:
         winner_block = '\n'.join(_fmt(e, i) for i, e in enumerate(winners))
         loser_block = '\n'.join(_fmt(e, i) for i, e in enumerate(losers))
 
+        # Build business context section
+        biz_context = ''
+        if campaign_contexts:
+            ctx_list = '\n'.join(f'- {c}' for c in campaign_contexts)
+            biz_context = f"""
+===================================================
+SENDER'S BUSINESS CONTEXT
+===================================================
+These emails are sent by a business that describes itself / its service as:
+{ctx_list}
+
+CRITICAL: The sender's service directly affects WHY certain observations drive engagement.
+For example, if the sender offers web design services, then observations about broken or
+poorly designed websites resonate because they demonstrate the sender's expertise and the
+recipient's need for the sender's service. This does NOT mean "always mention broken
+websites" — it means observations that ALIGN WITH WHAT THE SENDER CAN HELP WITH are
+more compelling. An observation is effective when it's both accurate AND relevant to what
+the sender offers.
+
+"""
+
         return f"""You are an expert at analyzing cold email outreach effectiveness. I'm going to show you two groups of WEBSITE ANALYSES that were used to personalize outreach emails:
 
 - **WINNERS**: Website observations that were included in emails that got replies/clicks/engagement
 - **LOSERS**: Website observations that were included in emails that got zero engagement
 
-Your job: Compare the two groups and identify what makes website observations effective at driving replies. What kinds of observations resonate with recipients? What kinds fall flat?
-
+Your job: Compare the two groups and identify what makes website observations effective at driving replies. Focus on the QUALITY and RELEVANCE of the observations, not just surface-level patterns.
+{biz_context}
 This is based on {total_count} total website analyses.
 
 ===================================================
@@ -254,14 +296,24 @@ WORST PERFORMING WEBSITE OBSERVATIONS (LOSERS)
 
 ===================================================
 
+IMPORTANT ANALYSIS GUIDELINES:
+- Consider WHY an observation drove engagement — was it because it was accurate, specific,
+  and relevant to the sender's expertise? Or was it generic advice anyone could give?
+- Distinguish between observations that work because they match the sender's service offering
+  vs observations that would work for any cold email.
+- "Broken website = good observation" is WRONG thinking. "Accurately identifying a real problem
+  that the sender can specifically help fix = good observation" is RIGHT.
+- The best observations demonstrate the sender's expertise by noticing things a non-expert
+  would miss.
+
 Analyze the patterns and return ONLY a valid JSON object with these exact keys. Each value should be 1-3 concise, actionable sentences:
 
 {{
-  "observation_types_that_work": "What kinds of website observations drive engagement? (e.g. specific vs vague, business-impact vs cosmetic, quick wins vs major overhauls)",
-  "observation_types_to_avoid": "What kinds of observations fall flat or turn recipients off?",
+  "observation_types_that_work": "What kinds of observations drive engagement? Focus on the qualities (accuracy, specificity, relevance to sender's expertise) rather than surface topics.",
+  "observation_types_to_avoid": "What kinds of observations fall flat? Consider whether they failed because they were generic, inaccurate, or irrelevant to what the sender actually offers.",
   "framing_patterns": "How should observations be framed? (benefit-led vs problem-led, tone, specificity level)",
-  "priority_focus_areas": "What areas of a website should the analyzer focus on first? (e.g. mobile, loading speed, calls-to-action, trust signals, SEO, content clarity)",
-  "personalization_depth": "How much should observations reference the recipient's specific business vs generic web design advice?",
+  "priority_focus_areas": "What areas of a website should the analyzer focus on? Prioritize areas where the sender can demonstrate real expertise.",
+  "personalization_depth": "How much should observations reference the recipient's specific business vs generic advice?",
   "length_and_detail": "How detailed/long should each observation be for maximum impact?",
   "top_recommendation": "The single most impactful change to make to website analysis right now based on this data."
 }}

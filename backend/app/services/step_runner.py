@@ -85,6 +85,7 @@ class StepRunner:
                     db.session.commit()
                     continue
 
+
                 try:
                     subject = sr.personalized_subject or 'Follow-up'
                     body = sr.personalized_body or ''

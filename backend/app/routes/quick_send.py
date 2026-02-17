@@ -6,6 +6,7 @@ from app.models.settings import WorkspaceSettings
 from app.services.claude_service import ClaudeService
 from app.services.gmail_service import GmailService
 from app.services.tracking_service import TrackingService
+from app.services.spam_checker import check_spam_score
 import json
 
 quick_send_bp = Blueprint('quick_send', __name__)
@@ -121,13 +122,21 @@ def generate_quick_email():
             # Fetch website insights (with health checks + screenshot analysis)
             website_insights = None
             website_status = None
+            learned_website_insights = None
+            raw_lw = WorkspaceSettings.get(g.workspace_id, 'learned_website_insights') if g.workspace_id else None
+            if raw_lw:
+                try:
+                    learned_website_insights = json.loads(raw_lw)
+                except Exception:
+                    pass
             try:
                 from app.services.website_analyzer import WebsiteAnalyzer
                 url = WebsiteAnalyzer.resolve_url(recipient_data)
                 if url:
                     current_app.logger.info(f'Fetching website: {url}')
-                    website_insights = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data)
-                    if website_insights:
+                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data, learned_website_insights)
+                    if wa_result:
+                        website_insights = wa_result['analysis']
                         website_status = 'success'
                         current_app.logger.info(f'Website analysis complete for {url}')
                     else:
@@ -142,6 +151,8 @@ def generate_quick_email():
                 website_status = 'error'
                 current_app.logger.warning(f'Website analysis failed: {e}')
 
+            team_contacts = wa_result.get('team_contacts', []) if wa_result else []
+
             result = claude.personalize_email(
                 template_subject=template.subject,
                 template_body=template.body,
@@ -150,9 +161,13 @@ def generate_quick_email():
                 writing_style=writing_style,
                 campaign_context=None,
                 website_insights=website_insights,
-                learned_insights=learned_insights
+                learned_insights=learned_insights,
+                team_contacts=team_contacts,
             )
             result['website_status'] = website_status
+            result['spam_check'] = check_spam_score(
+                result.get('subject', ''), result.get('body', '')
+            )
             return jsonify(result)
         else:
             # Freeform generation (no template)
@@ -161,6 +176,9 @@ def generate_quick_email():
                 context=context,
                 writing_style=writing_style_raw,
                 learned_insights=learned_insights
+            )
+            result['spam_check'] = check_spam_score(
+                result.get('subject', ''), result.get('body', '')
             )
             return jsonify(result)
     except Exception as e:
@@ -193,7 +211,7 @@ def send_quick_email():
         if not account:
             return jsonify({'error': 'No Gmail account connected'}), 400
 
-    gmail = GmailService(account_id=account_id)
+    gmail = GmailService(account_id=account.id)
     if not gmail.connect():
         return jsonify({'error': 'Gmail not connected'}), 400
 

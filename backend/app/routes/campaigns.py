@@ -5,8 +5,9 @@ from app.models.campaign_step import CampaignStep
 from app.models.step_recipient import StepRecipient
 from app.models.settings import WorkspaceSettings
 from app.services.csv_parser import parse_file, detect_field_mapping
-from app.services.claude_service import ClaudeService, clean_company_name
+from app.services.claude_service import ClaudeService, clean_company_name, _looks_like_company_name, resolve_recipient_fields
 from app.services.campaign_runner import CampaignRunner
+from app.services.spam_checker import check_spam_score
 import re
 from datetime import datetime
 import json
@@ -270,6 +271,14 @@ def list_recipients(id):
                 'bounced_at': log.bounced_at.isoformat() if log.bounced_at else None,
                 'bounce_reason': log.bounce_reason,
             }
+        # Include per-recipient spam check when content exists
+        if r.personalized_body:
+            data['spam_check'] = check_spam_score(
+                r.personalized_subject or '', r.personalized_body
+            )
+        # Surface content warnings (stored in error_message during generation)
+        if r.error_message and r.personalized_body:
+            data['content_warnings'] = r.error_message.split(' | ')
         result.append(data)
 
     return jsonify(result)
@@ -357,6 +366,7 @@ def regenerate_recipient_preview(id, recipient_id):
 
     try:
         # Fetch and analyze recipient's website
+        # Pass previous observations so the model picks different angles on regeneration
         from app.services.website_analyzer import WebsiteAnalyzer
         learned_website_insights = _get_learned_website_insights()
         recipient_dict = {
@@ -365,8 +375,19 @@ def regenerate_recipient_preview(id, recipient_id):
             'company': recipient.company,
             'custom_fields': recipient.get_all_context()
         }
-        wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+        # Extract just the numbered observations from the previous email body
+        previous_observations = None
+        if recipient.personalized_body:
+            import re as _re
+            obs_lines = _re.findall(r'^\s*[12]\.\s*.+', recipient.personalized_body, _re.MULTILINE)
+            if obs_lines:
+                previous_observations = '\n'.join(obs_lines)
+        wa_result = WebsiteAnalyzer.fetch_and_analyze(
+            claude, recipient_dict, learned_website_insights,
+            previous_observations=previous_observations,
+        )
         website_insights = wa_result['analysis'] if wa_result else None
+        team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 
         # Log the analysis for learning
         if wa_result:
@@ -380,24 +401,39 @@ def regenerate_recipient_preview(id, recipient_id):
             writing_style=writing_style,
             campaign_context=campaign.campaign_context,
             website_insights=website_insights,
-            learned_insights=learned_insights
+            learned_insights=learned_insights,
+            team_contacts=team_contacts,
         )
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
         recipient.approved = False  # Reset approval after regeneration
+        # Store content warnings (e.g. missing website insights)
+        if result.get('content_warnings'):
+            recipient.error_message = ' | '.join(result['content_warnings'])
+        else:
+            recipient.error_message = None
         db.session.commit()
-        return jsonify(recipient.to_dict())
+
+        resp = recipient.to_dict()
+        resp['spam_check'] = check_spam_score(
+            recipient.personalized_subject, recipient.personalized_body
+        )
+        return jsonify(resp)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 def _substitute_template_variables(text, recipient):
     """Replace {{variable}} placeholders with recipient data."""
+    custom = recipient.get_custom_fields() or {}
+    name, company = resolve_recipient_fields(
+        recipient.name, clean_company_name(recipient.company or ''),
+        recipient.email, custom,
+    )
     variables = {
-        'name': recipient.name or '',
+        'name': name or 'there',
         'email': recipient.email or '',
-        'company': clean_company_name(recipient.company or '') or '',
+        'company': company or '',
     }
-    custom = recipient.get_custom_fields()
     if custom:
         variables.update(custom)
 
@@ -453,6 +489,10 @@ def generate_preview(id):
         learned_insights = _get_learned_insights()
         learned_website_insights = _get_learned_website_insights()
 
+        # Cache website analysis by resolved URL so recipients at the same
+        # domain don't trigger duplicate fetches / screenshots / API calls.
+        website_analysis_cache = {}
+
         for recipient in recipients:
             try:
                 recipient_dict = {
@@ -461,8 +501,18 @@ def generate_preview(id):
                     'company': recipient.company,
                     'custom_fields': recipient.get_all_context()
                 }
-                wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+
+                # Domain-level caching for website analysis
+                resolved_url = WebsiteAnalyzer.resolve_url(recipient_dict)
+                cache_key = (resolved_url or '').lower().rstrip('/')
+                if cache_key and cache_key in website_analysis_cache:
+                    wa_result = website_analysis_cache[cache_key]
+                else:
+                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+                    if cache_key and wa_result:
+                        website_analysis_cache[cache_key] = wa_result
                 website_insights = wa_result['analysis'] if wa_result else None
+                team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 
                 # Log the analysis for the learning feedback loop
                 if wa_result:
@@ -476,10 +526,16 @@ def generate_preview(id):
                     writing_style=writing_style,
                     campaign_context=campaign.campaign_context,
                     website_insights=website_insights,
-                    learned_insights=learned_insights
+                    learned_insights=learned_insights,
+                    team_contacts=team_contacts,
                 )
                 recipient.personalized_subject = result.get('subject', campaign.template.subject)
                 recipient.personalized_body = result.get('body', campaign.template.body)
+                # Store content warnings (e.g. missing website insights)
+                if result.get('content_warnings'):
+                    recipient.error_message = ' | '.join(result['content_warnings'])
+                else:
+                    recipient.error_message = None
                 generated += 1
             except Exception as e:
                 # Do NOT set personalized_body on failure — leave the recipient
@@ -500,11 +556,22 @@ def generate_preview(id):
             generated += 1
         db.session.commit()
 
+    # Run spam check on all generated recipients and flag any issues
+    spam_warnings = 0
+    for recipient in recipients:
+        if recipient.personalized_body:
+            sc = check_spam_score(
+                recipient.personalized_subject or '', recipient.personalized_body
+            )
+            if sc['level'] in ('medium', 'high'):
+                spam_warnings += 1
+
     return jsonify({
         'success': True,
         'generated': generated,
         'failed': failed,
-        'remaining': remaining
+        'remaining': remaining,
+        'spam_warnings': spam_warnings,
     })
 
 @campaigns_bp.route('/<int:id>/send-individual', methods=['POST'])

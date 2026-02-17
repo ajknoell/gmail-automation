@@ -1,8 +1,16 @@
 import base64
 import re
+import time
 import requests
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
+
+
+# Cache website fetch results (screenshots, text, health issues) keyed by URL.
+# Avoids re-fetching and re-screenshotting the same site on regeneration.
+# Entries expire after 10 minutes.
+_website_cache: Dict[str, dict] = {}
+_CACHE_TTL = 600  # seconds
 
 
 class _TextExtractor(HTMLParser):
@@ -11,21 +19,21 @@ class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self._parts = []
-        self._skip = False
-        self._skip_tags = {'script', 'style', 'noscript', 'svg', 'head'}
+        self._skip_depth = 0
+        self._skip_tags = {'script', 'style', 'noscript', 'svg', 'head', 'nav'}
 
     def handle_starttag(self, tag, attrs):
         if tag in self._skip_tags:
-            self._skip = True
+            self._skip_depth += 1
         if tag in ('br', 'p', 'div', 'h1', 'h2', 'h3', 'h4', 'li', 'tr'):
             self._parts.append('\n')
 
     def handle_endtag(self, tag):
-        if tag in self._skip_tags:
-            self._skip = False
+        if tag in self._skip_tags and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data):
-        if not self._skip:
+        if self._skip_depth == 0:
             self._parts.append(data)
 
     def get_text(self):
@@ -88,11 +96,23 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
         issues.append(f'CONNECTION_ERROR: Could not connect to the website. Detail: {e}')
         return issues
 
+    # --- Page speed check ---
+    load_time = resp.elapsed.total_seconds()
+    if load_time > 3:
+        issues.append(
+            f'SLOW_LOAD: The website took {load_time:.1f} seconds to respond '
+            f'— visitors expect pages to load in under 3 seconds and may leave before the site appears.'
+        )
+
     # --- HTTP status code check ---
     if resp.status_code >= 500:
         issues.append(f'SERVER_ERROR: The website returns a {resp.status_code} server error — visitors see an error page.')
     elif resp.status_code == 403:
-        issues.append('ACCESS_DENIED: The website returns a 403 Forbidden — visitors are blocked from viewing the site.')
+        # 403 is almost always bot/Cloudflare protection blocking our
+        # requests library.  Real browsers (and Playwright screenshots)
+        # pass the challenge fine, so this is NOT a visitor-facing issue.
+        # Downgrade to a soft note that won't override the screenshot.
+        issues.append('BOT_BLOCKED_403: Our automated check got a 403 from this site (likely bot protection like Cloudflare). This does NOT mean visitors are blocked. Ignore this if the screenshot shows the site loading normally.')
     elif resp.status_code == 404:
         issues.append('NOT_FOUND: The website\'s homepage returns a 404 — visitors land on a "page not found" error.')
     elif resp.status_code >= 400:
@@ -167,6 +187,21 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
                     )
                     break
 
+            # Check for outdated copyright year — scan the FULL page
+            # because copyright notices are almost always in the footer.
+            from datetime import datetime as _dt
+            full_lower = resp.text.lower()
+            copyright_years = re.findall(
+                r'(?:©|\(c\)|copyright)\s*(\d{4})', full_lower
+            )
+            if copyright_years:
+                newest_year = max(int(y) for y in copyright_years)
+                if newest_year < 2020:
+                    issues.append(
+                        f'OUTDATED_COPYRIGHT: The website\'s copyright year is {newest_year} '
+                        f'— the site design is likely due for a refresh. This is a design refresh opportunity, not a sign the business is inactive.'
+                    )
+
             # Check for "not secure" / mixed-content hints in page title
             title_match = re.search(r'<title[^>]*>(.*?)</title>', body_lower)
             if title_match:
@@ -177,16 +212,102 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
     return issues
 
 
+def _expand_accordions(page) -> None:
+    """Click common accordion/collapsible elements to reveal hidden content.
+
+    Many websites hide FAQ answers, service details, etc. behind clickable
+    accordions.  This tries to expand them so the screenshot shows the
+    *actual* content rather than just collapsed headings.
+    """
+    try:
+        # Common accordion selectors (covers most frameworks/themes):
+        # - HTML5 <details> elements (just set the 'open' attribute)
+        # - Elements with accordion-related classes/roles
+        # - FAQ section buttons/headers
+        page.evaluate("""() => {
+            // 1. Native <details> elements — force open
+            document.querySelectorAll('details:not([open])').forEach(el => {
+                el.setAttribute('open', '');
+            });
+
+            // 2. Common accordion buttons / triggers — click them
+            const selectors = [
+                // ARIA accordion pattern
+                '[role="button"][aria-expanded="false"]',
+                'button[aria-expanded="false"]',
+                // Common CSS class patterns
+                '.accordion-header:not(.active)',
+                '.accordion-title:not(.active)',
+                '.accordion-trigger:not(.active)',
+                '.faq-question',
+                '.faq-item > *:first-child',
+                '.toggle-header',
+                '.collapsible-header',
+                // WordPress / Elementor
+                '.elementor-tab-title:not(.elementor-active)',
+                '.wp-block-coblocks-accordion__title',
+                // Squarespace
+                '.accordion-item__click-target',
+                // Wix
+                '[data-testid="faq-question"]',
+            ];
+            const clicked = new Set();
+            for (const sel of selectors) {
+                document.querySelectorAll(sel).forEach(el => {
+                    if (!clicked.has(el) && el.offsetParent !== null) {
+                        clicked.add(el);
+                        el.click();
+                    }
+                });
+            }
+        }""")
+        # Brief pause for expand animations to complete
+        page.wait_for_timeout(800)
+    except Exception:
+        pass  # Non-critical — if expansion fails, we still get the default view
+
+
+def _trigger_lazy_content(page) -> None:
+    """Scroll through the page to trigger intersection-observer and
+    scroll-based lazy loading / animations.
+
+    Many sites hide content (cards, images, counters) until the element
+    scrolls into view.  Playwright's ``full_page=True`` screenshot extends
+    the viewport but never fires scroll events, so those elements stay
+    invisible.  This function smoothly scrolls to the bottom and back to
+    top so everything gets a chance to load.
+    """
+    try:
+        page.evaluate("""async () => {
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+            const step = Math.max(300, Math.floor(window.innerHeight * 0.7));
+            const maxY = document.body.scrollHeight;
+            // Scroll down in steps
+            for (let y = 0; y < maxY; y += step) {
+                window.scrollTo(0, y);
+                await delay(100);
+            }
+            // Hit the very bottom
+            window.scrollTo(0, maxY);
+            await delay(200);
+            // Scroll back to top
+            window.scrollTo(0, 0);
+            await delay(100);
+        }""")
+        # Extra pause for animations to finish after scroll completes
+        page.wait_for_timeout(500)
+    except Exception:
+        pass  # Non-critical
+
+
 def _capture_screenshot(
-    url: str, timeout: int = 20, ignore_ssl: bool = False
+    url: str, timeout: int = 20
 ) -> Optional[str]:
     """Capture a full-page screenshot using Playwright and return as base64 PNG.
 
-    When ``ignore_ssl`` is True, Chromium is launched with
-    ``--ignore-certificate-errors`` so we can capture what the browser
-    actually shows for sites with SSL problems (the warning page itself).
-
     Returns None if Playwright is not installed or the capture fails.
+    For sites with SSL errors, the screenshot will show the browser's
+    security warning — exactly what real visitors see.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -195,10 +316,7 @@ def _capture_screenshot(
 
     try:
         with sync_playwright() as p:
-            launch_args = []
-            if ignore_ssl:
-                launch_args.append('--ignore-certificate-errors')
-            browser = p.chromium.launch(headless=True, args=launch_args)
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             try:
                 page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
@@ -207,6 +325,10 @@ def _capture_screenshot(
                 pass
             # Small extra wait for late-loading widgets (reviews, galleries, etc.)
             page.wait_for_timeout(2000)
+            # Scroll through the page to trigger lazy-loaded / animated content
+            _trigger_lazy_content(page)
+            # Expand accordions/FAQs so screenshot shows actual content
+            _expand_accordions(page)
             screenshot_bytes = page.screenshot(full_page=True)
             browser.close()
 
@@ -233,6 +355,62 @@ def _capture_screenshot(
         return None
 
 
+def _capture_mobile_screenshot(
+    url: str, timeout: int = 20
+) -> Optional[str]:
+    """Capture a mobile-viewport screenshot (375x812, iPhone-style).
+
+    Returns base64 PNG or None if Playwright is unavailable / capture fails.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(
+                viewport={'width': 375, 'height': 812},
+                user_agent=(
+                    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
+                    'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+                    'Version/17.0 Mobile/15E148 Safari/604.1'
+                ),
+            )
+            try:
+                page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
+            except Exception:
+                pass
+            page.wait_for_timeout(2000)
+            _trigger_lazy_content(page)
+            _expand_accordions(page)
+            screenshot_bytes = page.screenshot(full_page=True)
+            browser.close()
+
+        # Resize if too large
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(screenshot_bytes))
+            max_width = 375
+            max_height = 2000
+            if img.width > max_width or img.height > max_height:
+                ratio = min(max_width / img.width, max_height / img.height)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                img = img.resize(new_size, Image.LANCZOS)
+                buf = io.BytesIO()
+                img.save(buf, format='PNG', optimize=True)
+                screenshot_bytes = buf.getvalue()
+        except ImportError:
+            pass
+
+        return base64.b64encode(screenshot_bytes).decode('utf-8')
+    except Exception as e:
+        print(f"Mobile screenshot capture failed for {url}: {e}")
+        return None
+
+
 class WebsiteAnalyzer:
 
     @staticmethod
@@ -250,7 +428,11 @@ class WebsiteAnalyzer:
                 url,
                 timeout=timeout,
                 headers={
-                    'User-Agent': 'Mozilla/5.0 (compatible; email-outreach-bot/1.0)',
+                    'User-Agent': (
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                        'AppleWebKit/537.36 (KHTML, like Gecko) '
+                        'Chrome/120.0.0.0 Safari/537.36'
+                    ),
                     'Accept': 'text/html',
                 },
                 allow_redirects=True,
@@ -290,21 +472,169 @@ class WebsiteAnalyzer:
         return f'https://{domain}'
 
     @classmethod
+    def fetch_inner_pages(cls, base_url: str, max_chars: int = 1500) -> Optional[str]:
+        """Fetch key inner pages (/about, /services, /contact) and return combined text.
+
+        Skips pages that redirect back to the homepage or return errors.
+        Returns None if no meaningful inner-page content was found.
+        """
+        from urllib.parse import urlparse, urljoin
+
+        if not base_url.startswith(('http://', 'https://')):
+            base_url = 'https://' + base_url
+
+        # Normalise: ensure trailing slash for urljoin
+        if not base_url.endswith('/'):
+            base_url += '/'
+
+        homepage_path = urlparse(base_url).path
+        inner_paths = ['/about', '/about-us', '/services', '/contact', '/team', '/our-team', '/staff', '/people', '/meet-the-team']
+        parts: List[str] = []
+
+        for path in inner_paths:
+            page_url = urljoin(base_url, path)
+            try:
+                resp = requests.get(
+                    page_url,
+                    timeout=5,
+                    headers={
+                        'User-Agent': (
+                            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                            'AppleWebKit/537.36 (KHTML, like Gecko) '
+                            'Chrome/120.0.0.0 Safari/537.36'
+                        ),
+                        'Accept': 'text/html',
+                    },
+                    allow_redirects=True,
+                )
+                if not resp.ok:
+                    continue
+
+                # Skip if it redirected back to the homepage
+                final_path = urlparse(resp.url).path.rstrip('/')
+                if final_path == homepage_path.rstrip('/') or final_path == '':
+                    continue
+
+                content_type = resp.headers.get('content-type', '')
+                if 'text/html' not in content_type:
+                    continue
+
+                extractor = _TextExtractor()
+                extractor.feed(resp.text)
+                text = extractor.get_text()
+                if text and len(text) > 50:
+                    parts.append(f'--- {path} ---\n{text[:800]}')
+            except Exception:
+                continue
+
+        if not parts:
+            return None
+
+        combined = '\n\n'.join(parts)
+        if len(combined) > max_chars:
+            combined = combined[:max_chars] + '\n[...truncated]'
+        return combined
+
+    @staticmethod
+    def extract_team_contacts(text: str) -> List[Dict]:
+        """Scan website text for team members with marketing/web-relevant roles.
+
+        Returns a list of {'name': ..., 'role': ...} dicts for people whose
+        title suggests they handle marketing, branding, web, or creative work.
+        """
+        if not text:
+            return []
+
+        relevant_keywords = {
+            'marketing', 'brand', 'branding', 'creative', 'communications',
+            'digital', 'web', 'design', 'content', 'social media', 'media',
+            'advertising', 'pr ', 'public relations', 'growth', 'outreach',
+        }
+
+        results = []
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or len(stripped) > 120:
+                continue
+            # Skip our inner-page section markers (--- /about ---)
+            if stripped.startswith('---'):
+                continue
+            lower = stripped.lower()
+
+            # Check if this line contains a relevant role keyword
+            has_keyword = any(kw in lower for kw in relevant_keywords)
+            if not has_keyword:
+                continue
+
+            # Common patterns:
+            # "Name - Title", "Name | Title", "Name, Title"
+            for sep in (' - ', ' | ', ' – ', ', '):
+                if sep in stripped:
+                    parts = stripped.split(sep, 1)
+                    # Figure out which part is the name and which is the role
+                    for name_part, role_part in [(parts[0], parts[1]), (parts[1], parts[0])]:
+                        role_lower = role_part.strip().lower()
+                        if any(kw in role_lower for kw in relevant_keywords):
+                            name = name_part.strip().rstrip(',').strip()
+                            # Name must be 2+ words, 4-50 chars, capitalized
+                            name_words = name.split()
+                            if (2 <= len(name_words) <= 4
+                                    and 4 <= len(name) <= 50
+                                    and all(w[0].isupper() for w in name_words if w[0].isalpha())):
+                                results.append({'name': name, 'role': role_part.strip()})
+                    break
+            else:
+                # Pattern: role keyword on this line, name on adjacent line
+                # e.g. "Jane Doe\nMarketing Director" or "Marketing Director\nJane Doe"
+                for offset in (-1, 1):
+                    adj = i + offset
+                    if 0 <= adj < len(lines):
+                        adj_line = lines[adj].strip()
+                        if not adj_line or len(adj_line) > 60 or adj_line.startswith('---'):
+                            continue
+                        adj_lower = adj_line.lower()
+                        # Adjacent line should NOT also have a keyword (avoids matching headers)
+                        if any(kw in adj_lower for kw in relevant_keywords):
+                            continue
+                        # Adjacent line looks like a proper name (2-4 capitalized words)
+                        words = adj_line.split()
+                        if (2 <= len(words) <= 4
+                                and all(w[0].isupper() for w in words if w[0].isalpha())
+                                and sum(c.isalpha() or c == ' ' for c in adj_line) > len(adj_line) * 0.7):
+                            results.append({'name': adj_line, 'role': stripped})
+                            break
+
+        # Deduplicate by name
+        seen = set()
+        unique = []
+        for r in results:
+            key = r['name'].lower()
+            if key not in seen:
+                seen.add(key)
+                unique.append(r)
+        return unique[:3]  # Cap at 3 to avoid noise
+
+    @classmethod
     def resolve_url(cls, recipient: dict) -> Optional[str]:
         """Get website URL from custom fields or email domain."""
         custom_fields = recipient.get('custom_fields', {})
 
-        # Check explicit website fields
-        for key in ('website', 'url', 'site', 'website_url', 'company_url', 'domain'):
-            val = custom_fields.get(key, '').strip()
-            if val:
-                return val
+        # Check explicit website fields (case-insensitive, space/underscore agnostic)
+        url_patterns = {
+            'website', 'url', 'site', 'website_url', 'company_url',
+            'domain', 'company_domain', 'web',
+        }
+        for orig_key, val in custom_fields.items():
+            norm = orig_key.lower().strip().replace(' ', '_')
+            if norm in url_patterns and isinstance(val, str) and val.strip():
+                return val.strip()
 
         # Fall back to email domain
         return cls.url_from_email(recipient.get('email', ''))
 
     @classmethod
-    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None) -> Optional[dict]:
+    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None, previous_observations: str = None) -> Optional[dict]:
         """Fetch recipient's website and generate improvement insights.
 
         Runs health checks first to detect critical issues (SSL errors,
@@ -319,43 +649,70 @@ class WebsiteAnalyzer:
         if not url:
             return None
 
-        # Ensure URL has a scheme
-        screenshot_url = url
-        if not screenshot_url.startswith(('http://', 'https://')):
-            screenshot_url = 'https://' + screenshot_url
+        # Always use HTTPS — that's what browsers default to and what
+        # visitors will hit.  If the site has an SSL issue on HTTPS we need
+        # to catch it even when the CSV stored an http:// URL.
+        from urllib.parse import urlparse
+        _parsed = urlparse(url if '://' in url else f'https://{url}')
+        screenshot_url = f'https://{_parsed.hostname}{_parsed.path}'.rstrip('/')
+        if _parsed.query:
+            screenshot_url += f'?{_parsed.query}'
 
-        # --- Step 1: Pre-flight health checks ---
-        health_issues = _check_website_health(screenshot_url)
-        has_ssl_issue = any(
-            tag in issue for issue in health_issues
-            for tag in ('SSL_', 'SECURITY_WARNING')
-        )
+        # Check cache — skip expensive fetch/screenshot if we already have
+        # recent data for this URL (e.g. on regeneration).
+        cache_key = screenshot_url.lower()
+        cached = _website_cache.get(cache_key)
+        if cached and (time.time() - cached['ts']) < _CACHE_TTL:
+            screenshot_b64 = cached['screenshot_b64']
+            mobile_screenshot_b64 = cached['mobile_screenshot_b64']
+            text = cached['text']
+            health_issues = cached['health_issues']
+        else:
+            # --- Step 1: Pre-flight health checks ---
+            health_issues = _check_website_health(screenshot_url)
 
-        # --- Step 2: Capture screenshot ---
-        # If there's an SSL issue, capture with ignore_ssl so we see what
-        # the browser actually shows (the warning page).
-        screenshot_b64 = _capture_screenshot(
-            screenshot_url, ignore_ssl=has_ssl_issue
-        )
+            # --- Step 2: Capture screenshots (desktop + mobile) ---
+            # Never bypass SSL errors — let the screenshot show exactly what
+            # visitors see (the scary browser warning).
+            screenshot_b64 = _capture_screenshot(screenshot_url)
+            mobile_screenshot_b64 = _capture_mobile_screenshot(screenshot_url)
 
-        # --- Step 3: Fetch text as supplementary context ---
-        text = None
-        # Skip text fetch if the site has connection-level issues
-        connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP')
-        if not any(tag in issue for issue in health_issues for tag in connection_failures):
-            try:
-                text = cls.fetch_website(url)
-                if not text or len(text) < 50:
+            # --- Step 3: Fetch text as supplementary context ---
+            text = None
+            connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP', 'SSL_')
+            if not any(tag in issue for issue in health_issues for tag in connection_failures):
+                try:
+                    text = cls.fetch_website(url)
+                    if not text or len(text) < 50:
+                        text = None
+                except Exception:
                     text = None
-            except Exception:
-                text = None
+
+                # --- Step 3b: Fetch key inner pages for richer context ---
+                if text:
+                    try:
+                        inner_text = cls.fetch_inner_pages(url)
+                        if inner_text:
+                            text = text + '\n\n' + inner_text
+                    except Exception:
+                        pass
+
+            # Store in cache for fast regeneration
+            _website_cache[cache_key] = {
+                'screenshot_b64': screenshot_b64,
+                'mobile_screenshot_b64': mobile_screenshot_b64,
+                'text': text,
+                'health_issues': health_issues,
+                'ts': time.time(),
+            }
 
         # Need at least one data source (issues alone count — they tell us
         # plenty about what visitors experience)
         if not screenshot_b64 and not text and not health_issues:
             return None
 
-        company = recipient.get('company')
+        from .claude_service import clean_company_name
+        company = clean_company_name(recipient.get('company', '')) or ''
         if not company:
             # Extract a readable name from the domain instead of using the raw URL
             from urllib.parse import urlparse
@@ -371,15 +728,21 @@ class WebsiteAnalyzer:
             company,
             url,
             screenshot_b64=screenshot_b64,
+            mobile_screenshot_b64=mobile_screenshot_b64,
             health_issues=health_issues,
             learned_website_insights=learned_website_insights,
+            previous_observations=previous_observations,
         )
         if not analysis:
             return None
+
+        # --- Step 5: Extract team contacts with marketing/web roles ---
+        team_contacts = cls.extract_team_contacts(text) if text else []
 
         return {
             'analysis': analysis,
             'url': url,
             'company': company,
+            'team_contacts': team_contacts,
             'raw_text_preview': (text[:500] if text else ''),
         }
