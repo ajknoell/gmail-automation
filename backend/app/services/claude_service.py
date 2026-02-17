@@ -343,6 +343,9 @@ YOUR TASK: Find 2 opportunities where a small improvement could bring them more 
 
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+   - PARKED / NOT-CONNECTED / BLANK PAGES: If the screenshot shows a generic "this domain isn't connected" page, a hosting provider's default page, or a blank/empty page, keep BOTH observations extremely short and concrete. Do NOT speculate about what the site could look like or suggest features for a site that doesn't exist yet. Example:
+     1. Your web address just shows a generic page, so anyone searching for you sees nothing
+     2. Even a simple one-page site with your number and services would start turning searches into calls
 2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
    - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
    - TINY PHOTOS / WRONG RATIO: If the business does visual work (construction, design, landscaping, food, etc.) and their project photos are small thumbnails buried under paragraphs of text, that's backwards. The WORK should be the hero. Big photos, minimal text. "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly."
@@ -371,6 +374,7 @@ CRITICAL RULES — READ CAREFULLY:
    - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
    - If the copyright year is current or recent (within 1 year), do NOT mention it. A 2026 copyright in 2026 is correct, not a problem.
    - NEVER invent problems. If you cannot identify a real, visible issue, pick a different angle. Do not fabricate observations about things that are actually fine.
+   - NEVER speculate about a site that doesn't exist. If the page is parked/blank/not connected, do NOT say things like "once you get the site live, adding real photos would..." — there is no site to improve. Just state the problem and a simple next step.
    - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
 
 2. PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery." Most small business sites have too much, not too little.
@@ -504,6 +508,9 @@ URL: {url}
 {learned_guidance}{issues_block}{text_block}
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+   - PARKED / NOT-CONNECTED / BLANK PAGES: If the text is mostly boilerplate from a hosting provider or domain registrar, keep BOTH observations extremely short and concrete. Do NOT speculate about what the site could look like. Example:
+     1. Your web address just shows a generic page, so anyone searching for you sees nothing
+     2. Even a simple one-page site with your number and services would start turning searches into calls
 2. CONTENT & STRUCTURE PROBLEMS: These are the most common real issues. Even from text alone, you can detect:
    - CONTENT OVERLOAD: Massive amounts of text, paragraphs that go on forever, too many topics crammed together. If the scraped text feels overwhelming to read, imagine how a visitor feels.
    - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
@@ -543,11 +550,12 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Be DIRECT. Say what a smart friend would say in one sentence, not what a consultant would write in a paragraph.
-- Don't describe what you see in detail. Just name the issue and the fix in plain language.
-- Name the OUTCOME of fixing it: more calls, more trust, more customers.
-- Avoid words like "broken", "failing", "terrible", "nobody", "zero", "missing", "lacking"
-- One sentence each, MAX 20 words. If it's longer, cut it.
+- EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
+- BAD: "Right now visitors see a generic error page instead of your business. That means you're losing every potential customer." (TWO sentences. WRONG.)
+- GOOD: "Your web address shows a generic page instead of your business, so every visitor bounces"
+- Just name the fix and the payoff. Do not describe what the site currently looks like first.
+- MAX 20 words per observation. Count them. If over 20, rewrite shorter.
+- NEVER speculate about a site that doesn't exist. If the page is parked/blank, do NOT say "once you get the site live..." — just state the problem and a simple next step.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
