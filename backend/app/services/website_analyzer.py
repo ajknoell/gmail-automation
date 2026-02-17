@@ -294,15 +294,13 @@ def _trigger_lazy_content(page) -> None:
 
 
 def _capture_screenshot(
-    url: str, timeout: int = 20, ignore_ssl: bool = False
+    url: str, timeout: int = 20
 ) -> Optional[str]:
     """Capture a full-page screenshot using Playwright and return as base64 PNG.
 
-    When ``ignore_ssl`` is True, Chromium is launched with
-    ``--ignore-certificate-errors`` so we can capture what the browser
-    actually shows for sites with SSL problems (the warning page itself).
-
     Returns None if Playwright is not installed or the capture fails.
+    For sites with SSL errors, the screenshot will show the browser's
+    security warning — exactly what real visitors see.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -311,10 +309,7 @@ def _capture_screenshot(
 
     try:
         with sync_playwright() as p:
-            launch_args = []
-            if ignore_ssl:
-                launch_args.append('--ignore-certificate-errors')
-            browser = p.chromium.launch(headless=True, args=launch_args)
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             try:
                 page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
@@ -354,7 +349,7 @@ def _capture_screenshot(
 
 
 def _capture_mobile_screenshot(
-    url: str, timeout: int = 20, ignore_ssl: bool = False
+    url: str, timeout: int = 20
 ) -> Optional[str]:
     """Capture a mobile-viewport screenshot (375x812, iPhone-style).
 
@@ -367,10 +362,7 @@ def _capture_mobile_screenshot(
 
     try:
         with sync_playwright() as p:
-            launch_args = []
-            if ignore_ssl:
-                launch_args.append('--ignore-certificate-errors')
-            browser = p.chromium.launch(headless=True, args=launch_args)
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page(
                 viewport={'width': 375, 'height': 812},
                 user_agent=(
@@ -657,20 +649,14 @@ class WebsiteAnalyzer:
 
         # --- Step 1: Pre-flight health checks ---
         health_issues = _check_website_health(screenshot_url)
-        has_ssl_issue = any(
-            tag in issue for issue in health_issues
-            for tag in ('SSL_', 'SECURITY_WARNING')
-        )
 
         # --- Step 2: Capture screenshots (desktop + mobile) ---
-        # If there's an SSL issue, capture with ignore_ssl so we see what
-        # the browser actually shows (the warning page).
-        screenshot_b64 = _capture_screenshot(
-            screenshot_url, ignore_ssl=has_ssl_issue
-        )
-        mobile_screenshot_b64 = _capture_mobile_screenshot(
-            screenshot_url, ignore_ssl=has_ssl_issue
-        )
+        # Never bypass SSL errors — let the screenshot show exactly what
+        # visitors see (the scary browser warning). This ensures Claude
+        # treats it as the critical issue it is instead of analyzing the
+        # site behind the warning.
+        screenshot_b64 = _capture_screenshot(screenshot_url)
+        mobile_screenshot_b64 = _capture_mobile_screenshot(screenshot_url)
 
         # --- Step 3: Fetch text as supplementary context ---
         text = None

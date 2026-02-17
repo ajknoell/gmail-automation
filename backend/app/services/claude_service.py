@@ -212,6 +212,8 @@ def _strip_ai_dashes(text: str) -> str:
     text = re.sub(r'(?<!\-)--(?!\-)', ',', text)
     # Clean up any double commas or comma-space issues from replacements
     text = re.sub(r',\s*,', ',', text)
+    # Fix double periods (e.g. "trust.." → "trust.")
+    text = re.sub(r'\.{2,}', '.', text)
     return text
 
 
@@ -349,7 +351,7 @@ PRIORITY ORDER (follow this strictly):
 2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
    - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
    - TINY PHOTOS / WRONG RATIO: If the business does visual work (construction, design, landscaping, food, etc.) and their project photos are small thumbnails buried under paragraphs of text, that's backwards. The WORK should be the hero. Big photos, minimal text. "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly."
-   - STOCK PHOTOS: If the images look generic, posed, or like they came from a photo library, call it out. A real business should show THEIR team, THEIR work, THEIR results. "Those look like stock photos" is a valid, powerful observation.
+   - STOCK PHOTOS: Almost NEVER flag photos as stock. Photos in portfolio/gallery/"Our Work" sections are the business's own project photos, not stock. Family or team photos are their real people, not stock. Professional lighting does not mean stock. Only flag stock if you see watermarks, obviously unrelated subjects (e.g., a generic corporate handshake on a plumber's site), or the exact same image repeated across unrelated sections. Accusing a business of using stock photos when they're showing their real work or family is one of the most offensive things you can say. When in doubt, skip this observation entirely and find something else.
    - TEXT WALLS: Too much text under service cards, too many paragraphs before getting to the point. If text blocks dominate over visuals, the fix is usually "cut the text, grow the photos." One sentence per service is plenty.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
    - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
@@ -383,7 +385,7 @@ CRITICAL RULES — READ CAREFULLY:
 3. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
 4. Name the issue AND the benefit in one short sentence:
-   - Good: "Replacing the stock photos with real project shots would build instant trust"
+   - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
    - Good: "A quick-quote form could turn browsers into actual leads"
    - Bad: "Your SSL certificate is expired" (too technical)
    - Bad: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen..." (way too wordy, just say what the problem is)
@@ -402,8 +404,8 @@ LANGUAGE RULE — NO TECH JARGON:
 
 TONE:
 - EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
-- BAD: "The hero image looks polished, but swapping those stock photos for actual projects would build credibility with visitors. People want to see your real work." (TWO sentences. WRONG.)
-- GOOD: "Swapping the stock photos for real project shots would build instant credibility"
+- BAD: "The text block is pretty dense, and breaking it into bullets would help. People scan, they don't read." (TWO sentences. WRONG.)
+- GOOD: "Breaking that text block into bullets would make the key points pop in seconds"
 - Just name the fix and the payoff. Do not describe what the site currently looks like first.
 - MAX 20 words per observation. Count them. If over 20, rewrite shorter.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
@@ -920,9 +922,15 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
+                body = _strip_ai_dashes(result.get('body', resolved_body))
+
+                # Ensure numbered observations aren't smashed into one paragraph.
+                # If "2." appears mid-line (not at the start), insert a line break.
+                body = re.sub(r'(?<!\n)(\s*)(2\.)\s', r'\n\n\2 ', body)
+
                 out = {
                     'subject': _strip_ai_dashes(result.get('subject', resolved_subject)),
-                    'body': _strip_ai_dashes(result.get('body', resolved_body))
+                    'body': body
                 }
                 if content_warnings:
                     out['content_warnings'] = content_warnings
