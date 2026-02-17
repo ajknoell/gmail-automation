@@ -69,6 +69,12 @@ export const uploadRecipients = (id, file, mapping) => {
 export const getRecipients = (id) => api.get(`/api/campaigns/${id}/recipients`);
 export const clearRecipients = (id) => api.delete(`/api/campaigns/${id}/recipients`);
 export const deleteRecipient = (campaignId, recipientId) => api.delete(`/api/campaigns/${campaignId}/recipients/${recipientId}`);
+export const moveRecipients = (campaignId, recipientIds, targetCampaignId, newCampaignName) =>
+  api.post(`/api/campaigns/${campaignId}/recipients/move`, {
+    recipient_ids: recipientIds,
+    target_campaign_id: targetCampaignId || undefined,
+    new_campaign_name: newCampaignName || undefined,
+  });
 export const generatePreview = (id, batchSize) =>
   api.post(`/api/campaigns/${id}/generate-preview`, batchSize != null ? { batch_size: batchSize } : {});
 export const approveRecipients = (id, recipientIds) =>

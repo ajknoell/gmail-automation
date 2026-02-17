@@ -3,8 +3,10 @@ import { useParams, Link } from 'react-router-dom';
 import {
   getCampaign,
   getRecipients,
+  getCampaigns,
   clearRecipients,
   deleteRecipient,
+  moveRecipients,
   uploadRecipients,
   generatePreview,
   approveRecipients,
@@ -37,6 +39,118 @@ import RichTextEditor from '../components/RichTextEditor';
 import SequenceBuilder from '../components/SequenceBuilder';
 import ColdCallModal from '../components/ColdCallModal';
 
+function MoveModal({ campaigns, selectedCount, onMove, onClose, isMoving }) {
+  const [targetMode, setTargetMode] = useState('existing');
+  const [selectedTargetId, setSelectedTargetId] = useState('');
+  const [newName, setNewName] = useState('');
+
+  const canSubmit = targetMode === 'existing'
+    ? selectedTargetId !== ''
+    : newName.trim() !== '';
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: '2rem',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: '#fff', borderRadius: '0.75rem', width: '100%', maxWidth: '500px',
+        boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{
+          padding: '1rem 1.5rem', borderBottom: '1px solid #E5E7EB',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <h3 style={{ margin: 0 }}>Move {selectedCount} Recipient{selectedCount !== 1 ? 's' : ''}</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none', fontSize: '1.5rem',
+              color: '#9CA3AF', cursor: 'pointer', lineHeight: 1,
+            }}
+          >&times;</button>
+        </div>
+
+        <div style={{ padding: '1.5rem' }}>
+          <p style={{ fontSize: '0.875rem', color: '#6B7280', marginBottom: '1rem' }}>
+            Personalized content will be cleared when recipients are moved. Only pending recipients will be moved.
+          </p>
+
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="targetMode"
+                checked={targetMode === 'existing'}
+                onChange={() => setTargetMode('existing')}
+              />
+              Existing campaign
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="targetMode"
+                checked={targetMode === 'new'}
+                onChange={() => setTargetMode('new')}
+              />
+              New campaign
+            </label>
+          </div>
+
+          {targetMode === 'existing' ? (
+            <select
+              className="form-input"
+              value={selectedTargetId}
+              onChange={(e) => setSelectedTargetId(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              <option value="">Select a campaign...</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.status} — {c.total_recipients} recipients)
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              className="form-input"
+              placeholder="New campaign name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              style={{ width: '100%' }}
+              autoFocus
+            />
+          )}
+        </div>
+
+        <div style={{
+          padding: '1rem 1.5rem', borderTop: '1px solid #E5E7EB',
+          display: 'flex', justifyContent: 'flex-end', gap: '0.5rem',
+        }}>
+          <button className="btn btn-secondary" onClick={onClose} disabled={isMoving}>
+            Cancel
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={!canSubmit || isMoving}
+            onClick={() => onMove(
+              targetMode === 'existing' ? parseInt(selectedTargetId) : null,
+              targetMode === 'new' ? newName.trim() : null
+            )}
+          >
+            {isMoving ? 'Moving...' : 'Move Recipients'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CampaignDetail() {
   const { id } = useParams();
   const [campaign, setCampaign] = useState(null);
@@ -53,6 +167,10 @@ function CampaignDetail() {
   const [exportingClay, setExportingClay] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [previewRecipientId, setPreviewRecipientId] = useState(null);
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState(new Set());
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [movingRecipients, setMovingRecipients] = useState(false);
+  const [campaignsList, setCampaignsList] = useState([]);
   const [steps, setSteps] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [coldCallRecipientId, setColdCallRecipientId] = useState(null);
@@ -287,6 +405,61 @@ function CampaignDetail() {
     } catch (error) {
       alert('Failed to clear recipients');
     }
+  };
+
+  const handleToggleRecipient = (recipientId) => {
+    setSelectedRecipientIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(recipientId)) {
+        next.delete(recipientId);
+      } else {
+        next.add(recipientId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleAll = () => {
+    const pendingIds = recipients.filter((r) => r.status === 'pending').map((r) => r.id);
+    if (pendingIds.length > 0 && pendingIds.every((rid) => selectedRecipientIds.has(rid))) {
+      setSelectedRecipientIds(new Set());
+    } else {
+      setSelectedRecipientIds(new Set(pendingIds));
+    }
+  };
+
+  const handleOpenMoveModal = async () => {
+    try {
+      const res = await getCampaigns();
+      setCampaignsList(res.data.filter((c) => c.id !== parseInt(id)));
+    } catch {
+      alert('Failed to load campaigns');
+      return;
+    }
+    setShowMoveModal(true);
+  };
+
+  const handleMoveRecipients = async (targetCampaignId, newCampaignName) => {
+    setMovingRecipients(true);
+    try {
+      const res = await moveRecipients(
+        id,
+        Array.from(selectedRecipientIds),
+        targetCampaignId,
+        newCampaignName
+      );
+      const { moved, skipped_sent, skipped_duplicate, target_campaign_name } = res.data;
+      let msg = `Moved ${moved} recipient(s) to "${target_campaign_name}".`;
+      if (skipped_sent > 0) msg += `\n${skipped_sent} skipped (already sent).`;
+      if (skipped_duplicate > 0) msg += `\n${skipped_duplicate} skipped (already in target).`;
+      alert(msg);
+      setSelectedRecipientIds(new Set());
+      setShowMoveModal(false);
+      loadData();
+    } catch (error) {
+      alert('Failed to move recipients: ' + (error.response?.data?.error || error.message));
+    }
+    setMovingRecipients(false);
   };
 
   const handleAttachmentsChange = async (newAttachments) => {
@@ -617,6 +790,15 @@ function CampaignDetail() {
                   >
                     Clear Recipients
                   </button>
+                  {selectedRecipientIds.size > 0 && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleOpenMoveModal}
+                      style={{ padding: '0.4rem 0.75rem' }}
+                    >
+                      Move Selected ({selectedRecipientIds.size})
+                    </button>
+                  )}
                   <button
                     className="btn btn-secondary"
                     onClick={() => handleGeneratePreview(10)}
@@ -763,6 +945,18 @@ function CampaignDetail() {
             <table className="table">
               <thead>
                 <tr>
+                  {campaign.status === 'draft' && (
+                    <th style={{ width: '40px' }}>
+                      <input
+                        type="checkbox"
+                        checked={
+                          recipients.filter((r) => r.status === 'pending').length > 0 &&
+                          recipients.filter((r) => r.status === 'pending').every((r) => selectedRecipientIds.has(r.id))
+                        }
+                        onChange={handleToggleAll}
+                      />
+                    </th>
+                  )}
                   <th>Email</th>
                   <th>Name</th>
                   <th>Company</th>
@@ -782,6 +976,19 @@ function CampaignDetail() {
               <tbody>
                 {recipients.map((recipient) => (
                   <tr key={recipient.id}>
+                    {campaign.status === 'draft' && (
+                      <td>
+                        {recipient.status === 'pending' ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedRecipientIds.has(recipient.id)}
+                            onChange={() => handleToggleRecipient(recipient.id)}
+                          />
+                        ) : (
+                          <span style={{ color: '#D1D5DB' }} title="Already sent — cannot move">—</span>
+                        )}
+                      </td>
+                    )}
                     <td>{recipient.email}</td>
                     <td>{recipient.name || '-'}</td>
                     <td>{recipient.company || '-'}</td>
@@ -1191,6 +1398,16 @@ function CampaignDetail() {
           </div>
         );
       })()}
+
+      {showMoveModal && (
+        <MoveModal
+          campaigns={campaignsList}
+          selectedCount={selectedRecipientIds.size}
+          onMove={handleMoveRecipients}
+          onClose={() => setShowMoveModal(false)}
+          isMoving={movingRecipients}
+        />
+      )}
       {coldCallRecipientId && (
         <ColdCallModal
           recipientId={coldCallRecipientId}

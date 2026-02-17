@@ -247,6 +247,90 @@ def delete_recipient(id, recipient_id):
     return jsonify({'success': True})
 
 
+@campaigns_bp.route('/<int:id>/recipients/move', methods=['POST'])
+def move_recipients(id):
+    """Move pending recipients from this campaign to another campaign."""
+    source = Campaign.query.get_or_404(id)
+
+    if source.status != 'draft':
+        return jsonify({'error': 'Can only move recipients from draft campaigns'}), 400
+
+    data = request.get_json()
+    recipient_ids = data.get('recipient_ids', [])
+    target_campaign_id = data.get('target_campaign_id')
+    new_campaign_name = data.get('new_campaign_name')
+
+    if not recipient_ids:
+        return jsonify({'error': 'No recipients selected'}), 400
+
+    if not target_campaign_id and not new_campaign_name:
+        return jsonify({'error': 'Target campaign or new campaign name is required'}), 400
+
+    # Create new campaign if requested
+    if new_campaign_name:
+        target = Campaign(
+            workspace_id=g.workspace_id,
+            name=new_campaign_name.strip(),
+        )
+        db.session.add(target)
+        db.session.flush()
+    else:
+        target = Campaign.query.get_or_404(target_campaign_id)
+        if target.workspace_id != g.workspace_id:
+            return jsonify({'error': 'Target campaign not found'}), 404
+
+    if target.id == source.id:
+        return jsonify({'error': 'Cannot move recipients to the same campaign'}), 400
+
+    # Fetch selected recipients that belong to the source campaign
+    recipients = Recipient.query.filter(
+        Recipient.id.in_(recipient_ids),
+        Recipient.campaign_id == id
+    ).all()
+
+    # Build set of existing emails in target for duplicate detection
+    existing_emails = {
+        r.email.lower()
+        for r in Recipient.query.filter_by(campaign_id=target.id).all()
+    }
+
+    moved = 0
+    skipped_sent = 0
+    skipped_duplicate = 0
+
+    for r in recipients:
+        if r.status != 'pending':
+            skipped_sent += 1
+            continue
+
+        if r.email.lower() in existing_emails:
+            skipped_duplicate += 1
+            continue
+
+        r.campaign_id = target.id
+        r.personalized_subject = None
+        r.personalized_body = None
+        r.approved = False
+        r.error_message = None
+
+        existing_emails.add(r.email.lower())
+        moved += 1
+
+    source.total_recipients = Recipient.query.filter_by(campaign_id=source.id).count()
+    target.total_recipients = Recipient.query.filter_by(campaign_id=target.id).count()
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'moved': moved,
+        'skipped_sent': skipped_sent,
+        'skipped_duplicate': skipped_duplicate,
+        'target_campaign_id': target.id,
+        'target_campaign_name': target.name,
+    })
+
+
 @campaigns_bp.route('/<int:id>/recipients', methods=['GET'])
 def list_recipients(id):
     """List recipients for a campaign with tracking data."""
