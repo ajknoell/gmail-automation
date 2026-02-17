@@ -342,13 +342,20 @@ URL: {url}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
-2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
-3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+2. UX & READABILITY PROBLEMS: These are the most common real issues. Look carefully:
+   - CONTENT OVERLOAD: Too much text, walls of words, paragraphs that go on forever. If a visitor would feel overwhelmed or not know where to look first, that's a real problem. "Streamlining your homepage so the key message jumps out in 3 seconds would keep more visitors engaged."
+   - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
+   - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention. When everything screams "look at me," nothing wins.
+   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read. If the site forces reading, most people leave.
+   - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's a bigger problem than missing a gallery.
+   These are MORE impactful than suggesting new features. A clean, scannable site converts better than a cluttered site with more features.
+3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
+4. FEATURE SUGGESTIONS: Only suggest adding new features (galleries, calculators, review sections) if the site's existing content and layout are already clean and well-organized. A messy site doesn't need more stuff, it needs less clutter.
 
 SCAM/MALWARE DETECTION — CHECK THE SCREENSHOT FOR THESE:
 - If you see fake antivirus warnings (McAfee, Norton, Windows Defender), pop-up alerts about "viruses detected", or "your computer is infected" messages — this is a CRITICAL issue. The business owner likely doesn't know this is happening.
-- Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business — that's scaring away every potential customer"
+- Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business, that's scaring away every potential customer"
 - This is the #1 most urgent thing to flag — it's actively driving away customers AND could damage their reputation.
 
 CRITICAL RULES — READ CAREFULLY:
@@ -358,15 +365,19 @@ CRITICAL RULES — READ CAREFULLY:
    - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
    - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
 
-2. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
+2. PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery." Most small business sites have too much, not too little.
 
-3. Frame each suggestion as a BENEFIT they'd gain, not a problem they have:
-   - Good: "Right now visitors see a warning before your site loads — fixing that would instantly restore trust and stop losing potential customers at the door"
+3. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
+
+4. Frame each suggestion as a BENEFIT they'd gain, not a problem they have:
+   - Good: "Right now visitors see a warning before your site loads, fixing that would instantly restore trust and stop losing potential customers at the door"
+   - Good: "Trimming the homepage down to your top 3 services with clear photos would help visitors find what they need fast instead of scrolling through everything"
    - Good: "A quick-quote calculator could turn browsing visitors into real leads"
-   - Bad: "Your SSL certificate is expired" (too technical — describe what visitors experience)
+   - Bad: "Your SSL certificate is expired" (too technical)
    - Bad: "You're missing a quote calculator" (names the problem, not the benefit)
+   - Bad: "Add a photo gallery" (generic feature suggestion that ignores bigger issues)
 
-4. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
+5. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
 
 LANGUAGE RULE — NO TECH JARGON:
 - The recipient is a business owner, NOT a web developer. Write like you're explaining to a friend.
@@ -485,15 +496,21 @@ COMPANY: {company_name}
 URL: {url}
 {learned_guidance}{issues_block}{text_block}
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all — these are show-stoppers that cost them every single visitor. If a critical issue was detected above, it MUST be observation #1.
-2. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
-3. DESIGN & CONTENT IMPROVEMENTS: Only suggest these if there are no critical or functional issues.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+2. UX & READABILITY PROBLEMS: These are the most common real issues. Even from text alone, you can detect:
+   - CONTENT OVERLOAD: Massive amounts of text, paragraphs that go on forever, too many topics crammed together. If the scraped text feels overwhelming to read, imagine how a visitor feels.
+   - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
+   - UNCLEAR VALUE PROPOSITION: If you can't tell in the first few sentences what this business does best and why someone should call them, that's the #1 issue.
+   - HARD TO SCAN: No clear sections, everything runs together, no concise messaging.
+   These content quality issues are MORE impactful than suggesting new features.
+3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
+4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content is already clean and focused.
 
 IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If the text mentions reviews, testimonials, ratings, or social proof, the site likely ALREADY has them — do NOT suggest adding them.
 - If the text mentions galleries, portfolios, or project showcases, the site likely ALREADY has them — do NOT suggest adding them.
 - If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
-- Focus on things you CAN determine from text: content clarity, messaging strength, calls-to-action, SEO signals, content freshness.
+- PREFER observations about content QUALITY over suggestions to add new content. "Tightening up the homepage so visitors immediately see your top services" beats "add a photo gallery."
 
 RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST, even without health-check data):
 - Counters or stats showing "0" — means the JavaScript animations never fire, so the page isn't rendering properly
@@ -502,7 +519,8 @@ RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST, even withou
 - If you see these signs, the #1 issue is: the site isn't loading properly for visitors. Frame it helpfully, not harshly.
 
 IF THE SITE APPEARS FUNCTIONAL AND NO CRITICAL ISSUES WERE DETECTED, then look for:
-- Value opportunities: "Adding X could help you convert more visitors into calls" — always tie back to business results
+- Content quality: Is there too much text? Is the messaging clear? Can a visitor quickly understand what makes this business special?
+- Value opportunities: "Streamlining your homepage to highlight your top 3 services would help visitors find what they need fast" — tie back to business results
 - Quick wins that paint a picture
 - Frame each point as a BENEFIT they'd gain, not a problem they have
 
