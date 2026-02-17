@@ -3,7 +3,7 @@ from app import db
 from app.models import Campaign, Recipient, Template, EmailLog, Settings, OAuthToken
 from app.models.settings import WorkspaceSettings
 from app.services.csv_parser import parse_file, detect_field_mapping
-from app.services.claude_service import ClaudeService, clean_company_name, _looks_like_company_name
+from app.services.claude_service import ClaudeService, clean_company_name, _looks_like_company_name, resolve_recipient_fields
 from app.services.campaign_runner import CampaignRunner
 from app.services.spam_checker import check_spam_score
 import re
@@ -409,15 +409,16 @@ def regenerate_recipient_preview(id, recipient_id):
 
 def _substitute_template_variables(text, recipient):
     """Replace {{variable}} placeholders with recipient data."""
-    name = recipient.name or ''
-    if _looks_like_company_name(name):
-        name = ''
+    custom = recipient.get_custom_fields() or {}
+    name, company = resolve_recipient_fields(
+        recipient.name, clean_company_name(recipient.company or ''),
+        recipient.email, custom,
+    )
     variables = {
         'name': name or 'there',
         'email': recipient.email or '',
-        'company': clean_company_name(recipient.company or '') or '',
+        'company': company or '',
     }
-    custom = recipient.get_custom_fields()
     if custom:
         variables.update(custom)
 

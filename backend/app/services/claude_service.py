@@ -92,6 +92,85 @@ def _looks_like_company_name(name: str) -> bool:
     return False
 
 
+def _extract_contact_name(custom_fields: dict) -> str:
+    """Try to find a real contact/person name from custom fields.
+
+    CSVs often have a 'name' column with the business name and a separate
+    column like 'contact_name', 'first_name', 'contact', or 'person' with
+    the actual human's name.  These extra columns end up in custom_fields.
+    """
+    if not custom_fields:
+        return ''
+    contact_keys = [
+        'contact_name', 'contact', 'first_name', 'firstname',
+        'person', 'contact_person', 'owner', 'owner_name',
+        'full_name', 'fullname',
+    ]
+    for key in contact_keys:
+        val = custom_fields.get(key, '')
+        if val and isinstance(val, str) and val.strip():
+            # Don't use it if it also looks like a company name
+            if not _looks_like_company_name(val.strip()):
+                return val.strip()
+    return ''
+
+
+def _name_from_email(email: str) -> str:
+    """Try to extract a first name from an email prefix.
+
+    'jeff@blglass.com'  →  'Jeff'
+    'sarah.jones@...'   →  'Sarah'
+    'info@...'          →  ''  (generic, skip)
+    """
+    if not email or '@' not in email:
+        return ''
+    prefix = email.split('@')[0].lower()
+    # Skip generic / role-based prefixes
+    generic = {
+        'info', 'admin', 'hello', 'contact', 'support', 'sales',
+        'office', 'service', 'team', 'billing', 'help', 'mail',
+        'noreply', 'no-reply', 'webmaster', 'postmaster',
+        'enquiries', 'inquiries', 'marketing', 'hr',
+    }
+    # Take first part if separated by dots or underscores
+    first = re.split(r'[._]', prefix)[0]
+    if first in generic or len(first) < 2:
+        return ''
+    # Only use if it looks like a real name (all alpha)
+    if first.isalpha():
+        return first.capitalize()
+    return ''
+
+
+def resolve_recipient_fields(recipient_name: str, cleaned_company: str,
+                             email: str, custom_fields: dict) -> tuple:
+    """Resolve the best name and company for a recipient.
+
+    Handles the common case where a CSV puts the business name in the
+    'name' column and the actual contact person in a secondary column.
+
+    Returns (name, company) with the best values found.
+    """
+    name = (recipient_name or '').strip()
+    company = (cleaned_company or '').strip()
+
+    if _looks_like_company_name(name):
+        # The "name" field is actually a business name
+        if not company:
+            company = name  # Move it to company
+        name = ''  # Clear — it's not a person
+
+    # Try to find the real contact name from custom fields
+    if not name:
+        name = _extract_contact_name(custom_fields or {})
+
+    # Last resort: derive from email prefix
+    if not name:
+        name = _name_from_email(email or '')
+
+    return name, company
+
+
 def _strip_ai_dashes(text: str) -> str:
     """Replace em dashes, en dashes, and double hyphens with commas.
 
@@ -452,8 +531,6 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
 
-        company = clean_company_name(recipient.get('company', '')) or 'their company'
-
         # Build rich context from custom fields
         custom_fields = recipient.get('custom_fields', {})
 
@@ -569,23 +646,19 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
                 style_instructions = "WRITER'S PERSONAL STYLE (THIS IS CRITICAL - match this voice exactly):\n" + "\n".join(style_parts)
 
         # Pre-substitute template variables with actual recipient data.
-        # Use cleaned company name and handle empty name gracefully.
-        recipient_name = (recipient.get('name') or '').strip()
+        # Resolve name vs company — handles CSVs where the business name
+        # is in the 'name' column and the real contact is elsewhere.
+        raw_name = (recipient.get('name') or '').strip()
         cleaned_company = clean_company_name(recipient.get('company', '')) or ''
-
-        # Detect if the "name" is actually a company/business name.
-        # If so, treat it as missing so Claude uses "Hi there," instead.
-        if _looks_like_company_name(recipient_name):
-            recipient_name = ''
+        recipient_name, cleaned_company = resolve_recipient_fields(
+            raw_name, cleaned_company, recipient.get('email', ''), custom_fields
+        )
 
         variable_map = {
             'email': recipient.get('email') or '',
-            'company': cleaned_company,
+            'company': cleaned_company or 'your company',
+            'name': recipient_name or 'there',
         }
-        # Only set name if we actually have a personal name (not empty).
-        # When name is empty the fallback returns "there" for greeting.
-        if recipient_name:
-            variable_map['name'] = recipient_name
 
         # Add all custom fields as available variables
         for k, v in custom_fields.items():
@@ -593,39 +666,31 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
                 variable_map[k] = str(v)
 
         # Handle website_insights separately from the variable_map.
-        # When available: do NOT pre-substitute — let Claude insert them
-        # from the WEBSITE OBSERVATIONS prompt section so it can format
-        # them naturally within the email.
+        # When available: pre-substitute directly into the template body.
         # When not available: remove the placeholder entirely and flag it.
         has_website_insights = bool(website_insights)
         template_has_wi_placeholder = '{{website_insights}}' in template_body or '{{ website_insights }}' in template_body
-
-        # Track which variables are missing
-        missing_vars = []
 
         # Replace {{variable}} placeholders in template
         import re as _re
         def _replace_var(match):
             var_name = match.group(1).strip()
-            # website_insights is handled via the prompt, not pre-substitution
+            # website_insights: pre-substitute directly when available
             if var_name == 'website_insights':
                 if has_website_insights:
-                    return '[WEBSITE_OBSERVATIONS]'
+                    return website_insights
                 return ''
             val = variable_map.get(var_name)
             if val is not None and val != '':
                 return val
-            missing_vars.append(var_name)
-            # For name: use "there" as a safe generic fallback
-            if var_name == 'name':
-                return 'there'
-            # Return a Claude-readable instruction for other missing vars
-            return f'[GENERATE: write appropriate content for "{var_name}"]'
+            # For any truly missing variable, use empty string —
+            # never insert markers that Claude might echo
+            return ''
 
         resolved_subject = _re.sub(r'\{\{(\s*\w+\s*)\}\}', _replace_var, template_subject)
         resolved_body = _re.sub(r'\{\{(\s*\w+\s*)\}\}', _replace_var, template_body)
 
-        # Clean up empty lines left by removed website_insights placeholder
+        # Clean up empty lines left by removed placeholders
         resolved_body = _re.sub(r'\n\s*\n\s*\n', '\n\n', resolved_body)
 
         # Build data-driven insights block
@@ -662,7 +727,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 RECIPIENT PROFILE:
 - Name: {recipient_name or 'there'}
 - Email: {recipient.get('email')}
-- Company: {company}
+- Company: {cleaned_company or 'unknown'}
 
 RICH CONTEXT (use this to personalize):
 {rich_context}
@@ -680,7 +745,6 @@ TEMPLATE STRUCTURE RULE (THIS IS THE MOST IMPORTANT RULE):
 - If there is a section with website insights or bullet points, keep it exactly where it appears in the template — do not relocate that content to the opening or anywhere else
 - Think of yourself as filling in a form, not rewriting a letter
 
-{"MISSING VARIABLE INSTRUCTIONS: The template contains [GENERATE: ...] markers where data was not available. For each one, write natural-sounding content IN PLACE that fits the surrounding template text. Keep it in the same position — do not move it. NEVER output [GENERATE: ...] literally in your response." + chr(10) + "Missing variables: " + ", ".join(missing_vars) if missing_vars else ""}
 
 STYLE REQUIREMENTS:
 1. Match the writer's personal style EXACTLY
@@ -714,7 +778,7 @@ NO TECH JARGON RULE:
 - Describe problems as the VISITOR EXPERIENCE: "when someone visits your site, they see a generic page instead of your business" — not "your domain is parked"
 - If the website observations contain technical language, REWRITE them in plain English in the final email
 
-{("WEBSITE OBSERVATIONS (from reviewing their site):" + chr(10) + website_insights + chr(10) + chr(10) + "WEBSITE INSERTION RULE: The template body contains [WEBSITE_OBSERVATIONS]. Replace that marker with these 2 observations, rewritten in your own words to fit naturally in the email. Each should show the VALUE of improving (more customers, more trust, stronger first impression). NEVER output [WEBSITE_OBSERVATIONS] literally.") if website_insights else ""}
+{("WEBSITE OBSERVATIONS NOTE: The template body already contains website observations (pre-filled from analysis). Rewrite them in your own words so they sound natural and conversational. Each should show the VALUE of improving (more customers, more trust, stronger first impression). Keep them in the same position in the email.") if website_insights else ""}
 
 {f"CAMPAIGN MUST-INCLUDE (weave this into EVERY email naturally): {campaign_context}" if campaign_context else ""}
 
