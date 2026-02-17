@@ -373,46 +373,55 @@ URL: {url}
 {learned_guidance}{issues_block}{text_supplement}{previous_block}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
+ANALYZE LIKE A MARKETING STRATEGIST AND WEB EXPERT, NOT JUST A DESIGNER:
+Think about the site through the lens of conversion rate optimization (CRO), proven marketing principles, and modern web development best practices:
+
+MARKETING & CRO:
+- 5-SECOND TEST: Can a visitor tell what this business does, why they're different, and what to do next within 5 seconds? If not, that's the #1 issue.
+- ABOVE-THE-FOLD HIERARCHY: The most important message, differentiator, or call-to-action should be visible without scrolling. What's currently above the fold? Is it the right thing?
+- VISUAL CREDIBILITY: Modern visitors judge trustworthiness in milliseconds. Dated design patterns (pre-2018 aesthetics, outdated fonts, old-school gradients) erode trust even if the content is strong.
+- SOCIAL PROOF PLACEMENT: Reviews and testimonials convert best when placed near decision points (next to CTAs, on service pages), not buried at the bottom.
+- SCANNABILITY: 79% of web users scan rather than read. Short paragraphs, bullet points, clear headers, and visual breaks make content digestible.
+- MOBILE-FIRST: Over 60% of local service searches happen on mobile. If the mobile screenshot shows issues, that's high-impact.
+- CLEAR NEXT STEP: Every page should have one obvious thing the visitor should do (call, get a quote, book online). Multiple competing CTAs dilute conversions.
+
+WEB DEVELOPMENT & UX:
+- PAGE SPEED: If the screenshot shows lots of heavy elements (massive hero images, unoptimized galleries, tons of widgets/scripts), the site likely loads slowly. Slow sites lose 53% of visitors on mobile.
+- MODERN WEB STANDARDS: Sites using outdated frameworks, table-based layouts, or Flash look broken on modern browsers. A site that hasn't been updated in years may have compatibility issues visitors notice.
+- RESPONSIVE DESIGN: If the mobile screenshot shows content overflowing, tiny unreadable text, or elements overlapping, that's a real problem affecting the majority of their visitors.
+- ACCESSIBILITY: Low contrast text, tiny font sizes, or missing alt text on images hurts both users and search rankings.
+- CLUTTERED OR SLOW-LOADING ELEMENTS: Excessive third-party widgets, auto-playing videos, pop-ups stacking on top of each other, or chat widgets covering key content all hurt user experience.
+
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
    - PARKED / NOT-CONNECTED / BLANK PAGES: If the screenshot shows a generic "this domain isn't connected" page, a hosting provider's default page, or a blank/empty page, keep BOTH observations extremely short and concrete. Do NOT speculate about what the site could look like or suggest features for a site that doesn't exist yet. Example:
      1. Your web address just shows a generic page, so anyone searching for you sees nothing
      2. Even a simple one-page site with your number and services would start turning searches into calls
-2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
-   - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
-   - TINY PHOTOS / WRONG RATIO: If the business does visual work (construction, design, landscaping, food, etc.) and their project photos are small thumbnails buried under paragraphs of text, that's backwards. The WORK should be the hero. Big photos, minimal text. "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly."
-   - STOCK PHOTOS: Almost NEVER flag photos as stock. Photos in portfolio/gallery/"Our Work" sections are the business's own project photos, not stock. Family or team photos are their real people, not stock. Professional lighting does not mean stock. Only flag stock if you see watermarks, obviously unrelated subjects (e.g., a generic corporate handshake on a plumber's site), or the exact same image repeated across unrelated sections. Accusing a business of using stock photos when they're showing their real work or family is one of the most offensive things you can say. When in doubt, skip this observation entirely and find something else.
-   - TEXT WALLS: Too much text under service cards, too many paragraphs before getting to the point. If text blocks dominate over visuals, the fix is usually "cut the text, grow the photos." One sentence per service is plenty.
+   - SCAM/MALWARE: If you see fake antivirus warnings, pop-up alerts about "viruses detected", or "your computer is infected" messages, this is CRITICAL. Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business, that's scaring away every potential customer"
+2. DESIGN & CONVERSION ISSUES: Look at the screenshot through both a design AND marketing lens:
+   - OUTDATED DESIGN: If the site looks like it was built 5+ years ago (old design patterns, dated typography, boxy layouts), a modern refresh would increase trust and conversions. Frame it as helping the site match the quality of their work.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
-   - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
-   - WASTED SPACE: Huge sections that don't help convert visitors, like giant social media logo walls, oversized maps, or massive footers full of badges. That space could show actual work, reviews, or a clear next step.
-   - FLAT SERVICE LISTS: A wall of services in all-caps or bullet points with no grouping, icons, or descriptions. Visitors can't tell what the business specializes in when everything looks equally important.
-   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read.
-   - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's bigger than any missing feature.
-   - DATED/STALE FEEL: If the copyright year is before 2020, suggest a website refresh. NEVER question whether the business is still active — just frame it as "a fresh design would help the site match the quality of your work" or similar. Copyrights from 2020 or later should NOT be mentioned.
-   These design issues are MORE impactful than suggesting new features. A well-designed site with good photos converts better than a cluttered site with more features.
+   - TEXT-HEAVY SECTIONS: Too much text, not enough visual breathing room. Visitors scan, not read. If text blocks dominate, suggest tightening the copy.
+   - WEAK ABOVE-THE-FOLD: The first screen should sell. If the hero section is generic, vague, or doesn't communicate what makes this business special, that's a high-impact observation.
+   - BURIED DIFFERENTIATORS: If the business has something genuinely unique (specific specialization, years of experience, guarantees) but it's not prominent, that's worth noting. But ONLY if you can clearly see it's buried — don't guess.
+   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks.
+   - PHOTOS: Almost NEVER flag photos as stock. Portfolio/gallery photos are the business's own work. Family/team photos are their real people. Only flag stock if you see watermarks or obviously unrelated generic subjects. When in doubt, skip this entirely.
+   - DATED/STALE FEEL: Only mention the copyright year if it is before 2020. A copyright of 2020 or later is NOT worth mentioning. NEVER question whether the business is still active.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
-4. FEATURE SUGGESTIONS: Only suggest adding new features (galleries, calculators, review sections) if the site's existing content and layout are already clean and well-organized. A messy site doesn't need more stuff, it needs less clutter.
+4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content and layout are already clean. A messy site doesn't need more stuff.
 
-SCAM/MALWARE DETECTION — CHECK THE SCREENSHOT FOR THESE:
-- If you see fake antivirus warnings (McAfee, Norton, Windows Defender), pop-up alerts about "viruses detected", or "your computer is infected" messages — this is a CRITICAL issue. The business owner likely doesn't know this is happening.
-- Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business, that's scaring away every potential customer"
-- This is the #1 most urgent thing to flag — it's actively driving away customers AND could damage their reputation.
+ACCURACY RULES — DO NOT MAKE CLAIMS YOU CAN'T VERIFY:
+1. ONLY describe what you can clearly see in the screenshot. If you can't tell whether something is "buried" or "mid-page" from the screenshot, don't claim it is.
+2. NEVER say something is "probably your biggest" anything. You don't know their business strategy. Describe what you see, not what you assume.
+3. NEVER tell them to move specific content to specific positions unless you can clearly see the issue in the screenshot. "Your financing offer could get more visibility" is safer than "move your $97/month offer above the fold."
+4. DO NOT invent problems. If the site is genuinely good, find a smaller, safe observation. A weak but accurate observation is better than a bold but wrong one.
+5. If the site already has reviews, galleries, CTAs, or other features visible, do NOT suggest adding them.
+6. NEVER speculate about a site that doesn't exist. If the page is parked/blank, just state the problem and a simple next step.
+7. Look at the screenshot carefully before each suggestion and ask yourself: "Can I clearly see this issue?" If not, find something else.
 
-CRITICAL RULES — READ CAREFULLY:
-1. ONLY suggest improvements for things that are ACTUALLY absent or weak on the site.
-   - If the site already has customer reviews/testimonials visible, do NOT suggest adding reviews.
-   - If the site already has a photo gallery, do NOT suggest adding a gallery.
-   - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
-   - Only mention the copyright year if it is before 2020. A copyright of 2020 or later is NOT worth mentioning.
-   - NEVER frame an old copyright as "visitors might wonder if you're still in business" or "wonder if you're still actively taking on projects." That is insulting. Instead, frame it as a website refresh opportunity: "A quick design refresh would make the site feel more current" or "refreshing the site design would help it match the quality of your work."
-   - NEVER invent problems. If you cannot identify a real, visible issue, pick a different angle. Do not fabricate observations about things that are actually fine.
-   - NEVER speculate about a site that doesn't exist. If the page is parked/blank/not connected, do NOT say things like "once you get the site live, adding real photos would..." — there is no site to improve. Just state the problem and a simple next step.
-   - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
+PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery."
 
-2. PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery." Most small business sites have too much, not too little.
-
-3. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
+BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
 4. Name the issue AND the benefit in one short sentence:
    - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
