@@ -374,6 +374,7 @@ def regenerate_recipient_preview(id, recipient_id):
         }
         wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
         website_insights = wa_result['analysis'] if wa_result else None
+        team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 
         # Log the analysis for learning
         if wa_result:
@@ -387,7 +388,8 @@ def regenerate_recipient_preview(id, recipient_id):
             writing_style=writing_style,
             campaign_context=campaign.campaign_context,
             website_insights=website_insights,
-            learned_insights=learned_insights
+            learned_insights=learned_insights,
+            team_contacts=team_contacts,
         )
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
@@ -497,6 +499,7 @@ def generate_preview(id):
                     if cache_key and wa_result:
                         website_analysis_cache[cache_key] = wa_result
                 website_insights = wa_result['analysis'] if wa_result else None
+                team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 
                 # Log the analysis for the learning feedback loop
                 if wa_result:
@@ -510,7 +513,8 @@ def generate_preview(id):
                     writing_style=writing_style,
                     campaign_context=campaign.campaign_context,
                     website_insights=website_insights,
-                    learned_insights=learned_insights
+                    learned_insights=learned_insights,
+                    team_contacts=team_contacts,
                 )
                 recipient.personalized_subject = result.get('subject', campaign.template.subject)
                 recipient.personalized_body = result.get('body', campaign.template.body)

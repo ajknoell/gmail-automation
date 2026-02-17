@@ -100,7 +100,11 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
     if resp.status_code >= 500:
         issues.append(f'SERVER_ERROR: The website returns a {resp.status_code} server error — visitors see an error page.')
     elif resp.status_code == 403:
-        issues.append('ACCESS_DENIED: The website returns a 403 Forbidden — visitors are blocked from viewing the site.')
+        # 403 is almost always bot/Cloudflare protection blocking our
+        # requests library.  Real browsers (and Playwright screenshots)
+        # pass the challenge fine, so this is NOT a visitor-facing issue.
+        # Downgrade to a soft note that won't override the screenshot.
+        issues.append('BOT_BLOCKED_403: Our automated check got a 403 from this site (likely bot protection like Cloudflare). This does NOT mean visitors are blocked. Ignore this if the screenshot shows the site loading normally.')
     elif resp.status_code == 404:
         issues.append('NOT_FOUND: The website\'s homepage returns a 404 — visitors land on a "page not found" error.')
     elif resp.status_code >= 400:
@@ -329,7 +333,11 @@ class WebsiteAnalyzer:
                 url,
                 timeout=timeout,
                 headers={
-                    'User-Agent': 'Mozilla/5.0 (compatible; email-outreach-bot/1.0)',
+                    'User-Agent': (
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                        'AppleWebKit/537.36 (KHTML, like Gecko) '
+                        'Chrome/120.0.0.0 Safari/537.36'
+                    ),
                     'Accept': 'text/html',
                 },
                 allow_redirects=True,
@@ -385,7 +393,7 @@ class WebsiteAnalyzer:
             base_url += '/'
 
         homepage_path = urlparse(base_url).path
-        inner_paths = ['/about', '/about-us', '/services', '/contact']
+        inner_paths = ['/about', '/about-us', '/services', '/contact', '/team', '/our-team', '/staff', '/people', '/meet-the-team']
         parts: List[str] = []
 
         for path in inner_paths:
@@ -395,7 +403,11 @@ class WebsiteAnalyzer:
                     page_url,
                     timeout=5,
                     headers={
-                        'User-Agent': 'Mozilla/5.0 (compatible; email-outreach-bot/1.0)',
+                        'User-Agent': (
+                            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                            'AppleWebKit/537.36 (KHTML, like Gecko) '
+                            'Chrome/120.0.0.0 Safari/537.36'
+                        ),
                         'Accept': 'text/html',
                     },
                     allow_redirects=True,
@@ -428,16 +440,100 @@ class WebsiteAnalyzer:
             combined = combined[:max_chars] + '\n[...truncated]'
         return combined
 
+    @staticmethod
+    def extract_team_contacts(text: str) -> List[Dict]:
+        """Scan website text for team members with marketing/web-relevant roles.
+
+        Returns a list of {'name': ..., 'role': ...} dicts for people whose
+        title suggests they handle marketing, branding, web, or creative work.
+        """
+        if not text:
+            return []
+
+        relevant_keywords = {
+            'marketing', 'brand', 'branding', 'creative', 'communications',
+            'digital', 'web', 'design', 'content', 'social media', 'media',
+            'advertising', 'pr ', 'public relations', 'growth', 'outreach',
+        }
+
+        results = []
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or len(stripped) > 120:
+                continue
+            # Skip our inner-page section markers (--- /about ---)
+            if stripped.startswith('---'):
+                continue
+            lower = stripped.lower()
+
+            # Check if this line contains a relevant role keyword
+            has_keyword = any(kw in lower for kw in relevant_keywords)
+            if not has_keyword:
+                continue
+
+            # Common patterns:
+            # "Name - Title", "Name | Title", "Name, Title"
+            for sep in (' - ', ' | ', ' – ', ', '):
+                if sep in stripped:
+                    parts = stripped.split(sep, 1)
+                    # Figure out which part is the name and which is the role
+                    for name_part, role_part in [(parts[0], parts[1]), (parts[1], parts[0])]:
+                        role_lower = role_part.strip().lower()
+                        if any(kw in role_lower for kw in relevant_keywords):
+                            name = name_part.strip().rstrip(',').strip()
+                            # Name must be 2+ words, 4-50 chars, capitalized
+                            name_words = name.split()
+                            if (2 <= len(name_words) <= 4
+                                    and 4 <= len(name) <= 50
+                                    and all(w[0].isupper() for w in name_words if w[0].isalpha())):
+                                results.append({'name': name, 'role': role_part.strip()})
+                    break
+            else:
+                # Pattern: role keyword on this line, name on adjacent line
+                # e.g. "Jane Doe\nMarketing Director" or "Marketing Director\nJane Doe"
+                for offset in (-1, 1):
+                    adj = i + offset
+                    if 0 <= adj < len(lines):
+                        adj_line = lines[adj].strip()
+                        if not adj_line or len(adj_line) > 60 or adj_line.startswith('---'):
+                            continue
+                        adj_lower = adj_line.lower()
+                        # Adjacent line should NOT also have a keyword (avoids matching headers)
+                        if any(kw in adj_lower for kw in relevant_keywords):
+                            continue
+                        # Adjacent line looks like a proper name (2-4 capitalized words)
+                        words = adj_line.split()
+                        if (2 <= len(words) <= 4
+                                and all(w[0].isupper() for w in words if w[0].isalpha())
+                                and sum(c.isalpha() or c == ' ' for c in adj_line) > len(adj_line) * 0.7):
+                            results.append({'name': adj_line, 'role': stripped})
+                            break
+
+        # Deduplicate by name
+        seen = set()
+        unique = []
+        for r in results:
+            key = r['name'].lower()
+            if key not in seen:
+                seen.add(key)
+                unique.append(r)
+        return unique[:3]  # Cap at 3 to avoid noise
+
     @classmethod
     def resolve_url(cls, recipient: dict) -> Optional[str]:
         """Get website URL from custom fields or email domain."""
         custom_fields = recipient.get('custom_fields', {})
 
-        # Check explicit website fields
-        for key in ('website', 'url', 'site', 'website_url', 'company_url', 'domain'):
-            val = custom_fields.get(key, '').strip()
-            if val:
-                return val
+        # Check explicit website fields (case-insensitive, space/underscore agnostic)
+        url_patterns = {
+            'website', 'url', 'site', 'website_url', 'company_url',
+            'domain', 'company_domain', 'web',
+        }
+        for orig_key, val in custom_fields.items():
+            norm = orig_key.lower().strip().replace(' ', '_')
+            if norm in url_patterns and isinstance(val, str) and val.strip():
+                return val.strip()
 
         # Fall back to email domain
         return cls.url_from_email(recipient.get('email', ''))
@@ -529,9 +625,13 @@ class WebsiteAnalyzer:
         if not analysis:
             return None
 
+        # --- Step 5: Extract team contacts with marketing/web roles ---
+        team_contacts = cls.extract_team_contacts(text) if text else []
+
         return {
             'analysis': analysis,
             'url': url,
             'company': company,
+            'team_contacts': team_contacts,
             'raw_text_preview': (text[:500] if text else ''),
         }

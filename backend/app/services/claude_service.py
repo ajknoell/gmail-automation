@@ -308,11 +308,18 @@ visitors actually see):
 {trimmed}
 """
 
-        # Build the critical-issues block when health checks found problems
+        # Build the critical-issues block when health checks found problems.
+        # Filter out BOT_BLOCKED_403 when we have a screenshot — the screenshot
+        # proves the site loads fine; the 403 was just bot/Cloudflare protection.
         issues_block = ""
         if health_issues:
-            formatted = "\n".join(f"  - {issue}" for issue in health_issues)
-            issues_block = f"""
+            real_issues = [
+                issue for issue in health_issues
+                if not issue.startswith('BOT_BLOCKED_403')
+            ]
+            if real_issues:
+                formatted = "\n".join(f"  - {issue}" for issue in real_issues)
+                issues_block = f"""
 CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
 that visitors experience RIGHT NOW — they MUST be your #1 priority):
 {formatted}
@@ -441,11 +448,18 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 
         learned_guidance = self._build_learned_guidance(learned_website_insights)
 
-        # Build the critical-issues block when health checks found problems
+        # Build the critical-issues block when health checks found problems.
+        # Filter out BOT_BLOCKED_403 — a 403 from our requests library is
+        # almost always bot/Cloudflare protection, not a real visitor issue.
         issues_block = ""
         if health_issues:
-            formatted = "\n".join(f"  - {issue}" for issue in health_issues)
-            issues_block = f"""
+            real_issues = [
+                issue for issue in health_issues
+                if not issue.startswith('BOT_BLOCKED_403')
+            ]
+            if real_issues:
+                formatted = "\n".join(f"  - {issue}" for issue in real_issues)
+                issues_block = f"""
 CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
 that visitors experience RIGHT NOW — they MUST be your #1 priority):
 {formatted}
@@ -541,7 +555,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
             if l.startswith('1.') or l.startswith('2.'):
                 result_lines.append(l)
         if len(result_lines) >= 2:
-            return result_lines[0] + '\n' + result_lines[1]
+            return result_lines[0] + '\n\n' + result_lines[1]
         return raw
 
     def personalize_email(
@@ -553,7 +567,8 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         writing_style: Dict = None,
         campaign_context: str = None,
         website_insights: str = None,
-        learned_insights: Dict = None
+        learned_insights: Dict = None,
+        team_contacts: list = None,
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
 
@@ -636,6 +651,11 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         other_fields = {k: v for k, v in custom_fields.items() if k.lower() not in known_fields and v}
         if other_fields:
             context_parts.append(f"Additional Details: {json.dumps(other_fields)}")
+
+        # Team contacts detected on the recipient's website
+        if team_contacts:
+            people = ", ".join(f"{c['name']} ({c['role']})" for c in team_contacts)
+            context_parts.append(f"TEAM MEMBERS ON THEIR WEBSITE: {people}")
 
         rich_context = "\n".join(context_parts) if context_parts else "No additional context available"
 
@@ -744,6 +764,38 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
                     f"confidence: {confidence} — apply these patterns):\n" + "\n".join(parts)
                 )
 
+        # Build website observations note outside f-string (Python 3.9 doesn't allow backslashes in f-string expressions)
+        if website_insights:
+            _wi_note = (
+                "WEBSITE OBSERVATIONS NOTE: The template body already contains website observations "
+                "(pre-filled from analysis). Rewrite them in your own words so they sound natural and "
+                "conversational. Each should show the VALUE of improving (more customers, more trust, "
+                "stronger first impression). Keep them in the same position in the email.\n"
+                "FORMATTING RULE: Each observation MUST be on its own separate line/paragraph. Never "
+                "combine multiple observations into one paragraph. Use a line break between each "
+                "observation so they read as distinct points, e.g.:\n"
+                "1. First observation here.\n\n"
+                "2. Second observation here.\n"
+                "Never run them together in a single block of text."
+            )
+        else:
+            _wi_note = ""
+
+        # Build team contact note outside f-string (Python 3.9 backslash restriction)
+        _team_note = ""
+        if team_contacts:
+            people = ", ".join(f"{c['name']} ({c['role']})" for c in team_contacts)
+            _team_note = (
+                "TEAM CONTACT DETECTED: We found these people on their website "
+                "who handle marketing or related work: " + people + "\n"
+                "If their role is relevant to the service being offered (e.g. you offer "
+                "web design and they have a Marketing Manager), casually reference them "
+                "by first name in the email. For example: 'I'm sure [Name] has thought "
+                "about this...' or 'This might be something [Name] would find interesting.' "
+                "Keep it natural, not stalkerish. Only mention them if their role clearly "
+                "connects to what you're offering. If the connection is weak, skip it."
+            )
+
         prompt = f"""You are ghostwriting personalized outreach emails for a specific person. Your job is to write exactly like them - matching their voice, tone, and style perfectly.
 
 {style_instructions if style_instructions else "Write in a casual but professional tone. Keep it brief and human."}
@@ -804,7 +856,9 @@ NO TECH JARGON RULE:
 - Describe problems as the VISITOR EXPERIENCE: "when someone visits your site, they see a generic page instead of your business" — not "your domain is parked"
 - If the website observations contain technical language, REWRITE them in plain English in the final email
 
-{("WEBSITE OBSERVATIONS NOTE: The template body already contains website observations (pre-filled from analysis). Rewrite them in your own words so they sound natural and conversational. Each should show the VALUE of improving (more customers, more trust, stronger first impression). Keep them in the same position in the email.") if website_insights else ""}
+{_wi_note}
+
+{_team_note}
 
 {f"CAMPAIGN MUST-INCLUDE (weave this into EVERY email naturally): {campaign_context}" if campaign_context else ""}
 

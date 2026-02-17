@@ -194,6 +194,21 @@ function CampaignDetail() {
     try {
       await sendIndividual(id, recipientId);
       loadData();
+
+      // Auto-advance: move to next unsent preview or close the modal
+      if (previewRecipientId === recipientId) {
+        const unsent = recipients.filter(
+          (r) => r.personalized_body && r.status !== 'sent' && r.id !== recipientId
+        );
+        if (unsent.length > 0) {
+          // Find next one after current position, or wrap to first
+          const curIdx = recipients.findIndex((r) => r.id === recipientId);
+          const nextUnsent = unsent.find((r) => recipients.indexOf(r) > curIdx) || unsent[0];
+          setPreviewRecipientId(nextUnsent.id);
+        } else {
+          setPreviewRecipientId(null);
+        }
+      }
     } catch (error) {
       alert('Failed to send: ' + (error.response?.data?.error || error.message));
     }

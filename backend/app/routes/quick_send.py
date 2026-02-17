@@ -151,6 +151,8 @@ def generate_quick_email():
                 website_status = 'error'
                 current_app.logger.warning(f'Website analysis failed: {e}')
 
+            team_contacts = wa_result.get('team_contacts', []) if wa_result else []
+
             result = claude.personalize_email(
                 template_subject=template.subject,
                 template_body=template.body,
@@ -159,7 +161,8 @@ def generate_quick_email():
                 writing_style=writing_style,
                 campaign_context=None,
                 website_insights=website_insights,
-                learned_insights=learned_insights
+                learned_insights=learned_insights,
+                team_contacts=team_contacts,
             )
             result['website_status'] = website_status
             result['spam_check'] = check_spam_score(
