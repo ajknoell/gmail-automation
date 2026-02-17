@@ -230,6 +230,19 @@ def _strip_ai_dashes(text: str) -> str:
     return text
 
 
+def _strip_ai_dashes_from_analysis(analysis: dict):
+    """Apply _strip_ai_dashes to all text fields in a structured analysis dict."""
+    if not analysis:
+        return
+    for issue in analysis.get('issues', []):
+        issue['title'] = _strip_ai_dashes(issue.get('title', ''))
+        issue['description'] = _strip_ai_dashes(issue.get('description', ''))
+        if issue.get('example'):
+            issue['example'] = _strip_ai_dashes(issue['example'])
+    if analysis.get('recommendation'):
+        analysis['recommendation'] = _strip_ai_dashes(analysis['recommendation'])
+
+
 class ClaudeService:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
@@ -244,11 +257,14 @@ class ClaudeService:
         health_issues: list = None,
         learned_website_insights: dict = None,
         previous_observations: str = None,
-    ) -> str:
-        """Analyze a website and return 2 specific improvement observations for outreach emails.
+    ) -> dict:
+        """Analyze a website and return structured analysis with severity classifications.
+
+        Returns a dict with 'issues' (list of dicts with title, description,
+        severity, example) and 'recommendation' (str).
 
         When ``health_issues`` are provided they take priority — the first
-        observation will address the critical issue.  When a screenshot is
+        issue will address the critical problem.  When a screenshot is
         provided, uses Claude's vision capabilities for accurate visual
         analysis.  Falls back to text-only analysis otherwise.
 
@@ -447,17 +463,24 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
+- EXACTLY ONE SENTENCE per issue description. This is non-negotiable. If your description has a period followed by more words, you wrote too much. Cut it to one sentence.
 - BAD: "The text block is pretty dense, and breaking it into bullets would help. People scan, they don't read." (TWO sentences. WRONG.)
 - GOOD: "Breaking that text block into bullets would make the key points pop in seconds"
 - Just name the fix and the payoff. Do not describe what the site currently looks like first.
-- MAX 20 words per observation. Count them. If over 20, rewrite shorter.
+- MAX 25 words per issue description. Count them. If over 25, rewrite shorter.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
-YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
-1.
-2. """
+SEVERITY CLASSIFICATION:
+- "critical": Issues that directly harm conversions, user trust, or usability RIGHT NOW. Examples: broken navigation, unclear value proposition, mobile rendering issues, outdated/unprofessional design, missing contact information, security warnings, site down.
+- "important": Issues that diminish effectiveness but don't completely block results. Examples: slow load times, weak calls-to-action, poor content structure, inconsistent branding.
+- Do NOT include minor/nice-to-have issues. Only critical and important.
+- A single solid critical issue is better than padding with weak points.
+
+YOUR RESPONSE MUST BE ONLY a valid JSON object, nothing else. No markdown fences, no extra text:
+{{"issues": [{{"title": "Brief 5-7 word title", "description": "One sentence, max 25 words, explaining impact on their business", "severity": "critical", "example": "Optional specific example from the site"}}], "recommendation": "One sentence on the most impactful fix"}}
+
+Maximum 2 issues. Only include an "important" issue if it genuinely strengthens the case alongside a critical one. """
 
         try:
             content_blocks = [
@@ -486,13 +509,15 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 
             message = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=200,
+                max_tokens=400,
                 messages=[{
                     "role": "user",
                     "content": content_blocks,
                 }],
             )
-            return _strip_ai_dashes(self._parse_two_observations(message.content[0].text))
+            result = self._parse_analysis_json(message.content[0].text)
+            _strip_ai_dashes_from_analysis(result)
+            return result
         except Exception as e:
             print(f"Visual website analysis error: {e}")
             # Fall back to text-only if vision call fails
@@ -611,26 +636,35 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
+- EXACTLY ONE SENTENCE per issue description. This is non-negotiable. If your description has a period followed by more words, you wrote too much. Cut it to one sentence.
 - BAD: "Right now visitors see a generic error page instead of your business. That means you're losing every potential customer." (TWO sentences. WRONG.)
 - GOOD: "Your web address shows a generic page instead of your business, so every visitor bounces"
 - Just name the fix and the payoff. Do not describe what the site currently looks like first.
-- MAX 20 words per observation. Count them. If over 20, rewrite shorter.
+- MAX 25 words per issue description. Count them. If over 25, rewrite shorter.
 - NEVER speculate about a site that doesn't exist. If the page is parked/blank, do NOT say "once you get the site live..." — just state the problem and a simple next step.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
-YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
-1.
-2. """
+SEVERITY CLASSIFICATION:
+- "critical": Issues that directly harm conversions, user trust, or usability RIGHT NOW. Examples: broken navigation, unclear value proposition, mobile rendering issues, outdated/unprofessional design, missing contact information, security warnings, site down.
+- "important": Issues that diminish effectiveness but don't completely block results. Examples: slow load times, weak calls-to-action, poor content structure, inconsistent branding.
+- Do NOT include minor/nice-to-have issues. Only critical and important.
+- A single solid critical issue is better than padding with weak points.
+
+YOUR RESPONSE MUST BE ONLY a valid JSON object, nothing else. No markdown fences, no extra text:
+{{"issues": [{{"title": "Brief 5-7 word title", "description": "One sentence, max 25 words, explaining impact on their business", "severity": "critical", "example": "Optional specific example from the site"}}], "recommendation": "One sentence on the most impactful fix"}}
+
+Maximum 2 issues. Only include an "important" issue if it genuinely strengthens the case alongside a critical one. """
 
         try:
             message = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=200,
+                max_tokens=400,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return _strip_ai_dashes(self._parse_two_observations(message.content[0].text))
+            result = self._parse_analysis_json(message.content[0].text)
+            _strip_ai_dashes_from_analysis(result)
+            return result
         except Exception as e:
             print(f"Website analysis error: {e}")
             return None
@@ -640,17 +674,66 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_two_observations(raw_text: str) -> str:
-        """Extract exactly 2 numbered observations from model output."""
+    def _parse_analysis_json(raw_text: str) -> dict:
+        """Parse structured JSON analysis from model output.
+
+        Returns a dict with 'issues' list and 'recommendation' string.
+        Falls back to legacy text format parsing if JSON parsing fails.
+        """
         raw = raw_text.strip()
+        # Try to extract JSON object
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if json_match:
+            try:
+                data = json.loads(json_match.group())
+                if 'issues' in data and isinstance(data['issues'], list):
+                    for issue in data['issues']:
+                        issue.setdefault('severity', 'important')
+                        issue.setdefault('title', '')
+                        issue.setdefault('description', '')
+                    data.setdefault('recommendation', '')
+                    return data
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback: parse legacy "1." / "2." format
         lines = [l.strip() for l in raw.split('\n') if l.strip()]
-        result_lines = []
+        issues = []
         for l in lines:
             if l.startswith('1.') or l.startswith('2.'):
-                result_lines.append(l)
-        if len(result_lines) >= 2:
-            return result_lines[0] + '\n\n' + result_lines[1]
-        return raw
+                text = l[2:].strip()
+                issues.append({
+                    'title': text[:50],
+                    'description': text,
+                    'severity': 'important',
+                    'example': None,
+                })
+        return {
+            'issues': issues[:2],
+            'recommendation': '',
+        }
+
+    @staticmethod
+    def format_analysis_as_text(analysis: dict) -> str:
+        """Convert structured analysis dict to plain text for email templates."""
+        if not analysis or not analysis.get('issues'):
+            return ''
+        lines = []
+        for i, issue in enumerate(analysis['issues'], 1):
+            lines.append(f"{i}. {issue.get('description', '')}")
+        return '\n\n'.join(lines)
+
+    @staticmethod
+    def get_max_severity(analysis: dict) -> str:
+        """Extract the highest severity from analysis issues."""
+        if not analysis or not analysis.get('issues'):
+            return None
+        severities = [i.get('severity', 'important') for i in analysis['issues']]
+        if 'critical' in severities:
+            return 'critical'
+        if 'important' in severities:
+            return 'important'
+        return None
 
     def personalize_email(
         self,

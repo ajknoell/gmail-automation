@@ -136,7 +136,7 @@ def generate_quick_email():
                     current_app.logger.info(f'Fetching website: {url}')
                     wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data, learned_website_insights)
                     if wa_result:
-                        website_insights = wa_result['analysis']
+                        website_insights = wa_result.get('analysis_text')
                         website_status = 'success'
                         current_app.logger.info(f'Website analysis complete for {url}')
                     else:
