@@ -1263,7 +1263,7 @@ Return ONLY valid JSON in this exact format:
 RECIPIENT:
 - Name: {recipient.get('name') or 'there'}
 - Email: {recipient.get('email')}
-- Company: {recipient.get('company') or 'their company'}
+- Company: {clean_company_name(recipient.get('company', '')) or 'their company'}
 - Research Notes: {recipient.get('notes') or 'None provided'}
 
 PURPOSE/CONTEXT:

@@ -711,7 +711,8 @@ class WebsiteAnalyzer:
         if not screenshot_b64 and not text and not health_issues:
             return None
 
-        company = recipient.get('company')
+        from .claude_service import clean_company_name
+        company = clean_company_name(recipient.get('company', '')) or ''
         if not company:
             # Extract a readable name from the domain instead of using the raw URL
             from urllib.parse import urlparse
