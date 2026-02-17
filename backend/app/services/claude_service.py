@@ -98,20 +98,34 @@ def _extract_contact_name(custom_fields: dict) -> str:
     CSVs often have a 'name' column with the business name and a separate
     column like 'contact_name', 'first_name', 'contact', or 'person' with
     the actual human's name.  These extra columns end up in custom_fields.
+
+    Key matching is case-insensitive and treats spaces/underscores as
+    equivalent (so 'First Name', 'first_name', and 'first name' all match).
     """
     if not custom_fields:
         return ''
-    contact_keys = [
+
+    # Patterns to match (normalized: lowercase, underscores)
+    contact_patterns = [
         'contact_name', 'contact', 'first_name', 'firstname',
         'person', 'contact_person', 'owner', 'owner_name',
         'full_name', 'fullname',
     ]
-    for key in contact_keys:
-        val = custom_fields.get(key, '')
-        if val and isinstance(val, str) and val.strip():
-            # Don't use it if it also looks like a company name
-            if not _looks_like_company_name(val.strip()):
-                return val.strip()
+
+    # Build a lookup: normalized_key -> original_key
+    normalized = {}
+    for orig_key in custom_fields:
+        norm = orig_key.lower().strip().replace(' ', '_')
+        normalized[norm] = orig_key
+
+    for pattern in contact_patterns:
+        orig_key = normalized.get(pattern)
+        if orig_key:
+            val = custom_fields[orig_key]
+            if val and isinstance(val, str) and val.strip():
+                # Don't use it if it also looks like a company name
+                if not _looks_like_company_name(val.strip()):
+                    return val.strip()
     return ''
 
 
@@ -147,22 +161,34 @@ def resolve_recipient_fields(recipient_name: str, cleaned_company: str,
     """Resolve the best name and company for a recipient.
 
     Handles the common case where a CSV puts the business name in the
-    'name' column and the actual contact person in a secondary column.
+    'name' column and the actual contact person in a secondary column
+    like 'First Name' or 'contact_name'.
 
     Returns (name, company) with the best values found.
     """
     name = (recipient_name or '').strip()
     company = (cleaned_company or '').strip()
 
-    if _looks_like_company_name(name):
-        # The "name" field is actually a business name
+    # First, check if the CSV has an explicit contact name field.
+    # If it does, the 'name' column is almost certainly the business name.
+    contact_from_fields = _extract_contact_name(custom_fields or {})
+    if contact_from_fields:
+        # Check if the main name is just the full version of the contact name
+        # (e.g., name="Frances Brunelle", First Name="Frances" — same person)
+        contact_lower = contact_from_fields.lower()
+        name_lower = name.lower() if name else ''
+        same_person = (
+            (contact_lower in name_lower or name_lower in contact_lower)
+            and not _looks_like_company_name(name)  # "Gappsi, Inc." is still a company
+        )
+        if not company and name and not same_person:
+            company = name  # The main 'name' field is the company
+        name = contact_from_fields
+    elif _looks_like_company_name(name):
+        # No contact name in custom fields, but main name looks like a company
         if not company:
-            company = name  # Move it to company
-        name = ''  # Clear — it's not a person
-
-    # Try to find the real contact name from custom fields
-    if not name:
-        name = _extract_contact_name(custom_fields or {})
+            company = name
+        name = ''
 
     # Last resort: derive from email prefix
     if not name:
