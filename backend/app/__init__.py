@@ -37,6 +37,7 @@ def create_app(config_class=None):
     from app.routes.insights import insights_bp
     from app.routes.attachments import attachments_bp
     from app.routes.listings import listings_bp
+    from app.routes.cold_calls import cold_calls_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
@@ -50,6 +51,7 @@ def create_app(config_class=None):
     app.register_blueprint(insights_bp, url_prefix='/api/insights')
     app.register_blueprint(attachments_bp, url_prefix='/api/attachments')
     app.register_blueprint(listings_bp, url_prefix='/api/listings')
+    app.register_blueprint(cold_calls_bp, url_prefix='/api/cold-calls')
 
     # Create database tables and run migrations
     with app.app_context():
@@ -66,6 +68,9 @@ def create_app(config_class=None):
 
         # Migrate unique constraints for workspace scoping
         _migrate_unique_constraints(app)
+
+        # Backfill campaign steps for existing campaigns (one-time)
+        _ensure_campaign_steps(app)
 
     # Workspace resolution middleware
     @app.before_request
@@ -108,6 +113,11 @@ def create_app(config_class=None):
     listing_interval = app.config.get('LISTING_CHECK_INTERVAL', 3600)
     ListingMonitor.start_background_polling(app, interval=listing_interval)
 
+    # Start sequence scheduler for campaign follow-up steps
+    from app.services.sequence_scheduler import SequenceScheduler
+    seq_interval = app.config.get('SEQUENCE_CHECK_INTERVAL', 300)
+    SequenceScheduler.start_background_polling(app, interval=seq_interval)
+
     return app
 
 
@@ -133,6 +143,7 @@ def _run_migrations(app):
     _add_column('recipients', 'notes', 'TEXT')
 
     # EmailLog tracking migrations
+    _add_column('email_logs', 'step_id', 'INTEGER')
     _add_column('email_logs', 'tracking_id', 'VARCHAR(36)')
     _add_column('email_logs', 'gmail_thread_id', 'VARCHAR(100)')
     _add_column('email_logs', 'gmail_account_id', 'INTEGER')
@@ -357,3 +368,70 @@ def _migrate_unique_constraints(app):
         db.session.rollback()
         app.logger.error(f'Unique constraint migration failed: {e}')
         raise
+
+
+def _ensure_campaign_steps(app):
+    """Backfill Step 1 for existing campaigns that have no steps."""
+    from app.models.settings import Settings
+    from app.models.campaign_step import CampaignStep
+    from app.models.step_recipient import StepRecipient
+    from app.models import Campaign, Recipient
+
+    if Settings.get('campaign_steps_backfilled'):
+        return
+
+    campaigns_without_steps = (
+        Campaign.query
+        .filter(~Campaign.id.in_(
+            db.session.query(CampaignStep.campaign_id).distinct()
+        ))
+        .all()
+    )
+
+    if not campaigns_without_steps:
+        Settings.set('campaign_steps_backfilled', 'true')
+        db.session.commit()
+        return
+
+    for campaign in campaigns_without_steps:
+        step = CampaignStep(
+            campaign_id=campaign.id,
+            position=1,
+            name='Initial Outreach',
+            step_type='template',
+            template_id=campaign.template_id,
+            delay_days=0,
+            status='completed' if campaign.status in ('completed', 'cancelled') else 'draft',
+            total_recipients=campaign.total_recipients or 0,
+            sent_count=campaign.sent_count or 0,
+            failed_count=campaign.failed_count or 0,
+        )
+        db.session.add(step)
+        db.session.flush()
+
+        recipients = Recipient.query.filter_by(campaign_id=campaign.id).all()
+        for r in recipients:
+            sr_status = 'pending'
+            if r.status in ('sent',):
+                sr_status = 'sent'
+            elif r.status in ('failed',):
+                sr_status = 'failed'
+            elif r.status in ('skipped',):
+                sr_status = 'skipped'
+            elif r.personalized_body:
+                sr_status = 'ready'
+
+            sr = StepRecipient(
+                step_id=step.id,
+                recipient_id=r.id,
+                personalized_subject=r.personalized_subject,
+                personalized_body=r.personalized_body,
+                approved=r.approved or False,
+                status=sr_status,
+                sent_at=r.sent_at if hasattr(r, 'sent_at') else None,
+            )
+            db.session.add(sr)
+
+    Settings.set('campaign_steps_backfilled', 'true')
+    db.session.commit()
+    app.logger.info(f'Backfilled steps for {len(campaigns_without_steps)} existing campaigns')

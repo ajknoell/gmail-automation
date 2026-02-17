@@ -4,6 +4,18 @@ import json
 import re
 
 
+def _strip_business_suffixes(name: str) -> str:
+    """Remove legal/business suffixes like LLC, Inc., Corp, etc."""
+    # Remove trailing suffixes (with optional commas, dots, spaces)
+    name = re.sub(
+        r'[,\s]+(LLC|L\.L\.C\.|INC\.?|INCORPORATED|CORP\.?|CORPORATION|LTD\.?|LIMITED|LP|L\.P\.|PLLC|P\.?C\.?|DBA)\s*$',
+        '', name, flags=re.IGNORECASE
+    ).strip()
+    # Clean up any trailing comma or period left behind
+    name = name.rstrip(',. ')
+    return name
+
+
 def clean_company_name(company: str) -> str:
     """Extract a human-readable company name from a URL or domain.
 
@@ -11,7 +23,8 @@ def clean_company_name(company: str) -> str:
         'blglass.com'                  -> 'Blglass'
         'https://www.acme-corp.com'    -> 'Acme Corp'
         'blue-sky.io/about'            -> 'Blue Sky'
-        'Acme Inc.'                    -> 'Acme Inc.' (unchanged, not a URL)
+        'Acme Inc.'                    -> 'Acme'
+        'VE BUILDERS, LLC'             -> 'VE BUILDERS'
     """
     if not company:
         return company
@@ -34,15 +47,15 @@ def clean_company_name(company: str) -> str:
     if domain_match:
         cleaned = domain_match.group(1)
     elif cleaned == company.strip():
-        # Nothing was stripped, not a URL — return as-is
-        return company
+        # Nothing was stripped, not a URL — just strip business suffixes
+        return _strip_business_suffixes(company.strip())
 
     # Make the extracted name readable:
     # Insert spaces before capitals in camelCase (e.g. "blueGlass" -> "blue Glass")
     cleaned = re.sub(r'([a-z])([A-Z])', r'\1 \2', cleaned)
     # Replace hyphens and underscores with spaces
     cleaned = cleaned.replace('-', ' ').replace('_', ' ')
-    return cleaned.title()
+    return _strip_business_suffixes(cleaned.title())
 
 
 def _looks_like_company_name(name: str) -> bool:
@@ -212,6 +225,8 @@ def _strip_ai_dashes(text: str) -> str:
     text = re.sub(r'(?<!\-)--(?!\-)', ',', text)
     # Clean up any double commas or comma-space issues from replacements
     text = re.sub(r',\s*,', ',', text)
+    # Fix double periods (e.g. "trust.." → "trust.")
+    text = re.sub(r'\.{2,}', '.', text)
     return text
 
 
@@ -228,6 +243,7 @@ class ClaudeService:
         mobile_screenshot_b64: str = None,
         health_issues: list = None,
         learned_website_insights: dict = None,
+        previous_observations: str = None,
     ) -> str:
         """Analyze a website and return 2 specific improvement observations for outreach emails.
 
@@ -235,6 +251,9 @@ class ClaudeService:
         observation will address the critical issue.  When a screenshot is
         provided, uses Claude's vision capabilities for accurate visual
         analysis.  Falls back to text-only analysis otherwise.
+
+        When ``previous_observations`` is provided (on regeneration), the
+        model is instructed to find completely different observations.
         """
 
         if screenshot_b64:
@@ -243,11 +262,13 @@ class ClaudeService:
                 mobile_screenshot_b64=mobile_screenshot_b64,
                 health_issues=health_issues,
                 learned_website_insights=learned_website_insights,
+                previous_observations=previous_observations,
             )
         return self._analyze_website_text(
             website_text, company_name, url,
             health_issues=health_issues,
             learned_website_insights=learned_website_insights,
+            previous_observations=previous_observations,
         )
 
     @staticmethod
@@ -292,6 +313,7 @@ class ClaudeService:
         mobile_screenshot_b64: str = None,
         health_issues: list = None,
         learned_website_insights: dict = None,
+        previous_observations: str = None,
     ) -> str:
         """Analyze a website screenshot (with optional supplementary text) via vision."""
 
@@ -301,10 +323,11 @@ class ClaudeService:
         if website_text:
             trimmed = website_text[:3000]
             text_supplement = f"""
-SUPPLEMENTARY TEXT (scraped from the HTML source — use ONLY to catch details
-that might not be visible in the screenshot, such as meta descriptions or
+SUPPLEMENTARY TEXT (scraped from the HTML source WITHOUT JavaScript — use ONLY
+to catch details not visible in the screenshot, such as meta descriptions or
 hidden content.  The screenshot is the primary source of truth for what
-visitors actually see):
+visitors actually see.  Animated counters/stats may show "0" in this text
+even though the screenshot shows real numbers; always trust the screenshot):
 {trimmed}
 """
 
@@ -334,49 +357,75 @@ critical issue OR a design improvement, depending on severity.
         if mobile_screenshot_b64:
             mobile_note = "\nYou are also seeing a MOBILE SCREENSHOT — compare the desktop and mobile views. If the mobile layout is broken, unusable, or missing key content, that's a strong observation."
 
+        previous_block = ""
+        if previous_observations:
+            previous_block = f"""
+PREVIOUS OBSERVATIONS (the user clicked "Regenerate" because these weren't good enough — you MUST pick completely different observations this time):
+{previous_observations}
+
+DO NOT repeat or rephrase any of the above. Find entirely new issues to highlight.
+"""
+
         prompt = f"""You're a web designer reviewing a potential client's website. You are looking at a SCREENSHOT of their live site — this is exactly what a visitor sees.{mobile_note}
 
 COMPANY: {company_name}
 URL: {url}
-{learned_guidance}{issues_block}{text_supplement}
+{learned_guidance}{issues_block}{text_supplement}{previous_block}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
+ANALYZE LIKE A MARKETING STRATEGIST AND WEB EXPERT, NOT JUST A DESIGNER:
+Think about the site through the lens of conversion rate optimization (CRO), proven marketing principles, and modern web development best practices:
+
+MARKETING & CRO:
+- 5-SECOND TEST: Can a visitor tell what this business does, why they're different, and what to do next within 5 seconds? If not, that's the #1 issue.
+- ABOVE-THE-FOLD HIERARCHY: The most important message, differentiator, or call-to-action should be visible without scrolling. What's currently above the fold? Is it the right thing?
+- VISUAL CREDIBILITY: Modern visitors judge trustworthiness in milliseconds. Dated design patterns (pre-2018 aesthetics, outdated fonts, old-school gradients) erode trust even if the content is strong.
+- SOCIAL PROOF PLACEMENT: Reviews and testimonials convert best when placed near decision points (next to CTAs, on service pages), not buried at the bottom.
+- SCANNABILITY: 79% of web users scan rather than read. Short paragraphs, bullet points, clear headers, and visual breaks make content digestible.
+- MOBILE-FIRST: Over 60% of local service searches happen on mobile. If the mobile screenshot shows issues, that's high-impact.
+- CLEAR NEXT STEP: Every page should have one obvious thing the visitor should do (call, get a quote, book online). Multiple competing CTAs dilute conversions.
+
+WEB DEVELOPMENT & UX:
+- PAGE SPEED: If the screenshot shows lots of heavy elements (massive hero images, unoptimized galleries, tons of widgets/scripts), the site likely loads slowly. Slow sites lose 53% of visitors on mobile.
+- MODERN WEB STANDARDS: Sites using outdated frameworks, table-based layouts, or Flash look broken on modern browsers. A site that hasn't been updated in years may have compatibility issues visitors notice.
+- RESPONSIVE DESIGN: If the mobile screenshot shows content overflowing, tiny unreadable text, or elements overlapping, that's a real problem affecting the majority of their visitors.
+- ACCESSIBILITY: Low contrast text, tiny font sizes, or missing alt text on images hurts both users and search rankings.
+- CLUTTERED OR SLOW-LOADING ELEMENTS: Excessive third-party widgets, auto-playing videos, pop-ups stacking on top of each other, or chat widgets covering key content all hurt user experience.
+
 PRIORITY ORDER (follow this strictly):
-1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
-2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
-   - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
-   - TINY PHOTOS / WRONG RATIO: If the business does visual work (construction, design, landscaping, food, etc.) and their project photos are small thumbnails buried under paragraphs of text, that's backwards. The WORK should be the hero. Big photos, minimal text. "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly."
-   - STOCK PHOTOS: If the images look generic, posed, or like they came from a photo library, call it out. A real business should show THEIR team, THEIR work, THEIR results. "Those look like stock photos" is a valid, powerful observation.
-   - TEXT WALLS: Too much text under service cards, too many paragraphs before getting to the point. If text blocks dominate over visuals, the fix is usually "cut the text, grow the photos." One sentence per service is plenty.
+1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+   - PARKED / NOT-CONNECTED / BLANK PAGES: If the screenshot shows a generic "this domain isn't connected" page, a hosting provider's default page, or a blank/empty page, keep BOTH observations extremely short and concrete. Do NOT speculate about what the site could look like or suggest features for a site that doesn't exist yet. Example:
+     1. Your web address just shows a generic page, so anyone searching for you sees nothing
+     2. Even a simple one-page site with your number and services would start turning searches into calls
+   - SCAM/MALWARE: If you see fake antivirus warnings, pop-up alerts about "viruses detected", or "your computer is infected" messages, this is CRITICAL. Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business, that's scaring away every potential customer"
+2. DESIGN & CONVERSION ISSUES: Look at the screenshot through both a design AND marketing lens:
+   - OUTDATED DESIGN: If the site looks like it was built 5+ years ago (old design patterns, dated typography, boxy layouts), a modern refresh would increase trust and conversions. Frame it as helping the site match the quality of their work.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
-   - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
-   - WASTED SPACE: Huge sections that don't help convert visitors, like giant social media logo walls, oversized maps, or massive footers full of badges. That space could show actual work, reviews, or a clear next step.
-   - FLAT SERVICE LISTS: A wall of services in all-caps or bullet points with no grouping, icons, or descriptions. Visitors can't tell what the business specializes in when everything looks equally important.
-   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read.
-   - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's bigger than any missing feature.
-   - DATED/STALE FEEL: Old copyright year in the footer, outdated design patterns, or a site that looks like it was built years ago and never updated. This makes the business look inactive.
-   These design issues are MORE impactful than suggesting new features. A well-designed site with good photos converts better than a cluttered site with more features.
+   - TEXT-HEAVY SECTIONS: Too much text, not enough visual breathing room. Visitors scan, not read. If text blocks dominate, suggest tightening the copy.
+   - WEAK ABOVE-THE-FOLD: The first screen should sell. If the hero section is generic, vague, or doesn't communicate what makes this business special, that's a high-impact observation.
+   - BURIED DIFFERENTIATORS: If the business has something genuinely unique (specific specialization, years of experience, guarantees) but it's not prominent, that's worth noting. But ONLY if you can clearly see it's buried — don't guess.
+   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks.
+   - PHOTOS: Almost NEVER flag photos as stock. Portfolio/gallery photos are the business's own work. Family/team photos are their real people. Only flag stock if you see watermarks or obviously unrelated generic subjects. When in doubt, skip this entirely.
+   - DATED/STALE FEEL: Only mention the copyright year if it is before 2020. A copyright of 2020 or later is NOT worth mentioning. NEVER question whether the business is still active.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
-4. FEATURE SUGGESTIONS: Only suggest adding new features (galleries, calculators, review sections) if the site's existing content and layout are already clean and well-organized. A messy site doesn't need more stuff, it needs less clutter.
+4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content and layout are already clean. A messy site doesn't need more stuff.
 
-SCAM/MALWARE DETECTION — CHECK THE SCREENSHOT FOR THESE:
-- If you see fake antivirus warnings (McAfee, Norton, Windows Defender), pop-up alerts about "viruses detected", or "your computer is infected" messages — this is a CRITICAL issue. The business owner likely doesn't know this is happening.
-- Frame it as: "When someone visits your website, they're seeing a fake virus warning instead of your business, that's scaring away every potential customer"
-- This is the #1 most urgent thing to flag — it's actively driving away customers AND could damage their reputation.
+ACCURACY RULES — DO NOT MAKE CLAIMS YOU CAN'T VERIFY:
+1. ONLY describe what you can clearly see in the screenshot. If you can't tell whether something is "buried" or "mid-page" from the screenshot, don't claim it is.
+2. NEVER say something is "probably your biggest" anything. You don't know their business strategy. Describe what you see, not what you assume.
+3. NEVER tell them to move specific content to specific positions unless you can clearly see the issue in the screenshot. "Your financing offer could get more visibility" is safer than "move your $97/month offer above the fold."
+4. DO NOT invent problems. If the site is genuinely good, find a smaller, safe observation. A weak but accurate observation is better than a bold but wrong one.
+5. If the site already has reviews, galleries, CTAs, or other features visible, do NOT suggest adding them.
+6. NEVER speculate about a site that doesn't exist. If the page is parked/blank, just state the problem and a simple next step.
+7. Look at the screenshot carefully before each suggestion and ask yourself: "Can I clearly see this issue?" If not, find something else.
+8. NEVER question, doubt, or second-guess a business's own numbers, stats, claims, or credentials. If they say "36,000+ projects" or "20 years experience" or "award-winning," take it at face value. Calling their numbers "inflated," "unbelievable," or "hard to believe" is calling them a liar and will guarantee they never respond. Their data is their data.
 
-CRITICAL RULES — READ CAREFULLY:
-1. ONLY suggest improvements for things that are ACTUALLY absent or weak on the site.
-   - If the site already has customer reviews/testimonials visible, do NOT suggest adding reviews.
-   - If the site already has a photo gallery, do NOT suggest adding a gallery.
-   - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
-   - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
+PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery."
 
-2. PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery." Most small business sites have too much, not too little.
-
-3. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
+BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
 4. Name the issue AND the benefit in one short sentence:
-   - Good: "Replacing the stock photos with real project shots would build instant trust"
+   - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
    - Good: "A quick-quote form could turn browsers into actual leads"
    - Bad: "Your SSL certificate is expired" (too technical)
    - Bad: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen..." (way too wordy, just say what the problem is)
@@ -394,11 +443,11 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Be DIRECT. EXACTLY ONE sentence per observation. Not two, not three. ONE.
-- BAD: "Your homepage has three dense paragraphs before visitors see your services. Moving those project galleries up top would get more people clicking through." (TWO sentences, too wordy)
-- GOOD: "Making your project photos full-size instead of tiny thumbnails would let visitors see your work instantly"
-- Don't describe what you see. Just name the fix and the payoff.
-- STRICTLY one sentence each, MAX 20 words. If it's longer, cut it.
+- EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
+- BAD: "The text block is pretty dense, and breaking it into bullets would help. People scan, they don't read." (TWO sentences. WRONG.)
+- GOOD: "Breaking that text block into bullets would make the key points pop in seconds"
+- Just name the fix and the payoff. Do not describe what the site currently looks like first.
+- MAX 20 words per observation. Count them. If over 20, rewrite shorter.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
@@ -459,6 +508,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         self, website_text: str, company_name: str, url: str,
         health_issues: list = None,
         learned_website_insights: dict = None,
+        previous_observations: str = None,
     ) -> str:
         """Analyze a website from scraped text only (fallback when no screenshot)."""
 
@@ -495,19 +545,32 @@ SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
 CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see the actual visual design, layout, or images. Be cautious about suggesting things that may already exist on the site visually but aren't captured in the raw text.
 """
 
+        previous_block = ""
+        if previous_observations:
+            previous_block = (
+                "\nPREVIOUS OBSERVATIONS (the user clicked Regenerate because these "
+                "were not good enough, you MUST pick completely different observations "
+                f"this time):\n{previous_observations}\n\n"
+                "DO NOT repeat or rephrase any of the above. Find entirely new issues "
+                "to highlight.\n"
+            )
+
         prompt = f"""You're a web designer who genuinely wants to help a potential client. Find 2 opportunities where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong.
 
 COMPANY: {company_name}
 URL: {url}
-{learned_guidance}{issues_block}{text_block}
+{learned_guidance}{issues_block}{text_block}{previous_block}
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
+   - PARKED / NOT-CONNECTED / BLANK PAGES: If the text is mostly boilerplate from a hosting provider or domain registrar, keep BOTH observations extremely short and concrete. Do NOT speculate about what the site could look like. Example:
+     1. Your web address just shows a generic page, so anyone searching for you sees nothing
+     2. Even a simple one-page site with your number and services would start turning searches into calls
 2. CONTENT & STRUCTURE PROBLEMS: These are the most common real issues. Even from text alone, you can detect:
    - CONTENT OVERLOAD: Massive amounts of text, paragraphs that go on forever, too many topics crammed together. If the scraped text feels overwhelming to read, imagine how a visitor feels.
    - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
    - UNCLEAR VALUE PROPOSITION: If you can't tell in the first few sentences what this business does best and why someone should call them, that's the #1 issue.
    - HARD TO SCAN: No clear sections, everything runs together, no concise messaging.
-   - DATED/STALE FEEL: If the health checks flagged an old copyright year, the site likely hasn't been updated in years. This makes the business look inactive.
+   - DATED/STALE FEEL: If the health checks flagged a copyright year before 2020, suggest a website refresh. NEVER say the business looks inactive or question whether they're still operating — just frame it as a refresh opportunity to make the site feel more current.
    These content quality issues are MORE impactful than suggesting new features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content is already clean and focused.
@@ -518,9 +581,11 @@ IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
 - PREFER observations about content QUALITY over suggestions to add new content. "Tightening up the homepage so visitors immediately see your top services" beats "add a photo gallery."
 
+IMPORTANT — TEXT SCRAPING LIMITATIONS:
+- This text was scraped WITHOUT JavaScript execution. Animated counters and stats that use JavaScript to count up from 0 will appear as "0" in this text even though they display real numbers on the live site. Do NOT flag counters showing "0" as a problem.
+- Navigation menus have been stripped, but some nav labels may still appear in the text. Do not treat stray menu labels as page content or filing decisions.
+
 RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST, even without health-check data):
-- Counters or stats showing "0" — means the JavaScript animations never fire, so the page isn't rendering properly
-- A jumble of navigation labels, headings, and body text all mashed together with no clear page structure — means the layout isn't loading
 - Content that reads like a template dump (every section present but no visual hierarchy) — the site framework exists but isn't working
 - If you see these signs, the #1 issue is: the site isn't loading properly for visitors. Frame it helpfully, not harshly.
 
@@ -541,11 +606,12 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Be DIRECT. Say what a smart friend would say in one sentence, not what a consultant would write in a paragraph.
-- Don't describe what you see in detail. Just name the issue and the fix in plain language.
-- Name the OUTCOME of fixing it: more calls, more trust, more customers.
-- Avoid words like "broken", "failing", "terrible", "nobody", "zero", "missing", "lacking"
-- One sentence each, MAX 20 words. If it's longer, cut it.
+- EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
+- BAD: "Right now visitors see a generic error page instead of your business. That means you're losing every potential customer." (TWO sentences. WRONG.)
+- GOOD: "Your web address shows a generic page instead of your business, so every visitor bounces"
+- Just name the fix and the payoff. Do not describe what the site currently looks like first.
+- MAX 20 words per observation. Count them. If over 20, rewrite shorter.
+- NEVER speculate about a site that doesn't exist. If the page is parked/blank, do NOT say "once you get the site live..." — just state the problem and a simple next step.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
@@ -909,9 +975,20 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
+                body = _strip_ai_dashes(result.get('body', resolved_body))
+
+                # Ensure numbered observations aren't smashed into one paragraph.
+                # If "2." appears without a preceding line break or <br>, add spacing.
+                # Handle both plain text (\n) and HTML (<br>) formats.
+                if '<br' not in body and '<p' not in body:
+                    # Plain text body — convert \n to <br> for HTML rendering
+                    body = body.replace('\n', '<br>')
+                # Ensure "2." starts on its own line
+                body = re.sub(r'(?<!<br>)(?<!<br/>)(?<!<br />)(\s*)(2\.)\s', r'<br><br>\2 ', body)
+
                 out = {
                     'subject': _strip_ai_dashes(result.get('subject', resolved_subject)),
-                    'body': _strip_ai_dashes(result.get('body', resolved_body))
+                    'body': body
                 }
                 if content_warnings:
                     out['content_warnings'] = content_warnings
@@ -1186,7 +1263,7 @@ Return ONLY valid JSON in this exact format:
 RECIPIENT:
 - Name: {recipient.get('name') or 'there'}
 - Email: {recipient.get('email')}
-- Company: {recipient.get('company') or 'their company'}
+- Company: {clean_company_name(recipient.get('company', '')) or 'their company'}
 - Research Notes: {recipient.get('notes') or 'None provided'}
 
 PURPOSE/CONTEXT:
@@ -1453,6 +1530,272 @@ Return ONLY valid JSON:
 
         except Exception as e:
             print(f"Meeting followup generation error: {e}")
+            raise
+
+    def generate_sequence_followup(
+        self,
+        step_number: int,
+        original_subject: str,
+        conversation_history: list,
+        contact_info: Dict,
+        ai_prompt: str = None,
+        campaign_context: str = None,
+        web_research: str = None,
+        writing_style: Dict = None,
+        learned_insights: Dict = None,
+    ) -> Dict[str, str]:
+        """Generate a follow-up email for a multi-step campaign sequence.
+
+        Takes full conversation history, optional web research, and adjusts
+        tone based on step number (later steps = shorter/more casual).
+        """
+        # Build conversation history block
+        history_block = ""
+        for i, msg in enumerate(conversation_history, 1):
+            history_block += f"\n--- Email #{i} (sent {msg.get('sent_at', 'unknown')}) ---\n"
+            history_block += f"Subject: {msg['subject']}\n"
+            history_block += f"Body: {msg['body']}\n"
+
+        # Build web research block
+        research_block = ""
+        if web_research:
+            research_block = f"""
+WEB RESEARCH (recent information about their company/industry — use this to add VALUE):
+{web_research}
+
+Use this research to mention something timely and relevant — a recent development,
+industry trend, or company news that connects naturally to your follow-up.
+Do NOT dump all the research into the email. Pick ONE relevant detail.
+"""
+
+        # Build writing style instructions
+        style_instructions = ""
+        if writing_style:
+            style_parts = []
+            if writing_style.get('tone'):
+                style_parts.append(f"TONE: {writing_style['tone']}")
+            if writing_style.get('opening_style'):
+                style_parts.append(f"OPENING APPROACH: {writing_style['opening_style']}")
+            if writing_style.get('length'):
+                style_parts.append(f"LENGTH: {writing_style['length']}")
+            if writing_style.get('closing_style'):
+                style_parts.append(f"CLOSING/CTA STYLE: {writing_style['closing_style']}")
+            if writing_style.get('phrases_to_use'):
+                style_parts.append(f"PHRASES/PATTERNS TO USE: {writing_style['phrases_to_use']}")
+            if writing_style.get('phrases_to_avoid'):
+                style_parts.append(f"PHRASES TO AVOID: {writing_style['phrases_to_avoid']}")
+            if style_parts:
+                style_instructions = "WRITER'S PERSONAL STYLE (match this voice exactly):\n" + "\n".join(style_parts)
+
+        # Build data-driven insights block
+        insights_instructions = ""
+        if learned_insights:
+            li_parts = []
+            if learned_insights.get('subject_line_patterns'):
+                li_parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
+            if learned_insights.get('opening_patterns'):
+                li_parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
+            if learned_insights.get('cta_patterns'):
+                li_parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
+            if learned_insights.get('avoid_patterns'):
+                li_parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
+            if li_parts:
+                confidence = learned_insights.get('confidence', 'medium')
+                insights_instructions = (
+                    f"DATA-DRIVEN INSIGHTS (confidence: {confidence}):\n" + "\n".join(li_parts)
+                )
+
+        contact_name = contact_info.get('name') or 'there'
+        contact_company = contact_info.get('company') or 'their company'
+
+        prompt = f"""You are ghostwriting follow-up #{step_number} in a multi-step outreach sequence.
+This is NOT the first time reaching out — there have been {len(conversation_history)} previous email(s) in this thread.
+
+{style_instructions if style_instructions else "Write in a casual, warm, genuine tone."}
+
+{insights_instructions}
+
+PREVIOUS EMAILS IN THIS THREAD:
+{history_block}
+
+ABOUT THEM:
+- Name: {contact_name}
+- Company: {contact_company}
+{research_block}
+{f'CAMPAIGN CONTEXT: {campaign_context}' if campaign_context else ''}
+{f'SPECIAL INSTRUCTIONS: {ai_prompt}' if ai_prompt else ''}
+
+FOLLOW-UP #{step_number} RULES:
+1. This goes in the SAME email thread — do NOT re-introduce yourself or repeat your pitch
+2. Each follow-up must add NEW value — never just "checking in"
+3. Step 2: Light nudge with one new angle or insight
+4. Step 3+: Even shorter, more casual, possibly a simple question
+5. Reference something specific from the research if available
+6. Max 2-3 sentences. Brevity increases with each step.
+7. Never guilt-trip about not replying
+8. No "circling back", "bumping this", "just following up" — find a more natural way
+
+ABSOLUTE RULES:
+- NEVER fabricate facts, meetings, or connections
+- NEVER use tech jargon — write for a business owner
+- Sound human, not automated
+
+Return ONLY valid JSON:
+{{"subject": "Re: {original_subject}", "body": "your follow-up"}}"""
+
+        try:
+            message = self.client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text.strip()
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    'subject': result.get('subject', f'Re: {original_subject}'),
+                    'body': result.get('body', ''),
+                }
+
+            return {'subject': f'Re: {original_subject}', 'body': response_text}
+
+        except Exception as e:
+            print(f"Sequence follow-up generation error: {e}")
+            raise
+
+    def generate_sequence_followup(
+        self,
+        step_number: int,
+        original_subject: str,
+        conversation_history: list,
+        contact_info: Dict,
+        ai_prompt: str = None,
+        campaign_context: str = None,
+        web_research: str = None,
+        writing_style: Dict = None,
+        learned_insights: Dict = None,
+    ) -> Dict[str, str]:
+        """Generate a follow-up email for a multi-step campaign sequence.
+
+        Takes full conversation history, optional web research, and adjusts
+        tone based on step number (later steps = shorter/more casual).
+        """
+        # Build conversation history block
+        history_block = ""
+        for i, msg in enumerate(conversation_history, 1):
+            history_block += f"\n--- Email #{i} (sent {msg.get('sent_at', 'unknown')}) ---\n"
+            history_block += f"Subject: {msg['subject']}\n"
+            history_block += f"Body: {msg['body']}\n"
+
+        # Build web research block
+        research_block = ""
+        if web_research:
+            research_block = f"""
+WEB RESEARCH (recent information about their company/industry — use this to add VALUE):
+{web_research}
+
+Use this research to mention something timely and relevant — a recent development,
+industry trend, or company news that connects naturally to your follow-up.
+Do NOT dump all the research into the email. Pick ONE relevant detail.
+"""
+
+        # Build writing style instructions
+        style_instructions = ""
+        if writing_style:
+            style_parts = []
+            if writing_style.get('tone'):
+                style_parts.append(f"TONE: {writing_style['tone']}")
+            if writing_style.get('opening_style'):
+                style_parts.append(f"OPENING APPROACH: {writing_style['opening_style']}")
+            if writing_style.get('length'):
+                style_parts.append(f"LENGTH: {writing_style['length']}")
+            if writing_style.get('closing_style'):
+                style_parts.append(f"CLOSING/CTA STYLE: {writing_style['closing_style']}")
+            if writing_style.get('phrases_to_use'):
+                style_parts.append(f"PHRASES/PATTERNS TO USE: {writing_style['phrases_to_use']}")
+            if writing_style.get('phrases_to_avoid'):
+                style_parts.append(f"PHRASES TO AVOID: {writing_style['phrases_to_avoid']}")
+            if style_parts:
+                style_instructions = "WRITER'S PERSONAL STYLE (match this voice exactly):\n" + "\n".join(style_parts)
+
+        # Build data-driven insights block
+        insights_instructions = ""
+        if learned_insights:
+            li_parts = []
+            if learned_insights.get('subject_line_patterns'):
+                li_parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
+            if learned_insights.get('opening_patterns'):
+                li_parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
+            if learned_insights.get('cta_patterns'):
+                li_parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
+            if learned_insights.get('avoid_patterns'):
+                li_parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
+            if li_parts:
+                confidence = learned_insights.get('confidence', 'medium')
+                insights_instructions = (
+                    f"DATA-DRIVEN INSIGHTS (confidence: {confidence}):\n" + "\n".join(li_parts)
+                )
+
+        contact_name = contact_info.get('name') or 'there'
+        contact_company = contact_info.get('company') or 'their company'
+
+        prompt = f"""You are ghostwriting follow-up #{step_number} in a multi-step outreach sequence.
+This is NOT the first time reaching out — there have been {len(conversation_history)} previous email(s) in this thread.
+
+{style_instructions if style_instructions else "Write in a casual, warm, genuine tone."}
+
+{insights_instructions}
+
+PREVIOUS EMAILS IN THIS THREAD:
+{history_block}
+
+ABOUT THEM:
+- Name: {contact_name}
+- Company: {contact_company}
+{research_block}
+{f'CAMPAIGN CONTEXT: {campaign_context}' if campaign_context else ''}
+{f'SPECIAL INSTRUCTIONS: {ai_prompt}' if ai_prompt else ''}
+
+FOLLOW-UP #{step_number} RULES:
+1. This goes in the SAME email thread — do NOT re-introduce yourself or repeat your pitch
+2. Each follow-up must add NEW value — never just "checking in"
+3. Step 2: Light nudge with one new angle or insight
+4. Step 3+: Even shorter, more casual, possibly a simple question
+5. Reference something specific from the research if available
+6. Max 2-3 sentences. Brevity increases with each step.
+7. Never guilt-trip about not replying
+8. No "circling back", "bumping this", "just following up" — find a more natural way
+
+ABSOLUTE RULES:
+- NEVER fabricate facts, meetings, or connections
+- NEVER use tech jargon — write for a business owner
+- Sound human, not automated
+
+Return ONLY valid JSON:
+{{"subject": "Re: {original_subject}", "body": "your follow-up"}}"""
+
+        try:
+            message = self.client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text.strip()
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    'subject': result.get('subject', f'Re: {original_subject}'),
+                    'body': result.get('body', ''),
+                }
+
+            return {'subject': f'Re: {original_subject}', 'body': response_text}
+
+        except Exception as e:
+            print(f"Sequence follow-up generation error: {e}")
             raise
 
     def generate_followup_email(

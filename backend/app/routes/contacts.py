@@ -90,9 +90,19 @@ def get_contact(contact_id):
             entry['source'] = 'Quick Send'
         email_history.append(entry)
 
+    # Cold call history
+    from app.models.cold_call import ColdCall
+    cold_calls = (
+        ColdCall.query
+        .filter_by(contact_id=contact.id)
+        .order_by(ColdCall.call_date.desc())
+        .all()
+    )
+
     return jsonify({
         'contact': contact.to_dict(),
         'email_history': email_history,
+        'cold_calls': [c.to_dict() for c in cold_calls],
     })
 
 

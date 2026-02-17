@@ -25,9 +25,19 @@ import {
   triggerReplyCheck,
   exportToClay,
   sendIndividual,
+  getSteps,
+  createStep,
+  updateStep,
+  deleteStep,
+  generateStepPreview,
+  approveStepRecipients,
+  startStep,
+  getTemplates,
 } from '../api/client';
 import AttachmentPicker from '../components/AttachmentPicker';
 import RichTextEditor from '../components/RichTextEditor';
+import SequenceBuilder from '../components/SequenceBuilder';
+import ColdCallModal from '../components/ColdCallModal';
 
 function MoveModal({ campaigns, selectedCount, onMove, onClose, isMoving }) {
   const [targetMode, setTargetMode] = useState('existing');
@@ -161,6 +171,9 @@ function CampaignDetail() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [movingRecipients, setMovingRecipients] = useState(false);
   const [campaignsList, setCampaignsList] = useState([]);
+  const [steps, setSteps] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [coldCallRecipientId, setColdCallRecipientId] = useState(null);
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
 
@@ -169,6 +182,9 @@ function CampaignDetail() {
     getGmailAccounts().then((res) => {
       setGmailAccounts(res.data.accounts || []);
     });
+    getTemplates().then((res) => {
+      setTemplates(res.data);
+    }).catch(() => {});
     const handleWsChange = () => loadData();
     window.addEventListener('workspace-changed', handleWsChange);
     return () => {
@@ -180,7 +196,7 @@ function CampaignDetail() {
   }, [id]);
 
   useEffect(() => {
-    if (campaign?.status === 'running') {
+    if (campaign?.status === 'running' || campaign?.status === 'sequence_active') {
       startProgressStream();
     }
     return () => {
@@ -218,6 +234,7 @@ function CampaignDetail() {
       ]);
       setCampaign(campaignRes.data);
       setAttachments(campaignRes.data.attachments || []);
+      setSteps(campaignRes.data.steps || []);
       setRecipients(recipientsRes.data);
 
       // Load tracking stats if emails have been sent
@@ -554,6 +571,66 @@ function CampaignDetail() {
     setCheckingReplies(false);
   };
 
+  // Step management handlers
+  const handleCreateStep = async (stepData) => {
+    try {
+      await createStep(id, stepData);
+      loadData();
+    } catch (error) {
+      alert('Failed to create step: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleUpdateStep = async (stepId, data) => {
+    try {
+      await updateStep(id, stepId, data);
+      loadData();
+    } catch (error) {
+      alert('Failed to update step: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleDeleteStep = async (stepId) => {
+    try {
+      await deleteStep(id, stepId);
+      loadData();
+    } catch (error) {
+      alert('Failed to delete step: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleGenerateStepPreview = async (stepId) => {
+    try {
+      const res = await generateStepPreview(id, stepId);
+      const { generated, failed, remaining } = res.data;
+      let msg = `Generated ${generated} follow-up emails.`;
+      if (failed > 0) msg += ` ${failed} failed.`;
+      if (remaining > 0) msg += ` ${remaining} remaining.`;
+      alert(msg);
+      loadData();
+    } catch (error) {
+      alert('Failed to generate step previews: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleApproveStep = async (stepId) => {
+    try {
+      await approveStepRecipients(id, stepId);
+      loadData();
+    } catch (error) {
+      alert('Failed to approve step recipients');
+    }
+  };
+
+  const handleStartStep = async (stepId) => {
+    try {
+      await startStep(id, stepId);
+      loadData();
+    } catch (error) {
+      alert('Failed to start step: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   if (loading) {
     return <div className="card">Loading...</div>;
   }
@@ -576,8 +653,8 @@ function CampaignDetail() {
           <Link to="/campaigns" className="text-sm text-light">&larr; Back to Campaigns</Link>
           <h1>{campaign.name}</h1>
         </div>
-        <span className={`badge badge-${campaign.status}`} style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>
-          {campaign.status}
+        <span className={`badge badge-${campaign.status === 'sequence_active' ? 'running' : campaign.status}`} style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>
+          {campaign.status === 'sequence_active' ? 'Sequence Active' : campaign.status}
         </span>
       </div>
 
@@ -778,6 +855,15 @@ function CampaignDetail() {
             </>
           )}
 
+          {campaign.status === 'sequence_active' && (
+            <>
+              <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
+                Follow-up sequence is running. Steps will send automatically based on their delay settings.
+              </span>
+              <button className="btn btn-danger" onClick={handleCancel}>Cancel Sequence</button>
+            </>
+          )}
+
           {(campaign.status === 'completed' || campaign.status === 'cancelled') && (
             <>
               <a href={exportCampaign(id)} className="btn btn-secondary" download>
@@ -804,6 +890,23 @@ function CampaignDetail() {
           )}
         </div>
       </div>
+
+      {/* Follow-up Sequence Builder */}
+      {recipients.length > 0 && (
+        <SequenceBuilder
+          campaignId={id}
+          steps={steps}
+          templates={templates}
+          campaignStatus={campaign.status}
+          onCreateStep={handleCreateStep}
+          onUpdateStep={handleUpdateStep}
+          onDeleteStep={handleDeleteStep}
+          onGeneratePreview={handleGenerateStepPreview}
+          onApproveStep={handleApproveStep}
+          onStartStep={handleStartStep}
+          onReloadSteps={loadData}
+        />
+      )}
 
       {/* Recipients Table */}
       <div className="card">
@@ -866,6 +969,7 @@ function CampaignDetail() {
                   {hasSentEmails && <th>Bounced</th>}
                   <th>Preview</th>
                   <th>Send</th>
+                  <th>Call</th>
                   {campaign.status === 'draft' && <th></th>}
                 </tr>
               </thead>
@@ -1044,6 +1148,16 @@ function CampaignDetail() {
                           {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
                         </button>
                       )}
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setColdCallRecipientId(recipient.id)}
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem' }}
+                        title="Log cold call"
+                      >
+                        &#128222;
+                      </button>
                     </td>
                     {campaign.status === 'draft' && (
                       <td>
@@ -1292,6 +1406,14 @@ function CampaignDetail() {
           onMove={handleMoveRecipients}
           onClose={() => setShowMoveModal(false)}
           isMoving={movingRecipients}
+        />
+      )}
+      {coldCallRecipientId && (
+        <ColdCallModal
+          recipientId={coldCallRecipientId}
+          campaignId={parseInt(id)}
+          onClose={() => setColdCallRecipientId(null)}
+          onSaved={() => setColdCallRecipientId(null)}
         />
       )}
     </div>

@@ -86,6 +86,22 @@ export const updateRecipient = (campaignId, recipientId, data) =>
 export const regenerateRecipientPreview = (campaignId, recipientId) =>
   api.post(`/api/campaigns/${campaignId}/recipients/${recipientId}/regenerate`);
 
+// Campaign Steps
+export const getSteps = (campaignId) => api.get(`/api/campaigns/${campaignId}/steps`);
+export const createStep = (campaignId, data) => api.post(`/api/campaigns/${campaignId}/steps`, data);
+export const updateStep = (campaignId, stepId, data) => api.put(`/api/campaigns/${campaignId}/steps/${stepId}`, data);
+export const deleteStep = (campaignId, stepId) => api.delete(`/api/campaigns/${campaignId}/steps/${stepId}`);
+export const getStepRecipients = (campaignId, stepId) => api.get(`/api/campaigns/${campaignId}/steps/${stepId}/recipients`);
+export const generateStepPreview = (campaignId, stepId, batchSize) =>
+  api.post(`/api/campaigns/${campaignId}/steps/${stepId}/generate-preview`, batchSize != null ? { batch_size: batchSize } : {});
+export const approveStepRecipients = (campaignId, stepId, recipientIds) =>
+  api.post(`/api/campaigns/${campaignId}/steps/${stepId}/approve`, recipientIds ? { recipient_ids: recipientIds } : {});
+export const updateStepRecipient = (campaignId, stepId, srId, data) =>
+  api.put(`/api/campaigns/${campaignId}/steps/${stepId}/recipients/${srId}`, data);
+export const regenerateStepRecipient = (campaignId, stepId, srId) =>
+  api.post(`/api/campaigns/${campaignId}/steps/${stepId}/recipients/${srId}/regenerate`);
+export const startStep = (campaignId, stepId) => api.post(`/api/campaigns/${campaignId}/steps/${stepId}/start`);
+
 // Campaign Actions
 export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);
@@ -142,6 +158,13 @@ export const setReplyFollowUp = (replyId, data) => api.post(`/api/replies/${repl
 // Follow-ups
 export const getFollowUps = () => api.get('/api/contacts/follow-ups');
 export const generateFollowUp = (contactId) => api.post(`/api/contacts/${contactId}/generate-followup`);
+
+// Cold Calls
+export const getColdCalls = (params) => api.get('/api/cold-calls', { params });
+export const createColdCall = (data) => api.post('/api/cold-calls', data);
+export const updateColdCall = (id, data) => api.put(`/api/cold-calls/${id}`, data);
+export const deleteColdCall = (id) => api.delete(`/api/cold-calls/${id}`);
+export const getColdCallOutcomes = () => api.get('/api/cold-calls/outcomes');
 
 // Workspaces
 export const getWorkspaces = () => api.get('/api/workspaces/');

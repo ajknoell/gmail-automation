@@ -1,8 +1,16 @@
 import base64
 import re
+import time
 import requests
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
+
+
+# Cache website fetch results (screenshots, text, health issues) keyed by URL.
+# Avoids re-fetching and re-screenshotting the same site on regeneration.
+# Entries expire after 10 minutes.
+_website_cache: Dict[str, dict] = {}
+_CACHE_TTL = 600  # seconds
 
 
 class _TextExtractor(HTMLParser):
@@ -11,21 +19,21 @@ class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self._parts = []
-        self._skip = False
-        self._skip_tags = {'script', 'style', 'noscript', 'svg', 'head'}
+        self._skip_depth = 0
+        self._skip_tags = {'script', 'style', 'noscript', 'svg', 'head', 'nav'}
 
     def handle_starttag(self, tag, attrs):
         if tag in self._skip_tags:
-            self._skip = True
+            self._skip_depth += 1
         if tag in ('br', 'p', 'div', 'h1', 'h2', 'h3', 'h4', 'li', 'tr'):
             self._parts.append('\n')
 
     def handle_endtag(self, tag):
-        if tag in self._skip_tags:
-            self._skip = False
+        if tag in self._skip_tags and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data):
-        if not self._skip:
+        if self._skip_depth == 0:
             self._parts.append(data)
 
     def get_text(self):
@@ -188,11 +196,10 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
             )
             if copyright_years:
                 newest_year = max(int(y) for y in copyright_years)
-                current_year = _dt.now().year
-                if current_year - newest_year >= 2:
+                if newest_year < 2020:
                     issues.append(
                         f'OUTDATED_COPYRIGHT: The website\'s copyright year is {newest_year} '
-                        f'— the site may not be actively maintained, which can make the business look inactive or outdated to visitors.'
+                        f'— the site design is likely due for a refresh. This is a design refresh opportunity, not a sign the business is inactive.'
                     )
 
             # Check for "not secure" / mixed-content hints in page title
@@ -294,15 +301,13 @@ def _trigger_lazy_content(page) -> None:
 
 
 def _capture_screenshot(
-    url: str, timeout: int = 20, ignore_ssl: bool = False
+    url: str, timeout: int = 20
 ) -> Optional[str]:
     """Capture a full-page screenshot using Playwright and return as base64 PNG.
 
-    When ``ignore_ssl`` is True, Chromium is launched with
-    ``--ignore-certificate-errors`` so we can capture what the browser
-    actually shows for sites with SSL problems (the warning page itself).
-
     Returns None if Playwright is not installed or the capture fails.
+    For sites with SSL errors, the screenshot will show the browser's
+    security warning — exactly what real visitors see.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -311,10 +316,7 @@ def _capture_screenshot(
 
     try:
         with sync_playwright() as p:
-            launch_args = []
-            if ignore_ssl:
-                launch_args.append('--ignore-certificate-errors')
-            browser = p.chromium.launch(headless=True, args=launch_args)
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': 1280, 'height': 900})
             try:
                 page.goto(url, wait_until='networkidle', timeout=timeout * 1000)
@@ -354,7 +356,7 @@ def _capture_screenshot(
 
 
 def _capture_mobile_screenshot(
-    url: str, timeout: int = 20, ignore_ssl: bool = False
+    url: str, timeout: int = 20
 ) -> Optional[str]:
     """Capture a mobile-viewport screenshot (375x812, iPhone-style).
 
@@ -367,10 +369,7 @@ def _capture_mobile_screenshot(
 
     try:
         with sync_playwright() as p:
-            launch_args = []
-            if ignore_ssl:
-                launch_args.append('--ignore-certificate-errors')
-            browser = p.chromium.launch(headless=True, args=launch_args)
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page(
                 viewport={'width': 375, 'height': 812},
                 user_agent=(
@@ -635,7 +634,7 @@ class WebsiteAnalyzer:
         return cls.url_from_email(recipient.get('email', ''))
 
     @classmethod
-    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None) -> Optional[dict]:
+    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None, previous_observations: str = None) -> Optional[dict]:
         """Fetch recipient's website and generate improvement insights.
 
         Runs health checks first to detect critical issues (SSL errors,
@@ -650,55 +649,70 @@ class WebsiteAnalyzer:
         if not url:
             return None
 
-        # Ensure URL has a scheme
-        screenshot_url = url
-        if not screenshot_url.startswith(('http://', 'https://')):
-            screenshot_url = 'https://' + screenshot_url
+        # Always use HTTPS — that's what browsers default to and what
+        # visitors will hit.  If the site has an SSL issue on HTTPS we need
+        # to catch it even when the CSV stored an http:// URL.
+        from urllib.parse import urlparse
+        _parsed = urlparse(url if '://' in url else f'https://{url}')
+        screenshot_url = f'https://{_parsed.hostname}{_parsed.path}'.rstrip('/')
+        if _parsed.query:
+            screenshot_url += f'?{_parsed.query}'
 
-        # --- Step 1: Pre-flight health checks ---
-        health_issues = _check_website_health(screenshot_url)
-        has_ssl_issue = any(
-            tag in issue for issue in health_issues
-            for tag in ('SSL_', 'SECURITY_WARNING')
-        )
+        # Check cache — skip expensive fetch/screenshot if we already have
+        # recent data for this URL (e.g. on regeneration).
+        cache_key = screenshot_url.lower()
+        cached = _website_cache.get(cache_key)
+        if cached and (time.time() - cached['ts']) < _CACHE_TTL:
+            screenshot_b64 = cached['screenshot_b64']
+            mobile_screenshot_b64 = cached['mobile_screenshot_b64']
+            text = cached['text']
+            health_issues = cached['health_issues']
+        else:
+            # --- Step 1: Pre-flight health checks ---
+            health_issues = _check_website_health(screenshot_url)
 
-        # --- Step 2: Capture screenshots (desktop + mobile) ---
-        # If there's an SSL issue, capture with ignore_ssl so we see what
-        # the browser actually shows (the warning page).
-        screenshot_b64 = _capture_screenshot(
-            screenshot_url, ignore_ssl=has_ssl_issue
-        )
-        mobile_screenshot_b64 = _capture_mobile_screenshot(
-            screenshot_url, ignore_ssl=has_ssl_issue
-        )
+            # --- Step 2: Capture screenshots (desktop + mobile) ---
+            # Never bypass SSL errors — let the screenshot show exactly what
+            # visitors see (the scary browser warning).
+            screenshot_b64 = _capture_screenshot(screenshot_url)
+            mobile_screenshot_b64 = _capture_mobile_screenshot(screenshot_url)
 
-        # --- Step 3: Fetch text as supplementary context ---
-        text = None
-        # Skip text fetch if the site has connection-level issues
-        connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP')
-        if not any(tag in issue for issue in health_issues for tag in connection_failures):
-            try:
-                text = cls.fetch_website(url)
-                if not text or len(text) < 50:
-                    text = None
-            except Exception:
-                text = None
-
-            # --- Step 3b: Fetch key inner pages for richer context ---
-            if text:
+            # --- Step 3: Fetch text as supplementary context ---
+            text = None
+            connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP', 'SSL_')
+            if not any(tag in issue for issue in health_issues for tag in connection_failures):
                 try:
-                    inner_text = cls.fetch_inner_pages(url)
-                    if inner_text:
-                        text = text + '\n\n' + inner_text
+                    text = cls.fetch_website(url)
+                    if not text or len(text) < 50:
+                        text = None
                 except Exception:
-                    pass
+                    text = None
+
+                # --- Step 3b: Fetch key inner pages for richer context ---
+                if text:
+                    try:
+                        inner_text = cls.fetch_inner_pages(url)
+                        if inner_text:
+                            text = text + '\n\n' + inner_text
+                    except Exception:
+                        pass
+
+            # Store in cache for fast regeneration
+            _website_cache[cache_key] = {
+                'screenshot_b64': screenshot_b64,
+                'mobile_screenshot_b64': mobile_screenshot_b64,
+                'text': text,
+                'health_issues': health_issues,
+                'ts': time.time(),
+            }
 
         # Need at least one data source (issues alone count — they tell us
         # plenty about what visitors experience)
         if not screenshot_b64 and not text and not health_issues:
             return None
 
-        company = recipient.get('company')
+        from .claude_service import clean_company_name
+        company = clean_company_name(recipient.get('company', '')) or ''
         if not company:
             # Extract a readable name from the domain instead of using the raw URL
             from urllib.parse import urlparse
@@ -717,6 +731,7 @@ class WebsiteAnalyzer:
             mobile_screenshot_b64=mobile_screenshot_b64,
             health_issues=health_issues,
             learned_website_insights=learned_website_insights,
+            previous_observations=previous_observations,
         )
         if not analysis:
             return None

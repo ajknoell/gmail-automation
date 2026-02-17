@@ -27,9 +27,10 @@ const DEFAULT_WRITING_STYLE = {
 function Settings({ onStatusChange }) {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
-  const [settings, setSettings] = useState({ anthropic_api_key: '', writing_style: null });
+  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', writing_style: null });
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [apiKey, setApiKey] = useState('');
+  const [tavilyKey, setTavilyKey] = useState('');
   const [writingStyle, setWritingStyle] = useState(DEFAULT_WRITING_STYLE);
   const [saving, setSaving] = useState(false);
   const [savingStyle, setSavingStyle] = useState(false);
@@ -125,6 +126,21 @@ function Settings({ onStatusChange }) {
       setSettings(settingsRes.data);
     } catch (error) {
       setMessage('Failed to save API key');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveTavilyKey = async () => {
+    if (!tavilyKey.trim()) return;
+    setSaving(true);
+    try {
+      await saveSettings({ tavily_api_key: tavilyKey });
+      setMessage('Tavily API key saved successfully!');
+      setTavilyKey('');
+      const settingsRes = await getSettings();
+      setSettings(settingsRes.data);
+    } catch (error) {
+      setMessage('Failed to save Tavily API key');
     }
     setSaving(false);
   };
@@ -259,6 +275,39 @@ function Settings({ onStatusChange }) {
             className="btn btn-primary"
             onClick={handleSaveApiKey}
             disabled={saving || !apiKey.trim()}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Tavily API Key (Web Research) */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Tavily API Key (Web Research) <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
+        <p className="text-sm text-light mb-2">
+          Optional. Used for web research in follow-up sequences — searches for recent news and trends about recipients' companies to add value to follow-up emails.
+          Get a key at <a href="https://tavily.com" target="_blank" rel="noopener noreferrer">tavily.com</a>.
+        </p>
+
+        {settings.tavily_api_key && (
+          <p className="mb-2">
+            Current key: <code>{settings.tavily_api_key.slice(0, 8)}...{settings.tavily_api_key.slice(-4)}</code>
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            type="password"
+            className="form-input"
+            placeholder="tvly-..."
+            value={tavilyKey}
+            onChange={(e) => setTavilyKey(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveTavilyKey}
+            disabled={saving || !tavilyKey.trim()}
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
