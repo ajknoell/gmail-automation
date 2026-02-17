@@ -80,6 +80,22 @@ export const updateRecipient = (campaignId, recipientId, data) =>
 export const regenerateRecipientPreview = (campaignId, recipientId) =>
   api.post(`/api/campaigns/${campaignId}/recipients/${recipientId}/regenerate`);
 
+// Campaign Steps
+export const getSteps = (campaignId) => api.get(`/api/campaigns/${campaignId}/steps`);
+export const createStep = (campaignId, data) => api.post(`/api/campaigns/${campaignId}/steps`, data);
+export const updateStep = (campaignId, stepId, data) => api.put(`/api/campaigns/${campaignId}/steps/${stepId}`, data);
+export const deleteStep = (campaignId, stepId) => api.delete(`/api/campaigns/${campaignId}/steps/${stepId}`);
+export const getStepRecipients = (campaignId, stepId) => api.get(`/api/campaigns/${campaignId}/steps/${stepId}/recipients`);
+export const generateStepPreview = (campaignId, stepId, batchSize) =>
+  api.post(`/api/campaigns/${campaignId}/steps/${stepId}/generate-preview`, batchSize != null ? { batch_size: batchSize } : {});
+export const approveStepRecipients = (campaignId, stepId, recipientIds) =>
+  api.post(`/api/campaigns/${campaignId}/steps/${stepId}/approve`, recipientIds ? { recipient_ids: recipientIds } : {});
+export const updateStepRecipient = (campaignId, stepId, srId, data) =>
+  api.put(`/api/campaigns/${campaignId}/steps/${stepId}/recipients/${srId}`, data);
+export const regenerateStepRecipient = (campaignId, stepId, srId) =>
+  api.post(`/api/campaigns/${campaignId}/steps/${stepId}/recipients/${srId}/regenerate`);
+export const startStep = (campaignId, stepId) => api.post(`/api/campaigns/${campaignId}/steps/${stepId}/start`);
+
 // Campaign Actions
 export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);

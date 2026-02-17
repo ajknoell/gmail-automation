@@ -8,6 +8,7 @@ class EmailLog(db.Model):
     workspace_id = db.Column(db.Integer, db.ForeignKey('workspaces.id'), nullable=True, index=True)
     recipient_id = db.Column(db.Integer, db.ForeignKey('recipients.id'))
     campaign_id = db.Column(db.Integer, db.ForeignKey('campaigns.id'))
+    step_id = db.Column(db.Integer, db.ForeignKey('campaign_steps.id'), nullable=True)
     gmail_message_id = db.Column(db.String(100))
     subject = db.Column(db.String(200))
     body = db.Column(db.Text)
@@ -35,6 +36,7 @@ class EmailLog(db.Model):
             'id': self.id,
             'recipient_id': self.recipient_id,
             'campaign_id': self.campaign_id,
+            'step_id': self.step_id,
             'gmail_message_id': self.gmail_message_id,
             'subject': self.subject,
             'status': self.status,
