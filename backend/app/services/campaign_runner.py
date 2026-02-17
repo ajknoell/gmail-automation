@@ -234,17 +234,32 @@ class CampaignRunner:
 
     @classmethod
     def _finish_campaign(cls, campaign_id: int, status: str):
-        """Mark campaign as finished."""
+        """Mark campaign as finished. If follow-up steps exist, enter sequence mode."""
         from app import create_app
         from app.models import Campaign
 
         app = create_app()
         with app.app_context():
             from app import db
+            from app.models.campaign_step import CampaignStep
+
             campaign = Campaign.query.get(campaign_id)
             if campaign:
-                campaign.status = status
-                campaign.completed_at = datetime.utcnow()
+                # Check if there are follow-up steps ready
+                if status == 'completed':
+                    next_steps = CampaignStep.query.filter(
+                        CampaignStep.campaign_id == campaign_id,
+                        CampaignStep.position > 1,
+                        CampaignStep.status.in_(['ready', 'draft']),
+                    ).count()
+                    if next_steps > 0:
+                        campaign.status = 'sequence_active'
+                    else:
+                        campaign.status = status
+                        campaign.completed_at = datetime.utcnow()
+                else:
+                    campaign.status = status
+                    campaign.completed_at = datetime.utcnow()
                 db.session.commit()
 
         # Clean up state

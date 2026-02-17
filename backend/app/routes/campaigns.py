@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify, Response, current_app, g
 from app import db
 from app.models import Campaign, Recipient, Template, EmailLog, Settings, OAuthToken
+from app.models.campaign_step import CampaignStep
+from app.models.step_recipient import StepRecipient
 from app.models.settings import WorkspaceSettings
 from app.services.csv_parser import parse_file, detect_field_mapping
 from app.services.claude_service import ClaudeService, clean_company_name
@@ -35,9 +37,9 @@ def list_campaigns():
 
 @campaigns_bp.route('/<int:id>', methods=['GET'])
 def get_campaign(id):
-    """Get a single campaign with stats."""
+    """Get a single campaign with stats and steps."""
     campaign = Campaign.query.get_or_404(id)
-    return jsonify(campaign.to_dict(include_template=True))
+    return jsonify(campaign.to_dict(include_template=True, include_steps=True))
 
 @campaigns_bp.route('', methods=['POST'])
 def create_campaign():
@@ -717,10 +719,17 @@ def cancel_campaign(id):
     """Cancel a campaign."""
     campaign = Campaign.query.get_or_404(id)
 
-    if campaign.status not in ['running', 'paused']:
+    if campaign.status not in ['running', 'paused', 'sequence_active']:
         return jsonify({'error': 'Campaign is not active'}), 400
 
     CampaignRunner.cancel(id)
+
+    # Cancel any pending steps
+    CampaignStep.query.filter(
+        CampaignStep.campaign_id == id,
+        CampaignStep.status.notin_(['completed', 'cancelled']),
+    ).update({'status': 'cancelled'}, synchronize_session=False)
+
     campaign.status = 'cancelled'
     db.session.commit()
 
@@ -792,3 +801,547 @@ def export_campaign(id):
         mimetype='text/csv',
         headers={'Content-Disposition': f'attachment; filename=campaign_{id}_results.csv'}
     )
+
+
+# ---- Campaign Steps API ----
+
+@campaigns_bp.route('/<int:id>/steps', methods=['GET'])
+def list_steps(id):
+    """List all steps for a campaign."""
+    Campaign.query.get_or_404(id)
+    steps = CampaignStep.query.filter_by(campaign_id=id).order_by(CampaignStep.position).all()
+    return jsonify([s.to_dict() for s in steps])
+
+
+@campaigns_bp.route('/<int:id>/steps', methods=['POST'])
+def create_step(id):
+    """Add a new step to a campaign."""
+    campaign = Campaign.query.get_or_404(id)
+    if campaign.status in ('running',):
+        return jsonify({'error': 'Cannot add steps to a running campaign'}), 400
+
+    data = request.get_json()
+
+    max_pos = db.session.query(db.func.max(CampaignStep.position)).filter_by(
+        campaign_id=id
+    ).scalar() or 0
+
+    requested_pos = data.get('position')
+    if requested_pos and requested_pos <= max_pos:
+        # Insert: shift existing steps up
+        CampaignStep.query.filter(
+            CampaignStep.campaign_id == id,
+            CampaignStep.position >= requested_pos,
+        ).update({CampaignStep.position: CampaignStep.position + 1})
+        position = requested_pos
+    else:
+        position = max_pos + 1
+
+    step = CampaignStep(
+        campaign_id=id,
+        position=position,
+        name=data.get('name') or f'Follow-up #{position - 1}' if position > 1 else 'Initial Outreach',
+        step_type=data.get('step_type', 'ai_followup'),
+        template_id=data.get('template_id'),
+        ai_prompt=data.get('ai_prompt'),
+        delay_days=data.get('delay_days', 3),
+        use_web_research=data.get('use_web_research', False),
+        web_research_prompt=data.get('web_research_prompt'),
+        auto_send=data.get('auto_send', False),
+    )
+    db.session.add(step)
+    db.session.commit()
+
+    # Create StepRecipient entries for all campaign recipients
+    _populate_step_recipients(step)
+
+    return jsonify(step.to_dict()), 201
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>', methods=['PUT'])
+def update_step(id, step_id):
+    """Update a step's configuration."""
+    Campaign.query.get_or_404(id)
+    step = CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+
+    if step.status in ('running',):
+        return jsonify({'error': 'Cannot update a running step'}), 400
+
+    data = request.get_json()
+
+    if 'name' in data:
+        step.name = data['name']
+    if 'step_type' in data:
+        step.step_type = data['step_type']
+    if 'template_id' in data:
+        step.template_id = data['template_id']
+    if 'ai_prompt' in data:
+        step.ai_prompt = data['ai_prompt']
+    if 'delay_days' in data:
+        step.delay_days = data['delay_days']
+    if 'use_web_research' in data:
+        step.use_web_research = data['use_web_research']
+    if 'web_research_prompt' in data:
+        step.web_research_prompt = data['web_research_prompt']
+    if 'auto_send' in data:
+        step.auto_send = data['auto_send']
+
+    db.session.commit()
+    return jsonify(step.to_dict())
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>', methods=['DELETE'])
+def delete_step(id, step_id):
+    """Delete a step and reorder remaining steps."""
+    Campaign.query.get_or_404(id)
+    step = CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+
+    if step.status == 'running':
+        return jsonify({'error': 'Cannot delete a running step'}), 400
+
+    position = step.position
+    db.session.delete(step)
+
+    # Reorder: shift positions down for steps after the deleted one
+    CampaignStep.query.filter(
+        CampaignStep.campaign_id == id,
+        CampaignStep.position > position,
+    ).update({CampaignStep.position: CampaignStep.position - 1})
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>/recipients', methods=['GET'])
+def list_step_recipients(id, step_id):
+    """List step recipients with status and tracking data."""
+    Campaign.query.get_or_404(id)
+    CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+
+    step_recipients = StepRecipient.query.filter_by(step_id=step_id).all()
+
+    # Join tracking data from email logs
+    log_ids = [sr.email_log_id for sr in step_recipients if sr.email_log_id]
+    logs_by_id = {}
+    if log_ids:
+        logs = EmailLog.query.filter(EmailLog.id.in_(log_ids)).all()
+        logs_by_id = {l.id: l for l in logs}
+
+    result = []
+    for sr in step_recipients:
+        data = sr.to_dict()
+        if sr.email_log_id and sr.email_log_id in logs_by_id:
+            log = logs_by_id[sr.email_log_id]
+            data['tracking'] = {
+                'opened_at': log.opened_at.isoformat() if log.opened_at else None,
+                'open_count': log.open_count or 0,
+                'clicked_at': log.clicked_at.isoformat() if log.clicked_at else None,
+                'click_count': log.click_count or 0,
+                'replied_at': log.replied_at.isoformat() if log.replied_at else None,
+                'bounced_at': log.bounced_at.isoformat() if log.bounced_at else None,
+            }
+        result.append(data)
+
+    return jsonify(result)
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>/generate-preview', methods=['POST'])
+def generate_step_preview(id, step_id):
+    """Generate AI-personalized content for a step's recipients."""
+    campaign = Campaign.query.get_or_404(id)
+    step = CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+
+    data = request.get_json(silent=True) or {}
+    batch_size = data.get('batch_size', 50)
+
+    api_key = Settings.get('anthropic_api_key')
+    if not api_key:
+        return jsonify({'error': 'Anthropic API key not configured'}), 400
+
+    claude = ClaudeService(api_key)
+    writing_style = _get_writing_style()
+    learned_insights = _get_learned_insights()
+
+    # Web search service if needed
+    web_search = None
+    if step.use_web_research:
+        tavily_key = Settings.get('tavily_api_key')
+        if tavily_key:
+            from app.services.web_search import WebSearchService
+            web_search = WebSearchService(tavily_key)
+
+    # Find step recipients that need generation
+    unpersonalized = (
+        StepRecipient.query
+        .filter_by(step_id=step_id, status='pending')
+        .filter(StepRecipient.personalized_body.is_(None))
+        .limit(batch_size if batch_size > 0 else 10000)
+        .all()
+    )
+
+    step.status = 'generating'
+    db.session.commit()
+
+    generated = 0
+    failed = 0
+
+    for sr in unpersonalized:
+        recipient = Recipient.query.get(sr.recipient_id)
+        if not recipient:
+            continue
+
+        try:
+            if step.step_type == 'ai_followup':
+                # Build conversation history from prior steps
+                conversation_history = _build_conversation_history(campaign.id, recipient.id, step.position)
+
+                # Web research
+                research_text = None
+                if web_search and step.use_web_research:
+                    custom_fields = recipient.get_custom_fields()
+                    from app.services.web_search import WebSearchService
+                    research = web_search.research_company(
+                        company=recipient.company or '',
+                        industry=custom_fields.get('industry') or custom_fields.get('sector'),
+                        custom_query=step.web_research_prompt,
+                        recipient_name=recipient.name,
+                    )
+                    research_text = WebSearchService.format_for_prompt(research)
+                    sr.web_research_results = json.dumps(research)
+
+                original_subject = _get_original_subject(campaign.id, recipient.id)
+
+                result = claude.generate_sequence_followup(
+                    step_number=step.position,
+                    original_subject=original_subject,
+                    conversation_history=conversation_history,
+                    contact_info={
+                        'name': recipient.name,
+                        'company': recipient.company,
+                    },
+                    ai_prompt=step.ai_prompt,
+                    campaign_context=campaign.campaign_context,
+                    web_research=research_text,
+                    writing_style=writing_style,
+                    learned_insights=learned_insights,
+                )
+                sr.personalized_subject = result.get('subject', f'Re: {original_subject}')
+                sr.personalized_body = result.get('body', '')
+                sr.status = 'ready'
+                generated += 1
+
+            elif step.step_type == 'template' and step.template_id:
+                # Reuse existing personalization flow
+                template = Template.query.get(step.template_id)
+                if not template:
+                    sr.status = 'failed'
+                    sr.error_message = 'Template not found'
+                    failed += 1
+                    db.session.commit()
+                    continue
+
+                if campaign.use_ai_personalization:
+                    recipient_dict = {
+                        'name': recipient.name,
+                        'email': recipient.email,
+                        'company': recipient.company,
+                        'custom_fields': recipient.get_all_context()
+                    }
+                    result = claude.personalize_email(
+                        template_subject=template.subject,
+                        template_body=template.body,
+                        recipient=recipient_dict,
+                        custom_prompt=campaign.ai_prompt,
+                        writing_style=writing_style,
+                        campaign_context=campaign.campaign_context,
+                        learned_insights=learned_insights,
+                    )
+                    sr.personalized_subject = result.get('subject', template.subject)
+                    sr.personalized_body = result.get('body', template.body)
+                else:
+                    sr.personalized_subject = _substitute_template_variables(template.subject, recipient)
+                    sr.personalized_body = _substitute_template_variables(template.body, recipient)
+
+                sr.status = 'ready'
+                generated += 1
+
+            db.session.commit()
+
+        except Exception as e:
+            current_app.logger.warning(f"Failed to generate step content for recipient {recipient.id}: {e}")
+            sr.error_message = str(e)
+            failed += 1
+            db.session.commit()
+
+    # Update step status
+    remaining = (
+        StepRecipient.query
+        .filter_by(step_id=step_id, status='pending')
+        .filter(StepRecipient.personalized_body.is_(None))
+        .count()
+    )
+    if remaining == 0:
+        step.status = 'ready'
+    else:
+        step.status = 'draft'  # Still has ungenerated recipients
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'generated': generated,
+        'failed': failed,
+        'remaining': remaining,
+    })
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>/approve', methods=['POST'])
+def approve_step_recipients(id, step_id):
+    """Approve step recipients for sending."""
+    Campaign.query.get_or_404(id)
+    CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+
+    data = request.get_json(silent=True) or {}
+    sr_ids = data.get('recipient_ids', [])
+
+    if sr_ids:
+        StepRecipient.query.filter(
+            StepRecipient.id.in_(sr_ids),
+            StepRecipient.step_id == step_id,
+        ).update({'approved': True, 'status': 'approved'}, synchronize_session=False)
+    else:
+        # Approve all ready recipients
+        StepRecipient.query.filter_by(
+            step_id=step_id, status='ready'
+        ).update({'approved': True, 'status': 'approved'}, synchronize_session=False)
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>/recipients/<int:sr_id>', methods=['PUT'])
+def update_step_recipient(id, step_id, sr_id):
+    """Edit a step recipient's generated content."""
+    Campaign.query.get_or_404(id)
+    CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+    sr = StepRecipient.query.filter_by(id=sr_id, step_id=step_id).first_or_404()
+
+    data = request.get_json()
+
+    if 'personalized_subject' in data:
+        sr.personalized_subject = data['personalized_subject']
+    if 'personalized_body' in data:
+        sr.personalized_body = data['personalized_body']
+    if 'approved' in data:
+        sr.approved = data['approved']
+        if data['approved'] and sr.status == 'ready':
+            sr.status = 'approved'
+
+    db.session.commit()
+    return jsonify(sr.to_dict())
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>/recipients/<int:sr_id>/regenerate', methods=['POST'])
+def regenerate_step_recipient(id, step_id, sr_id):
+    """Regenerate content for a single step recipient."""
+    campaign = Campaign.query.get_or_404(id)
+    step = CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+    sr = StepRecipient.query.filter_by(id=sr_id, step_id=step_id).first_or_404()
+
+    recipient = Recipient.query.get_or_404(sr.recipient_id)
+
+    api_key = Settings.get('anthropic_api_key')
+    if not api_key:
+        return jsonify({'error': 'Anthropic API key not configured'}), 400
+
+    claude = ClaudeService(api_key)
+    writing_style = _get_writing_style()
+    learned_insights = _get_learned_insights()
+
+    try:
+        if step.step_type == 'ai_followup':
+            conversation_history = _build_conversation_history(campaign.id, recipient.id, step.position)
+
+            # Web research
+            research_text = None
+            if step.use_web_research:
+                tavily_key = Settings.get('tavily_api_key')
+                if tavily_key:
+                    from app.services.web_search import WebSearchService
+                    web_search = WebSearchService(tavily_key)
+                    custom_fields = recipient.get_custom_fields()
+                    research = web_search.research_company(
+                        company=recipient.company or '',
+                        industry=custom_fields.get('industry') or custom_fields.get('sector'),
+                        custom_query=step.web_research_prompt,
+                        recipient_name=recipient.name,
+                    )
+                    research_text = WebSearchService.format_for_prompt(research)
+                    sr.web_research_results = json.dumps(research)
+
+            original_subject = _get_original_subject(campaign.id, recipient.id)
+
+            result = claude.generate_sequence_followup(
+                step_number=step.position,
+                original_subject=original_subject,
+                conversation_history=conversation_history,
+                contact_info={'name': recipient.name, 'company': recipient.company},
+                ai_prompt=step.ai_prompt,
+                campaign_context=campaign.campaign_context,
+                web_research=research_text,
+                writing_style=writing_style,
+                learned_insights=learned_insights,
+            )
+            sr.personalized_subject = result.get('subject', f'Re: {original_subject}')
+            sr.personalized_body = result.get('body', '')
+
+        elif step.step_type == 'template' and step.template_id:
+            template = Template.query.get(step.template_id)
+            if not template:
+                return jsonify({'error': 'Template not found'}), 400
+
+            recipient_dict = {
+                'name': recipient.name,
+                'email': recipient.email,
+                'company': recipient.company,
+                'custom_fields': recipient.get_all_context()
+            }
+            result = claude.personalize_email(
+                template_subject=template.subject,
+                template_body=template.body,
+                recipient=recipient_dict,
+                custom_prompt=campaign.ai_prompt,
+                writing_style=writing_style,
+                campaign_context=campaign.campaign_context,
+                learned_insights=learned_insights,
+            )
+            sr.personalized_subject = result.get('subject', template.subject)
+            sr.personalized_body = result.get('body', template.body)
+
+        sr.approved = False  # Reset approval after regeneration
+        sr.status = 'ready'
+        db.session.commit()
+
+        return jsonify(sr.to_dict())
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@campaigns_bp.route('/<int:id>/steps/<int:step_id>/start', methods=['POST'])
+def start_step(id, step_id):
+    """Manually trigger sending for a step (for steps that don't auto-send)."""
+    campaign = Campaign.query.get_or_404(id)
+    step = CampaignStep.query.filter_by(id=step_id, campaign_id=id).first_or_404()
+
+    if step.status == 'running':
+        return jsonify({'error': 'Step is already running'}), 400
+
+    # Get approved recipients with content
+    approved_srs = StepRecipient.query.filter_by(
+        step_id=step_id,
+    ).filter(
+        StepRecipient.approved == True,
+        StepRecipient.status.in_(['ready', 'approved']),
+        StepRecipient.personalized_body.isnot(None),
+    ).all()
+
+    if not approved_srs:
+        return jsonify({'error': 'No approved recipients with content ready to send'}), 400
+
+    # Verify Gmail account
+    account_id = campaign.gmail_account_id
+    if account_id:
+        account = OAuthToken.get_by_id(account_id)
+    else:
+        account = OAuthToken.get_default_gmail()
+    if not account:
+        return jsonify({'error': 'No Gmail account connected'}), 400
+    account_id = account.id
+
+    from app.services.step_runner import StepRunner
+    StepRunner.start(
+        campaign.id, step.id,
+        [sr.id for sr in approved_srs],
+        campaign.delay_seconds, account_id,
+    )
+
+    # If campaign isn't already in sequence mode, set it
+    if campaign.status not in ('running', 'sequence_active'):
+        campaign.status = 'sequence_active'
+        db.session.commit()
+
+    return jsonify({'success': True, 'status': 'running', 'recipients': len(approved_srs)})
+
+
+# ---- Step helper functions ----
+
+def _populate_step_recipients(step):
+    """Create StepRecipient rows for all recipients in the campaign."""
+    recipients = Recipient.query.filter_by(campaign_id=step.campaign_id).all()
+    for r in recipients:
+        existing = StepRecipient.query.filter_by(step_id=step.id, recipient_id=r.id).first()
+        if not existing:
+            sr = StepRecipient(step_id=step.id, recipient_id=r.id)
+            db.session.add(sr)
+    step.total_recipients = len(recipients)
+    db.session.commit()
+
+
+def _build_conversation_history(campaign_id, recipient_id, up_to_position):
+    """Build a list of all emails sent to a recipient in prior steps."""
+    history = []
+
+    prior_steps = (
+        CampaignStep.query
+        .filter_by(campaign_id=campaign_id)
+        .filter(CampaignStep.position < up_to_position)
+        .order_by(CampaignStep.position)
+        .all()
+    )
+
+    for ps in prior_steps:
+        sr = StepRecipient.query.filter_by(step_id=ps.id, recipient_id=recipient_id).first()
+        if sr and sr.personalized_body:
+            history.append({
+                'subject': sr.personalized_subject or '',
+                'body': sr.personalized_body or '',
+                'sent_at': sr.sent_at.isoformat() if sr.sent_at else 'not yet sent',
+            })
+
+    # Fallback: check original Recipient model for step 1 content (backward compat)
+    if not history:
+        r = Recipient.query.get(recipient_id)
+        if r and r.personalized_body:
+            history.append({
+                'subject': r.personalized_subject or '',
+                'body': r.personalized_body or '',
+                'sent_at': r.sent_at.isoformat() if hasattr(r, 'sent_at') and r.sent_at else 'unknown',
+            })
+
+    return history
+
+
+def _get_original_subject(campaign_id, recipient_id):
+    """Get the original email subject for thread continuity."""
+    log = (
+        EmailLog.query
+        .filter_by(campaign_id=campaign_id, recipient_id=recipient_id)
+        .order_by(EmailLog.created_at.asc())
+        .first()
+    )
+    if log and log.subject:
+        return log.subject
+
+    # Fallback: step 1 content
+    step1 = CampaignStep.query.filter_by(campaign_id=campaign_id, position=1).first()
+    if step1:
+        sr = StepRecipient.query.filter_by(step_id=step1.id, recipient_id=recipient_id).first()
+        if sr and sr.personalized_subject:
+            return sr.personalized_subject
+
+    # Final fallback
+    r = Recipient.query.get(recipient_id)
+    if r and r.personalized_subject:
+        return r.personalized_subject
+
+    return 'Hello'
