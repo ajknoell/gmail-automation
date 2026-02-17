@@ -448,11 +448,12 @@ BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic a
 12. NEVER claim services, offerings, or specializations are "not shown," "unclear," "buried," or use "general messaging" if they ARE visible in the screenshot. Check the header bar, navigation menus, hero text, and any dropdowns carefully. For example, a restoration company with "WATER | FIRE | MOLD | ASBESTOS" across the top and a services dropdown is CLEARLY showing their services. Saying "your homepage leads with general messaging instead of showing specific services" when the services are right there is embarrassingly wrong and will kill credibility instantly.
 13. Before writing each observation, mentally list what IS visible on the site. If your observation contradicts something visible, throw it out and find a real issue. Generic safe-sounding observations that could apply to any website (e.g. "lead with your specific services," "show visitors what makes you different") are almost always wrong because most sites already do this.
 
-4. Name the issue AND the benefit in one short sentence:
-   - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
+4. Name the opportunity AND the benefit in one short sentence. Lead positive:
+   - Good: "You've got great project work; making those photos the centerpiece would let your craftsmanship sell itself"
    - Good: "A quick-quote form could turn browsers into actual leads"
+   - Bad: "Your photos look generic" (negative, no benefit, puts them on defensive)
    - Bad: "Your SSL certificate is expired" (too technical)
-   - Bad: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen..." (way too wordy, just say what the problem is)
+   - Bad: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen..." (way too wordy)
 
 5. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
 
@@ -467,12 +468,14 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- EXACTLY ONE SENTENCE per issue description. This is non-negotiable. If your description has a period followed by more words, you wrote too much. Cut it to one sentence.
-- BAD: "The text block is pretty dense, and breaking it into bullets would help. People scan, they don't read." (TWO sentences. WRONG.)
-- GOOD: "Breaking that text block into bullets would make the key points pop in seconds"
-- Just name the fix and the payoff. Do not describe what the site currently looks like first.
+- Lead with what's WORKING, then suggest the upgrade. The pattern is: acknowledge the good → suggest how to make it even better.
+- BAD: "Your hero image looks generic; swapping it for real project photos would build more trust." (Negative, critical, puts them on the defensive.)
+- BAD: "The text block is pretty dense, and breaking it into bullets would help. People scan, they don't read." (TWO sentences and negative. WRONG.)
+- GOOD: "You've clearly got strong work, showcasing those finished projects front and center would let it sell itself"
+- GOOD: "The content is solid; breaking it into scannable bullets would help visitors find what they need fast"
+- EXACTLY ONE SENTENCE per issue description. If your description has a period followed by more words, you wrote too much.
 - MAX 25 words per issue description. Count them. If over 25, rewrite shorter.
-- Never condescending, but don't sugarcoat either. Honest and helpful.
+- Frame everything as an OPPORTUNITY to level up, not a problem to fix. These are businesses that are already doing well.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
 SEVERITY CLASSIFICATION:
@@ -640,13 +643,13 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- EXACTLY ONE SENTENCE per issue description. This is non-negotiable. If your description has a period followed by more words, you wrote too much. Cut it to one sentence.
-- BAD: "Right now visitors see a generic error page instead of your business. That means you're losing every potential customer." (TWO sentences. WRONG.)
-- GOOD: "Your web address shows a generic page instead of your business, so every visitor bounces"
-- Just name the fix and the payoff. Do not describe what the site currently looks like first.
+- Lead with what's WORKING, then suggest the upgrade. Acknowledge the good → suggest how to make it even better.
+- EXACTLY ONE SENTENCE per issue description. If your description has a period followed by more words, you wrote too much.
+- BAD: "Right now visitors see a generic error page instead of your business. That means you're losing every potential customer." (TWO sentences and negative. WRONG.)
+- GOOD: "The content is solid; tightening it into scannable sections would help visitors find what they need fast"
 - MAX 25 words per issue description. Count them. If over 25, rewrite shorter.
-- NEVER speculate about a site that doesn't exist. If the page is parked/blank, do NOT say "once you get the site live..." — just state the problem and a simple next step.
-- Never condescending, but don't sugarcoat either. Honest and helpful.
+- Frame everything as an OPPORTUNITY to level up, not a problem to fix.
+- NEVER speculate about a site that doesn't exist. If the page is parked/blank, just state the problem and a simple next step.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
 SEVERITY CLASSIFICATION:
