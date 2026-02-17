@@ -426,6 +426,7 @@ BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic a
 
 9. NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler, not a real observation. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features unless you can see the site is clearly missing something critical. If you can't find two genuinely specific observations, make both about content quality and presentation.
 10. NEVER cite a specific copyright year (e.g. "your copyright says 2016"). Small footer text in screenshots is frequently misread. If the health checks flagged OUTDATED_COPYRIGHT, you may say the design feels dated or could use a refresh — but never mention a year.
+11. NEVER call a tagline, slogan, or headline "generic" if it contains the company name or a play on the company name. Businesses often use puns and wordplay in their branding (e.g. a company called "Abodie" using "Your Humble Abodie Awaits" as a play on "abode"). Criticizing branded wordplay as "generic language" shows you didn't even understand their name. Before calling any headline generic, check whether it incorporates the company name or a clever variation of it.
 
 4. Name the issue AND the benefit in one short sentence:
    - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
@@ -942,6 +943,7 @@ ABSOLUTE RULE - NEVER FABRICATE:
 HUMILITY RULE:
 - NEVER try to sound smarter than the recipient about their own business
 - NEVER contradict what their website clearly states (e.g. don't say "visitors won't know what you do" if the site explains it)
+- NEVER call their tagline, slogan, or headline "generic" if it contains their company name or a play on it. Businesses use puns and wordplay in branding (e.g. "Abodie" → "Your Humble Abodie Awaits"). Criticizing branded wordplay shows you didn't understand their name.
 - Show you've done homework, but stay humble — they're the expert
 - Keep observations respectful and accurate. When in doubt, acknowledge what they're doing well before suggesting opportunities
 
