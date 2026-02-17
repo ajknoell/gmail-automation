@@ -258,6 +258,39 @@ def _expand_accordions(page) -> None:
         pass  # Non-critical — if expansion fails, we still get the default view
 
 
+def _trigger_lazy_content(page) -> None:
+    """Scroll through the page to trigger intersection-observer and
+    scroll-based lazy loading / animations.
+
+    Many sites hide content (cards, images, counters) until the element
+    scrolls into view.  Playwright's ``full_page=True`` screenshot extends
+    the viewport but never fires scroll events, so those elements stay
+    invisible.  This function smoothly scrolls to the bottom and back to
+    top so everything gets a chance to load.
+    """
+    try:
+        page.evaluate("""async () => {
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+            const step = Math.max(300, Math.floor(window.innerHeight * 0.7));
+            const maxY = document.body.scrollHeight;
+            // Scroll down in steps
+            for (let y = 0; y < maxY; y += step) {
+                window.scrollTo(0, y);
+                await delay(100);
+            }
+            // Hit the very bottom
+            window.scrollTo(0, maxY);
+            await delay(200);
+            // Scroll back to top
+            window.scrollTo(0, 0);
+            await delay(100);
+        }""")
+        # Extra pause for animations to finish after scroll completes
+        page.wait_for_timeout(500)
+    except Exception:
+        pass  # Non-critical
+
+
 def _capture_screenshot(
     url: str, timeout: int = 20, ignore_ssl: bool = False
 ) -> Optional[str]:
@@ -288,6 +321,8 @@ def _capture_screenshot(
                 pass
             # Small extra wait for late-loading widgets (reviews, galleries, etc.)
             page.wait_for_timeout(2000)
+            # Scroll through the page to trigger lazy-loaded / animated content
+            _trigger_lazy_content(page)
             # Expand accordions/FAQs so screenshot shows actual content
             _expand_accordions(page)
             screenshot_bytes = page.screenshot(full_page=True)
@@ -347,6 +382,7 @@ def _capture_mobile_screenshot(
             except Exception:
                 pass
             page.wait_for_timeout(2000)
+            _trigger_lazy_content(page)
             _expand_accordions(page)
             screenshot_bytes = page.screenshot(full_page=True)
             browser.close()
