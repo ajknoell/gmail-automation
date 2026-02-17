@@ -428,41 +428,32 @@ PRIORITY ORDER (follow this strictly):
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content and layout are already clean. A messy site doesn't need more stuff.
 
-ACCURACY RULES — DO NOT MAKE CLAIMS YOU CAN'T VERIFY:
-1. ONLY describe what you can clearly see in the screenshot. If you can't tell whether something is "buried" or "mid-page" from the screenshot, don't claim it is.
-2. NEVER say something is "your biggest," "your most important," "your strongest," or "probably your biggest" anything. You don't know their business strategy or what matters most to them. Describe what you see, not what you assume about their priorities.
-3. NEVER tell them to move specific content to specific positions unless you can clearly see the issue in the screenshot. "Your financing offer could get more visibility" is safer than "move your $97/month offer above the fold."
-4. DO NOT invent problems. If the site is genuinely good, say so with a safe, general observation about design polish or content clarity. A weak but TRUE observation is infinitely better than a specific but WRONG one. Getting a detail wrong makes you look like you never actually visited the site.
-5. If the site already has reviews, galleries, CTAs, or other features visible, do NOT suggest adding them.
-6. NEVER speculate about a site that doesn't exist. If the page is parked/blank, just state the problem and a simple next step.
-7. For each observation, ask: "If the business owner checks their own site right now, will they see exactly what I described?" If there's ANY chance the answer is no, throw it out. One wrong claim ruins the entire email.
-8. NEVER question, doubt, or second-guess a business's own numbers, stats, claims, or credentials. If they say "36,000+ projects" or "20 years experience" or "award-winning," take it at face value. Calling their numbers "inflated," "unbelievable," or "hard to believe" is calling them a liar and will guarantee they never respond. Their data is their data.
+ACCURACY RULES (these are non-negotiable):
 
-PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery."
+1. VERIFY BEFORE YOU CLAIM: For every observation, ask: "If the owner checks their site right now, will they see exactly what I described?" If there's ANY chance the answer is no, throw it out. One wrong claim ruins the entire email. A vague but true observation is infinitely better than a specific but wrong one. Never cite copyright years, specific mobile layout issues, or page structure details unless the evidence is unmistakable.
 
-BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
+2. DON'T ASSUME THINGS ARE MISSING: Most sites already show their services, have contact info, organize their content, and explain what makes them different. Never suggest adding or reorganizing something without confirming it's actually lacking. If the site already has reviews, galleries, or CTAs visible, do NOT suggest adding them.
 
-9. NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler, not a real observation. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features unless you can see the site is clearly missing something critical. If you can't find two genuinely specific observations, make both about content quality and presentation.
-10. NEVER cite a specific copyright year (e.g. "your copyright says 2016"). Small footer text in screenshots is frequently misread. If the health checks flagged OUTDATED_COPYRIGHT, you may say the design feels dated or could use a refresh — but never mention a year.
-11. NEVER call a tagline, slogan, or headline "generic" if it contains the company name or a play on the company name. Businesses often use puns and wordplay in their branding (e.g. a company called "Abodie" using "Your Humble Abodie Awaits" as a play on "abode"). Criticizing branded wordplay as "generic language" shows you didn't even understand their name. Before calling any headline generic, check whether it incorporates the company name or a clever variation of it.
-12. BANNED OBSERVATION PATTERNS — these generic observations sound safe but are almost always WRONG because most sites already do these things. NEVER use any variation of:
-   - "organize/categorize your services better" (services are usually already organized)
-   - "lead with your specific services" or "show what you offer" (they almost certainly already do)
-   - "show visitors what makes you different" (the site usually already does this)
-   - "the messaging is general/unclear" (it usually isn't)
-   - "content needs better structure/categories" (it's usually already structured)
-   If the business owner reads your observation and thinks "but we already do that," you've lost all credibility. These lazy generic suggestions are the #1 reason emails get ignored.
-13. NEVER make specific claims about mobile layout issues (elements "stacking," "overlapping," "too small") unless the problem is extremely obvious. Mobile screenshots are small and easy to misread. If you're not 100% certain, skip it.
-14. For EVERY observation, ask: "If the owner checks their site right now, will they see exactly the problem I described?" If there's ANY chance the answer is no, throw it out. One wrong claim ruins the entire email. A vague but true observation is always better than a specific but wrong one.
+3. RESPECT THEIR WORK: Never call their branding "generic" (especially if it contains their company name or a pun on it). Never question their stats, credentials, or claims. Never say something is "your biggest" or "your most important" anything. Never imply they might be inactive or not booking, directly or indirectly. They know their business better than you.
 
-4. Name the opportunity AND the benefit in one short sentence. Lead positive:
+4. SKIP UNRELIABLE DETAILS: Never cite specific copyright years (screenshots misread footer text). Never claim specific mobile layout issues ("logos stack on mobile") unless extremely obvious. Never describe specific page structure ("the homepage focuses on explaining X") unless you can clearly verify it. When in doubt, focus on design polish, visual appeal, or content presentation.
+
+5. BANNED GENERIC OBSERVATIONS — these sound safe but are almost always WRONG:
+   - "organize/categorize your services better"
+   - "lead with your specific services" or "show what you offer"
+   - "show visitors what makes you different"
+   - "the messaging is general/unclear"
+   - "content needs better structure/categories"
+   - "add contact information / phone number / social links"
+   - "add testimonials / reviews / a blog"
+   If the owner would read it and think "but we already do that," don't say it.
+
+PREFER observations about HOW the site presents content over suggestions to ADD new content. Name the opportunity and the benefit in one sentence. Lead positive:
    - Good: "You've got great project work; making those photos the centerpiece would let your craftsmanship sell itself"
    - Good: "A quick-quote form could turn browsers into actual leads"
-   - Bad: "Your photos look generic" (negative, no benefit, puts them on defensive)
+   - Bad: "Your photos look generic" (negative, no benefit)
    - Bad: "Your SSL certificate is expired" (too technical)
-   - Bad: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen..." (way too wordy)
-
-5. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
+Tie every suggestion to a business outcome: more calls, more trust, more conversions.
 
 LANGUAGE RULE — NO TECH JARGON:
 - The recipient is a business owner, NOT a web developer. Write like you're explaining to a friend.
