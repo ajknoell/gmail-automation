@@ -357,7 +357,7 @@ PRIORITY ORDER (follow this strictly):
    - FLAT SERVICE LISTS: A wall of services in all-caps or bullet points with no grouping, icons, or descriptions. Visitors can't tell what the business specializes in when everything looks equally important.
    - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read.
    - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's bigger than any missing feature.
-   - DATED/STALE FEEL: Old copyright year in the footer, outdated design patterns, or a site that looks like it was built years ago and never updated. This makes the business look inactive.
+   - DATED/STALE FEEL: Old copyright year in the footer, outdated design patterns, or a site that looks like it was built years ago and never updated. An older copyright doesn't mean the business is inactive; it just signals the site design is probably due for a refresh. Frame it that way.
    These design issues are MORE impactful than suggesting new features. A well-designed site with good photos converts better than a cluttered site with more features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features (galleries, calculators, review sections) if the site's existing content and layout are already clean and well-organized. A messy site doesn't need more stuff, it needs less clutter.
@@ -373,6 +373,7 @@ CRITICAL RULES — READ CAREFULLY:
    - If the site already has a photo gallery, do NOT suggest adding a gallery.
    - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
    - If the copyright year is current or recent (within 1 year), do NOT mention it. A 2026 copyright in 2026 is correct, not a problem.
+   - If the copyright is a few years old (e.g. 2023), do NOT frame it as "visitors wonder if you're still in business." The business is fine. Instead, treat it as a sign the site design could use a refresh. Say something like "A quick design refresh would make the site feel more current" rather than questioning whether the business is active.
    - NEVER invent problems. If you cannot identify a real, visible issue, pick a different angle. Do not fabricate observations about things that are actually fine.
    - NEVER speculate about a site that doesn't exist. If the page is parked/blank/not connected, do NOT say things like "once you get the site live, adding real photos would..." — there is no site to improve. Just state the problem and a simple next step.
    - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
@@ -516,7 +517,7 @@ PRIORITY ORDER (follow this strictly):
    - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
    - UNCLEAR VALUE PROPOSITION: If you can't tell in the first few sentences what this business does best and why someone should call them, that's the #1 issue.
    - HARD TO SCAN: No clear sections, everything runs together, no concise messaging.
-   - DATED/STALE FEEL: If the health checks flagged an old copyright year, the site likely hasn't been updated in years. This makes the business look inactive.
+   - DATED/STALE FEEL: If the health checks flagged an old copyright year, the site design is probably due for a refresh. Do NOT say the business looks inactive or question whether they're still operating. Frame it as a design refresh opportunity.
    These content quality issues are MORE impactful than suggesting new features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content is already clean and focused.
