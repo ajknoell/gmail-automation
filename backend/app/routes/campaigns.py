@@ -402,7 +402,7 @@ def regenerate_recipient_preview(id, recipient_id):
 def _substitute_template_variables(text, recipient):
     """Replace {{variable}} placeholders with recipient data."""
     variables = {
-        'name': recipient.name or '',
+        'name': recipient.name or 'there',
         'email': recipient.email or '',
         'company': clean_company_name(recipient.company or '') or '',
     }

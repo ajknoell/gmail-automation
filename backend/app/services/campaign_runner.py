@@ -48,7 +48,7 @@ class CampaignRunner:
         import re
 
         variables = {
-            'name': recipient.name or '',
+            'name': recipient.name or 'there',
             'email': recipient.email or '',
             'company': clean_company_name(recipient.company or '') or '',
         }

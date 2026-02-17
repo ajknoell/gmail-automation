@@ -521,12 +521,21 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
             if style_parts:
                 style_instructions = "WRITER'S PERSONAL STYLE (THIS IS CRITICAL - match this voice exactly):\n" + "\n".join(style_parts)
 
-        # Pre-substitute template variables with actual recipient data
+        # Pre-substitute template variables with actual recipient data.
+        # Use cleaned company name and handle empty name gracefully.
+        recipient_name = (recipient.get('name') or '').strip()
+        cleaned_company = clean_company_name(recipient.get('company', '')) or ''
+
         variable_map = {
-            'name': recipient.get('name') or '',
             'email': recipient.get('email') or '',
-            'company': recipient.get('company') or '',
+            'company': cleaned_company,
         }
+        # Only set name if we actually have a personal name (not empty).
+        # When name is empty we want the [GENERATE] path to trigger so
+        # Claude uses "there" or similar — not the company name.
+        if recipient_name:
+            variable_map['name'] = recipient_name
+
         # Add all custom fields as available variables
         for k, v in custom_fields.items():
             if v:
@@ -543,14 +552,24 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         def _replace_var(match):
             var_name = match.group(1).strip()
             val = variable_map.get(var_name)
-            if val is not None:
+            if val is not None and val != '':
                 return val
             missing_vars.append(var_name)
-            # Return a Claude-readable instruction instead of raw placeholder
+            # For name: use "there" as a safe generic fallback
+            if var_name == 'name':
+                return 'there'
+            # For website_insights: if we don't have it, remove the placeholder
+            # entirely rather than leaving a [GENERATE] marker the AI might echo
+            if var_name == 'website_insights':
+                return ''
+            # Return a Claude-readable instruction for other missing vars
             return f'[GENERATE: write appropriate content for "{var_name}"]'
 
         resolved_subject = _re.sub(r'\{\{(\s*\w+\s*)\}\}', _replace_var, template_subject)
         resolved_body = _re.sub(r'\{\{(\s*\w+\s*)\}\}', _replace_var, template_body)
+
+        # Clean up empty lines left by removed website_insights placeholder
+        resolved_body = _re.sub(r'\n\s*\n\s*\n', '\n\n', resolved_body)
 
         # Build data-driven insights block
         insights_instructions = ""
@@ -614,6 +633,12 @@ STYLE REQUIREMENTS:
 5. Every observation should tie back to a business benefit (more customers, more trust, stronger brand)
 6. Close casually, not with aggressive sales language
 7. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
+
+GREETING RULE (CRITICAL):
+- The greeting must use the recipient's PERSONAL first name (e.g. "Hi Sarah,")
+- If the name is "there" or looks like a company/business name (e.g. "B & L Glass", "Home at Home"), use "Hi there," instead
+- NEVER greet someone by their company name. "Hi B & L Glass," is wrong. "Hi there," is correct.
+- Company names typically contain: LLC, Inc, Corp, Co, Glass, Home, Services, Solutions, Group, Agency, Studio, etc.
 
 ABSOLUTE RULE - NEVER FABRICATE:
 - ONLY reference facts explicitly provided in the context above
