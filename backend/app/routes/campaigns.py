@@ -494,7 +494,7 @@ def generate_preview(id):
                     wa_result = website_analysis_cache[cache_key]
                 else:
                     wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
-                    if cache_key:
+                    if cache_key and wa_result:
                         website_analysis_cache[cache_key] = wa_result
                 website_insights = wa_result['analysis'] if wa_result else None
 

@@ -122,12 +122,19 @@ def generate_quick_email():
             # Fetch website insights (with health checks + screenshot analysis)
             website_insights = None
             website_status = None
+            learned_website_insights = None
+            raw_lw = WorkspaceSettings.get(g.workspace_id, 'learned_website_insights') if g.workspace_id else None
+            if raw_lw:
+                try:
+                    learned_website_insights = json.loads(raw_lw)
+                except Exception:
+                    pass
             try:
                 from app.services.website_analyzer import WebsiteAnalyzer
                 url = WebsiteAnalyzer.resolve_url(recipient_data)
                 if url:
                     current_app.logger.info(f'Fetching website: {url}')
-                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data)
+                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_data, learned_website_insights)
                     if wa_result:
                         website_insights = wa_result['analysis']
                         website_status = 'success'
@@ -201,7 +208,7 @@ def send_quick_email():
         if not account:
             return jsonify({'error': 'No Gmail account connected'}), 400
 
-    gmail = GmailService(account_id=account_id)
+    gmail = GmailService(account_id=account.id)
     if not gmail.connect():
         return jsonify({'error': 'Gmail not connected'}), 400
 
