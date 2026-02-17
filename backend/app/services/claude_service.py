@@ -45,6 +45,53 @@ def clean_company_name(company: str) -> str:
     return cleaned.title()
 
 
+def _looks_like_company_name(name: str) -> bool:
+    """Detect if a 'name' value is actually a company/business name.
+
+    Returns True for things like "B & L Glass", "Home at Home LLC",
+    "Smith Plumbing Services", etc. — anything that shouldn't be used
+    as a personal greeting.
+    """
+    if not name:
+        return False
+    n = name.strip()
+    lower = n.lower()
+
+    # Common company suffixes / indicators
+    company_words = {
+        'llc', 'inc', 'corp', 'co', 'ltd', 'llp', 'lp',
+        'glass', 'plumbing', 'roofing', 'electric', 'electrical',
+        'construction', 'contracting', 'landscaping', 'painting',
+        'cleaning', 'flooring', 'fencing', 'paving', 'masonry',
+        'services', 'solutions', 'group', 'agency', 'studio',
+        'enterprises', 'associates', 'partners', 'consulting',
+        'company', 'properties', 'realty', 'restoration',
+        'industries', 'innovations', 'technologies', 'tech',
+        'design', 'designs', 'interiors', 'exteriors',
+        'home', 'homes', 'builders', 'building',
+        'supply', 'supplies', 'equipment',
+        'auto', 'automotive', 'motors',
+        'media', 'digital', 'creative',
+    }
+    words = lower.split()
+    if any(w.rstrip('.,') in company_words for w in words):
+        return True
+
+    # Contains "&" — very common in business names, rare in personal names
+    if '&' in n:
+        return True
+
+    # Contains "and" between words (like "Smith and Sons")
+    if ' and ' in lower:
+        return True
+
+    # Ends with a period-abbreviated suffix (like "Inc." or "Co.")
+    if re.search(r'\b(inc|corp|co|ltd|llc)\.$', lower):
+        return True
+
+    return False
+
+
 def _strip_ai_dashes(text: str) -> str:
     """Replace em dashes, en dashes, and double hyphens with commas.
 
@@ -526,13 +573,17 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         recipient_name = (recipient.get('name') or '').strip()
         cleaned_company = clean_company_name(recipient.get('company', '')) or ''
 
+        # Detect if the "name" is actually a company/business name.
+        # If so, treat it as missing so Claude uses "Hi there," instead.
+        if _looks_like_company_name(recipient_name):
+            recipient_name = ''
+
         variable_map = {
             'email': recipient.get('email') or '',
             'company': cleaned_company,
         }
         # Only set name if we actually have a personal name (not empty).
-        # When name is empty we want the [GENERATE] path to trigger so
-        # Claude uses "there" or similar — not the company name.
+        # When name is empty the fallback returns "there" for greeting.
         if recipient_name:
             variable_map['name'] = recipient_name
 
@@ -540,9 +591,13 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         for k, v in custom_fields.items():
             if v:
                 variable_map[k] = str(v)
-        # Add website_insights if available
-        if website_insights:
-            variable_map['website_insights'] = website_insights
+
+        # Handle website_insights separately from the variable_map.
+        # When available: do NOT pre-substitute — let Claude insert them
+        # from the WEBSITE OBSERVATIONS prompt section so it can format
+        # them naturally within the email.
+        # When not available: remove the placeholder entirely.
+        has_website_insights = bool(website_insights)
 
         # Track which variables are missing
         missing_vars = []
@@ -551,6 +606,11 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         import re as _re
         def _replace_var(match):
             var_name = match.group(1).strip()
+            # website_insights is handled via the prompt, not pre-substitution
+            if var_name == 'website_insights':
+                if has_website_insights:
+                    return '[WEBSITE_OBSERVATIONS]'
+                return ''
             val = variable_map.get(var_name)
             if val is not None and val != '':
                 return val
@@ -558,10 +618,6 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
             # For name: use "there" as a safe generic fallback
             if var_name == 'name':
                 return 'there'
-            # For website_insights: if we don't have it, remove the placeholder
-            # entirely rather than leaving a [GENERATE] marker the AI might echo
-            if var_name == 'website_insights':
-                return ''
             # Return a Claude-readable instruction for other missing vars
             return f'[GENERATE: write appropriate content for "{var_name}"]'
 
@@ -603,7 +659,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
 {insights_instructions}
 
 RECIPIENT PROFILE:
-- Name: {recipient.get('name') or 'there'}
+- Name: {recipient_name or 'there'}
 - Email: {recipient.get('email')}
 - Company: {company}
 
@@ -623,7 +679,7 @@ TEMPLATE STRUCTURE RULE (THIS IS THE MOST IMPORTANT RULE):
 - If there is a section with website insights or bullet points, keep it exactly where it appears in the template — do not relocate that content to the opening or anywhere else
 - Think of yourself as filling in a form, not rewriting a letter
 
-{"MISSING VARIABLE INSTRUCTIONS: The template contains [GENERATE: ...] markers where data was not available. For each one, write natural-sounding content IN PLACE that fits the surrounding template text. Keep it in the same position — do not move it. For website_insights specifically: write exactly 2 observations about how improving their web presence could help grow their business — each one should show the VALUE of what better looks like (more leads, more trust, stronger first impression), not point out what's wrong." + chr(10) + "Missing variables: " + ", ".join(missing_vars) if missing_vars else ""}
+{"MISSING VARIABLE INSTRUCTIONS: The template contains [GENERATE: ...] markers where data was not available. For each one, write natural-sounding content IN PLACE that fits the surrounding template text. Keep it in the same position — do not move it. NEVER output [GENERATE: ...] literally in your response." + chr(10) + "Missing variables: " + ", ".join(missing_vars) if missing_vars else ""}
 
 STYLE REQUIREMENTS:
 1. Match the writer's personal style EXACTLY
@@ -657,7 +713,7 @@ NO TECH JARGON RULE:
 - Describe problems as the VISITOR EXPERIENCE: "when someone visits your site, they see a generic page instead of your business" — not "your domain is parked"
 - If the website observations contain technical language, REWRITE them in plain English in the final email
 
-{("WEBSITE OBSERVATIONS (these came from reviewing their site — insert them exactly where the website_insights content appears in the template, do NOT move them to another section. Each observation should show the VALUE of improving — tie it to more customers, more trust, or a stronger online presence. We're showing what's possible, not criticizing what exists):" + chr(10) + website_insights) if website_insights else ""}
+{("WEBSITE OBSERVATIONS (from reviewing their site):" + chr(10) + website_insights + chr(10) + chr(10) + "WEBSITE INSERTION RULE: The template body contains [WEBSITE_OBSERVATIONS]. Replace that marker with these 2 observations, rewritten in your own words to fit naturally in the email. Each should show the VALUE of improving (more customers, more trust, stronger first impression). NEVER output [WEBSITE_OBSERVATIONS] literally.") if website_insights else ""}
 
 {f"CAMPAIGN MUST-INCLUDE (weave this into EVERY email naturally): {campaign_context}" if campaign_context else ""}
 
