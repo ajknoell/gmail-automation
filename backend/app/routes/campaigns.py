@@ -503,17 +503,17 @@ def regenerate_recipient_preview(id, recipient_id):
             'company': recipient.company,
             'custom_fields': recipient.get_all_context()
         }
-        # Extract just the numbered observations from the previous email body.
+        # Extract the observation from the previous email body for regeneration.
         # Body is HTML with <br> tags instead of newlines, so normalize first.
         previous_observations = None
         if recipient.personalized_body:
             import re as _re
             # Convert HTML breaks to newlines so line-based regex can work
             plain = _re.sub(r'<br\s*/?\s*>', '\n', recipient.personalized_body)
-            obs_lines = _re.findall(r'^\s*[12]\.\s*.+', plain, _re.MULTILINE)
+            obs_lines = _re.findall(r'^\s*1\.\s*.+', plain, _re.MULTILINE)
             if obs_lines:
-                # Strip any remaining HTML tags from extracted observations
-                previous_observations = _re.sub(r'<[^>]+>', '', '\n'.join(obs_lines))
+                # Strip any remaining HTML tags from extracted observation
+                previous_observations = _re.sub(r'<[^>]+>', '', obs_lines[0])
         wa_result = WebsiteAnalyzer.fetch_and_analyze(
             claude, recipient_dict, learned_website_insights,
             previous_observations=previous_observations,

@@ -363,10 +363,9 @@ CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
 that visitors experience RIGHT NOW — they MUST be your #1 priority):
 {formatted}
 
-IMPORTANT: Your first observation (1.) MUST address the most critical issue
-above. Frame it helpfully — show the impact on their business and how fixing
-it would help. Your second observation (2.) can address either another
-critical issue OR a design improvement, depending on severity.
+IMPORTANT: Your observation MUST address the most critical issue above.
+Frame it helpfully — show the impact on their business and how fixing
+it would help.
 """
 
         mobile_note = ""
@@ -387,9 +386,9 @@ DO NOT repeat or rephrase any of the above. Find entirely new issues to highligh
 COMPANY: {company_name}
 URL: {url}
 {learned_guidance}{issues_block}{text_supplement}{previous_block}
-YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
+YOUR TASK: Find the single most impactful opportunity where a small improvement could bring them more customers, more trust, or a stronger first impression. This goes into a friendly cold outreach email. Quality over quantity: one genuinely insightful observation beats two generic ones.
 
-BEFORE YOU WRITE ANYTHING, silently inventory what the site IS doing well: What services are listed? Where? Is there a clear hero message? Navigation with service categories? Phone number visible? Reviews section? Gallery? CTA buttons? Only AFTER cataloging what exists should you look for genuine gaps. If the site already shows its services clearly in the header, nav, or hero, do NOT claim the messaging is "general" or services are "unclear."
+BEFORE YOU WRITE ANYTHING, silently inventory what the site IS doing well: What services are listed? Where? Is there a clear hero message? Navigation with service categories? Phone number visible? Reviews section? Gallery? CTA buttons? Only AFTER cataloging what exists should you look for a genuine gap. If the site already shows its services clearly in the header, nav, or hero, do NOT claim the messaging is "general" or services are "unclear."
 
 ANALYZE LIKE A MARKETING STRATEGIST AND WEB EXPERT, NOT JUST A DESIGNER:
 Think about the site through the lens of conversion rate optimization (CRO), proven marketing principles, and modern web development best practices:
@@ -485,7 +484,7 @@ SEVERITY CLASSIFICATION:
 YOUR RESPONSE MUST BE ONLY a valid JSON object, nothing else. No markdown fences, no extra text:
 {{"issues": [{{"title": "Brief 5-7 word title", "description": "One sentence, max 25 words, explaining impact on their business", "severity": "critical", "example": "Optional specific example from the site"}}], "recommendation": "One sentence on the most impactful fix"}}
 
-Maximum 2 issues. Only include an "important" issue if it genuinely strengthens the case alongside a critical one. """
+Return exactly 1 issue. Focus on the single most compelling observation. """
 
         try:
             content_blocks = [
@@ -514,7 +513,7 @@ Maximum 2 issues. Only include an "important" issue if it genuinely strengthens 
 
             message = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=400,
+                max_tokens=250,
                 messages=[{
                     "role": "user",
                     "content": content_blocks,
@@ -564,10 +563,9 @@ CRITICAL ISSUES DETECTED BY OUR AUTOMATED CHECKS (these are real problems
 that visitors experience RIGHT NOW — they MUST be your #1 priority):
 {formatted}
 
-IMPORTANT: Your first observation (1.) MUST address the most critical issue
-above. Frame it helpfully — show the impact on their business and how fixing
-it would help. Your second observation (2.) can address either another
-critical issue OR a design improvement, depending on severity.
+IMPORTANT: Your observation MUST address the most critical issue above.
+Frame it helpfully — show the impact on their business and how fixing
+it would help.
 """
 
         text_block = ""
@@ -589,7 +587,7 @@ CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see
                 "to highlight.\n"
             )
 
-        prompt = f"""You're a web designer who genuinely wants to help a potential client. Find 2 opportunities where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong.
+        prompt = f"""You're a web designer who genuinely wants to help a potential client. Find the single most impactful opportunity where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. This goes into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong. Quality over quantity: one genuinely insightful observation beats two generic ones.
 
 COMPANY: {company_name}
 URL: {url}
@@ -614,7 +612,7 @@ IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If the text mentions galleries, portfolios, or project showcases, the site likely ALREADY has them — do NOT suggest adding them.
 - If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
 - PREFER observations about content QUALITY over suggestions to add new content. "Tightening up the homepage so visitors immediately see your top services" beats "add a photo gallery."
-- NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features. If you can't find two genuinely specific observations, make both about content quality and presentation.
+- NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features.
 
 IMPORTANT — TEXT SCRAPING LIMITATIONS:
 - This text was scraped WITHOUT JavaScript execution. Animated counters and stats that use JavaScript to count up from 0 will appear as "0" in this text even though they display real numbers on the live site. Do NOT flag counters showing "0" as a problem.
@@ -659,12 +657,12 @@ SEVERITY CLASSIFICATION:
 YOUR RESPONSE MUST BE ONLY a valid JSON object, nothing else. No markdown fences, no extra text:
 {{"issues": [{{"title": "Brief 5-7 word title", "description": "One sentence, max 25 words, explaining impact on their business", "severity": "critical", "example": "Optional specific example from the site"}}], "recommendation": "One sentence on the most impactful fix"}}
 
-Maximum 2 issues. Only include an "important" issue if it genuinely strengthens the case alongside a critical one. """
+Return exactly 1 issue. Focus on the single most compelling observation. """
 
         try:
             message = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=400,
+                max_tokens=250,
                 messages=[{"role": "user", "content": prompt}]
             )
             result = self._parse_analysis_json(message.content[0].text)
@@ -701,20 +699,18 @@ Maximum 2 issues. Only include an "important" issue if it genuinely strengthens 
             except json.JSONDecodeError:
                 pass
 
-        # Fallback: parse legacy "1." / "2." format
+        # Fallback: parse legacy "1." format or plain text
         lines = [l.strip() for l in raw.split('\n') if l.strip()]
-        issues = []
         for l in lines:
-            if l.startswith('1.') or l.startswith('2.'):
+            if l.startswith('1.'):
                 text = l[2:].strip()
-                issues.append({
-                    'title': text[:50],
-                    'description': text,
-                    'severity': 'important',
-                    'example': None,
-                })
+                return {
+                    'issues': [{'title': text[:50], 'description': text, 'severity': 'important', 'example': None}],
+                    'recommendation': '',
+                }
+        # Last resort: use the entire text as the observation
         return {
-            'issues': issues[:2],
+            'issues': [{'title': raw[:50], 'description': raw, 'severity': 'important', 'example': None}] if raw else [],
             'recommendation': '',
         }
 
@@ -723,10 +719,8 @@ Maximum 2 issues. Only include an "important" issue if it genuinely strengthens 
         """Convert structured analysis dict to plain text for email templates."""
         if not analysis or not analysis.get('issues'):
             return ''
-        lines = []
-        for i, issue in enumerate(analysis['issues'], 1):
-            lines.append(f"{i}. {issue.get('description', '')}")
-        return '\n\n'.join(lines)
+        # Single observation — no numbering needed
+        return analysis['issues'][0].get('description', '')
 
     @staticmethod
     def get_max_severity(analysis: dict) -> str:
@@ -951,16 +945,10 @@ Maximum 2 issues. Only include an "important" issue if it genuinely strengthens 
         # Build website observations note outside f-string (Python 3.9 doesn't allow backslashes in f-string expressions)
         if website_insights:
             _wi_note = (
-                "WEBSITE OBSERVATIONS NOTE: The template body already contains website observations "
-                "(pre-filled from analysis). Rewrite them in your own words so they sound natural and "
-                "conversational. Each should show the VALUE of improving (more customers, more trust, "
-                "stronger first impression). Keep them in the same position in the email.\n"
-                "FORMATTING RULE: Each observation MUST be on its own separate line/paragraph. Never "
-                "combine multiple observations into one paragraph. Use a line break between each "
-                "observation so they read as distinct points, e.g.:\n"
-                "1. First observation here.\n\n"
-                "2. Second observation here.\n"
-                "Never run them together in a single block of text."
+                "WEBSITE OBSERVATION NOTE: The template body already contains a website observation "
+                "(pre-filled from analysis). Rewrite it in your own words so it sounds natural and "
+                "conversational. It should show the VALUE of improving (more customers, more trust, "
+                "stronger first impression). Keep it in the same position in the email."
             )
         else:
             _wi_note = ""
@@ -1091,8 +1079,6 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
                 body = re.sub(r'(<br\s*/?\s*>)\s+(?=<br)', r'\1', body)
                 # 3. Collapse runs of 3+ <br> tags down to 2 (one blank line max)
                 body = re.sub(r'(<br\s*/?\s*>){3,}', '<br><br>', body)
-                # 4. Ensure "2." starts on its own line if not already preceded by a break
-                body = re.sub(r'(?<!<br>)(?<!<br/>)(?<!<br />)(\s*)(2\.)\s', r'<br><br>\2 ', body)
 
                 subject = _strip_ai_dashes(result.get('subject', resolved_subject))
                 # Strip business suffixes (LLC, Inc, etc.) that may have leaked into the subject
