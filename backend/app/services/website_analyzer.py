@@ -203,6 +203,61 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
     return issues
 
 
+def _expand_accordions(page) -> None:
+    """Click common accordion/collapsible elements to reveal hidden content.
+
+    Many websites hide FAQ answers, service details, etc. behind clickable
+    accordions.  This tries to expand them so the screenshot shows the
+    *actual* content rather than just collapsed headings.
+    """
+    try:
+        # Common accordion selectors (covers most frameworks/themes):
+        # - HTML5 <details> elements (just set the 'open' attribute)
+        # - Elements with accordion-related classes/roles
+        # - FAQ section buttons/headers
+        page.evaluate("""() => {
+            // 1. Native <details> elements — force open
+            document.querySelectorAll('details:not([open])').forEach(el => {
+                el.setAttribute('open', '');
+            });
+
+            // 2. Common accordion buttons / triggers — click them
+            const selectors = [
+                // ARIA accordion pattern
+                '[role="button"][aria-expanded="false"]',
+                'button[aria-expanded="false"]',
+                // Common CSS class patterns
+                '.accordion-header:not(.active)',
+                '.accordion-title:not(.active)',
+                '.accordion-trigger:not(.active)',
+                '.faq-question',
+                '.faq-item > *:first-child',
+                '.toggle-header',
+                '.collapsible-header',
+                // WordPress / Elementor
+                '.elementor-tab-title:not(.elementor-active)',
+                '.wp-block-coblocks-accordion__title',
+                // Squarespace
+                '.accordion-item__click-target',
+                // Wix
+                '[data-testid="faq-question"]',
+            ];
+            const clicked = new Set();
+            for (const sel of selectors) {
+                document.querySelectorAll(sel).forEach(el => {
+                    if (!clicked.has(el) && el.offsetParent !== null) {
+                        clicked.add(el);
+                        el.click();
+                    }
+                });
+            }
+        }""")
+        # Brief pause for expand animations to complete
+        page.wait_for_timeout(800)
+    except Exception:
+        pass  # Non-critical — if expansion fails, we still get the default view
+
+
 def _capture_screenshot(
     url: str, timeout: int = 20, ignore_ssl: bool = False
 ) -> Optional[str]:
@@ -233,6 +288,8 @@ def _capture_screenshot(
                 pass
             # Small extra wait for late-loading widgets (reviews, galleries, etc.)
             page.wait_for_timeout(2000)
+            # Expand accordions/FAQs so screenshot shows actual content
+            _expand_accordions(page)
             screenshot_bytes = page.screenshot(full_page=True)
             browser.close()
 
@@ -290,6 +347,7 @@ def _capture_mobile_screenshot(
             except Exception:
                 pass
             page.wait_for_timeout(2000)
+            _expand_accordions(page)
             screenshot_bytes = page.screenshot(full_page=True)
             browser.close()
 
