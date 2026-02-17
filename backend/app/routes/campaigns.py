@@ -227,6 +227,15 @@ def clear_recipients(id):
     if campaign.status == 'running':
         return jsonify({'error': 'Cannot clear recipients while campaign is running'}), 400
 
+    # Get recipient IDs to clean up related records first
+    recipient_ids = [r.id for r in Recipient.query.filter_by(campaign_id=id).with_entities(Recipient.id).all()]
+    if recipient_ids:
+        EmailLog.query.filter(EmailLog.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
+        StepRecipient.query.filter(StepRecipient.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
+        from app.models.website_analysis_log import WebsiteAnalysisLog
+        WebsiteAnalysisLog.query.filter(WebsiteAnalysisLog.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
+        from app.models.cold_call import ColdCall
+        ColdCall.query.filter(ColdCall.recipient_id.in_(recipient_ids)).delete(synchronize_session=False)
     Recipient.query.filter_by(campaign_id=id).delete()
     campaign.total_recipients = 0
     db.session.commit()
@@ -241,6 +250,13 @@ def delete_recipient(id, recipient_id):
         return jsonify({'error': 'Cannot remove recipients while campaign is running'}), 400
 
     recipient = Recipient.query.filter_by(id=recipient_id, campaign_id=id).first_or_404()
+    # Clean up related records that have FK references to this recipient
+    EmailLog.query.filter_by(recipient_id=recipient_id).delete()
+    StepRecipient.query.filter_by(recipient_id=recipient_id).delete()
+    from app.models.website_analysis_log import WebsiteAnalysisLog
+    WebsiteAnalysisLog.query.filter_by(recipient_id=recipient_id).delete()
+    from app.models.cold_call import ColdCall
+    ColdCall.query.filter_by(recipient_id=recipient_id).delete()
     db.session.delete(recipient)
     campaign.total_recipients = max(0, (campaign.total_recipients or 0) - 1)
     db.session.commit()
