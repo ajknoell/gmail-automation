@@ -7,7 +7,9 @@ import {
   getTags,
   addTagToContact,
   removeTagFromContact,
+  deleteColdCall,
 } from '../api/client';
+import ColdCallModal from '../components/ColdCallModal';
 
 function ContactDetail() {
   const { id } = useParams();
@@ -26,6 +28,9 @@ function ContactDetail() {
   const [followUpDate, setFollowUpDate] = useState('');
   const [followUpNote, setFollowUpNote] = useState('');
   const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [coldCalls, setColdCalls] = useState([]);
+  const [showColdCallModal, setShowColdCallModal] = useState(false);
+  const [editingColdCall, setEditingColdCall] = useState(null);
 
   useEffect(() => {
     loadContact();
@@ -42,6 +47,7 @@ function ContactDetail() {
       const res = await getContact(id);
       setContact(res.data.contact);
       setEmailHistory(res.data.email_history || []);
+      setColdCalls(res.data.cold_calls || []);
       setNotes(res.data.contact.notes || '');
       setFollowUpDate(res.data.contact.follow_up_date || '');
       setFollowUpNote(res.data.contact.follow_up_note || '');
@@ -507,6 +513,110 @@ function ContactDetail() {
           </div>
         )}
       </div>
+
+      {/* Cold Calls */}
+      <div className="card mt-4">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <h3 className="card-title">Cold Calls ({coldCalls.length})</h3>
+          <button
+            className="btn btn-primary"
+            onClick={() => { setEditingColdCall(null); setShowColdCallModal(true); }}
+            style={{ padding: '0.35rem 0.75rem', fontSize: '0.85rem' }}
+          >
+            Log Cold Call
+          </button>
+        </div>
+
+        {coldCalls.length === 0 ? (
+          <div className="empty-state"><p>No cold calls logged yet.</p></div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Outcome</th>
+                  <th>Duration</th>
+                  <th>Notes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {coldCalls.map((call) => (
+                  <tr key={call.id}>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                      {formatDateTime(call.call_date)}
+                    </td>
+                    <td>
+                      <span className="badge" style={{
+                        background: call.outcome === 'connected' ? '#ECFDF5' :
+                          call.outcome === 'not_interested' ? '#FEF2F2' :
+                          call.outcome === 'callback_requested' ? '#FEF3C7' : '#F3F4F6',
+                        color: call.outcome === 'connected' ? '#059669' :
+                          call.outcome === 'not_interested' ? '#DC2626' :
+                          call.outcome === 'callback_requested' ? '#D97706' : '#4B5563',
+                      }}>
+                        {call.outcome_label}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: '#6B7280' }}>
+                      {call.duration_minutes ? `${call.duration_minutes} min` : '-'}
+                    </td>
+                    <td style={{ maxWidth: '300px', fontSize: '0.85rem' }}>
+                      {call.notes ? (
+                        <span title={call.notes}>
+                          {call.notes.length > 80 ? call.notes.substring(0, 80) + '...' : call.notes}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9CA3AF' }}>-</span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setEditingColdCall(call); setShowColdCallModal(true); }}
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          onClick={async () => {
+                            if (!confirm('Delete this cold call record?')) return;
+                            try {
+                              await deleteColdCall(call.id);
+                              loadContact();
+                            } catch {}
+                          }}
+                          style={{
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.75rem',
+                            background: 'none',
+                            color: '#EF4444',
+                            border: '1px solid #EF4444',
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showColdCallModal && (
+        <ColdCallModal
+          contactId={contact.id}
+          editingCall={editingColdCall}
+          onClose={() => { setShowColdCallModal(false); setEditingColdCall(null); }}
+          onSaved={loadContact}
+        />
+      )}
     </div>
   );
 }

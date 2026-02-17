@@ -153,6 +153,13 @@ export const setReplyFollowUp = (replyId, data) => api.post(`/api/replies/${repl
 export const getFollowUps = () => api.get('/api/contacts/follow-ups');
 export const generateFollowUp = (contactId) => api.post(`/api/contacts/${contactId}/generate-followup`);
 
+// Cold Calls
+export const getColdCalls = (params) => api.get('/api/cold-calls', { params });
+export const createColdCall = (data) => api.post('/api/cold-calls', data);
+export const updateColdCall = (id, data) => api.put(`/api/cold-calls/${id}`, data);
+export const deleteColdCall = (id) => api.delete(`/api/cold-calls/${id}`);
+export const getColdCallOutcomes = () => api.get('/api/cold-calls/outcomes');
+
 // Workspaces
 export const getWorkspaces = () => api.get('/api/workspaces/');
 export const createWorkspace = (data) => api.post('/api/workspaces/', data);

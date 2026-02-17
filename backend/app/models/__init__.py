@@ -15,11 +15,12 @@ from app.models.deal_criteria import DealCriteria
 from app.models.website_analysis_log import WebsiteAnalysisLog
 from app.models.campaign_step import CampaignStep
 from app.models.step_recipient import StepRecipient
+from app.models.cold_call import ColdCall
 
 __all__ = [
     'Workspace', 'Template', 'Campaign', 'Recipient', 'EmailLog',
     'Settings', 'WorkspaceSettings', 'OAuthToken',
     'LinkClick', 'OpenEvent', 'Contact', 'Tag', 'contact_tags', 'ReplyMessage',
     'MonitoredSite', 'Listing', 'DealCriteria', 'WebsiteAnalysisLog',
-    'CampaignStep', 'StepRecipient',
+    'CampaignStep', 'StepRecipient', 'ColdCall',
 ]

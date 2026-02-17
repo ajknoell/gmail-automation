@@ -37,6 +37,7 @@ def create_app(config_class=None):
     from app.routes.insights import insights_bp
     from app.routes.attachments import attachments_bp
     from app.routes.listings import listings_bp
+    from app.routes.cold_calls import cold_calls_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
@@ -50,6 +51,7 @@ def create_app(config_class=None):
     app.register_blueprint(insights_bp, url_prefix='/api/insights')
     app.register_blueprint(attachments_bp, url_prefix='/api/attachments')
     app.register_blueprint(listings_bp, url_prefix='/api/listings')
+    app.register_blueprint(cold_calls_bp, url_prefix='/api/cold-calls')
 
     # Create database tables and run migrations
     with app.app_context():
