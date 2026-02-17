@@ -350,6 +350,8 @@ PRIORITY ORDER (follow this strictly):
    - TEXT WALLS: Too much text under service cards, too many paragraphs before getting to the point. If text blocks dominate over visuals, the fix is usually "cut the text, grow the photos." One sentence per service is plenty.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
    - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
+   - WASTED SPACE: Huge sections that don't help convert visitors, like giant social media logo walls, oversized maps, or massive footers full of badges. That space could show actual work, reviews, or a clear next step.
+   - FLAT SERVICE LISTS: A wall of services in all-caps or bullet points with no grouping, icons, or descriptions. Visitors can't tell what the business specializes in when everything looks equally important.
    - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read.
    - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's bigger than any missing feature.
    - DATED/STALE FEEL: Old copyright year in the footer, outdated design patterns, or a site that looks like it was built years ago and never updated. This makes the business look inactive.
