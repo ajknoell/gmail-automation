@@ -987,13 +987,13 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
                     '', body, flags=re.IGNORECASE
                 )
 
-                # Ensure numbered observations aren't smashed into one paragraph.
-                # If "2." appears without a preceding line break or <br>, add spacing.
-                # Handle both plain text (\n) and HTML (<br>) formats.
-                if '<br' not in body and '<p' not in body:
-                    # Plain text body — convert \n to <br> for HTML rendering
+                # Normalize line breaks for HTML rendering:
+                # 1. Convert any remaining \n to <br> (model may return mixed formats)
+                if '<p' not in body:
                     body = body.replace('\n', '<br>')
-                # Ensure "2." starts on its own line
+                # 2. Collapse runs of 3+ <br> tags down to 2 (one blank line max)
+                body = re.sub(r'(<br\s*/?\s*>){3,}', '<br><br>', body)
+                # 3. Ensure "2." starts on its own line if not already preceded by a break
                 body = re.sub(r'(?<!<br>)(?<!<br/>)(?<!<br />)(\s*)(2\.)\s', r'<br><br>\2 ', body)
 
                 subject = _strip_ai_dashes(result.get('subject', resolved_subject))
