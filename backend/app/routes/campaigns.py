@@ -357,6 +357,22 @@ def list_recipients(id):
     logs = EmailLog.query.filter_by(campaign_id=id).all()
     tracking_by_recipient = {l.recipient_id: l for l in logs}
 
+    # Join website analysis severity data
+    from app.models.website_analysis_log import WebsiteAnalysisLog
+    recipient_ids = [r.id for r in recipients]
+    severity_map = {}
+    if recipient_ids:
+        analysis_logs = WebsiteAnalysisLog.query.filter(
+            WebsiteAnalysisLog.recipient_id.in_(recipient_ids)
+        ).all()
+        for al in analysis_logs:
+            # Keep the most recent analysis per recipient
+            if al.recipient_id not in severity_map or (al.created_at and severity_map[al.recipient_id].get('_created_at', '') < al.created_at.isoformat()):
+                severity_map[al.recipient_id] = {
+                    'max_severity': al.max_severity,
+                    '_created_at': al.created_at.isoformat() if al.created_at else '',
+                }
+
     result = []
     for r in recipients:
         data = r.to_dict()
@@ -379,6 +395,10 @@ def list_recipients(id):
         # Surface content warnings (stored in error_message during generation)
         if r.error_message and r.personalized_body:
             data['content_warnings'] = r.error_message.split(' | ')
+        # Include website analysis severity
+        sev_data = severity_map.get(r.id)
+        if sev_data:
+            data['website_severity'] = sev_data['max_severity']
         result.append(data)
 
     return jsonify(result)
@@ -436,13 +456,21 @@ def _get_learned_website_insights():
 def _log_website_analysis(workspace_id, recipient_id, result):
     """Log a website analysis result for the learning feedback loop."""
     from app.models.website_analysis_log import WebsiteAnalysisLog
+    analysis_data = result.get('analysis')
+    analysis_json_str = None
+    max_severity = None
+    if analysis_data and isinstance(analysis_data, dict):
+        analysis_json_str = json.dumps(analysis_data)
+        max_severity = ClaudeService.get_max_severity(analysis_data)
     log = WebsiteAnalysisLog(
         workspace_id=workspace_id,
         recipient_id=recipient_id,
         url=result['url'],
         company=result.get('company'),
         raw_text_preview=result.get('raw_text_preview'),
-        analysis_result=result['analysis'],
+        analysis_result=result.get('analysis_text', ''),
+        analysis_json=analysis_json_str,
+        max_severity=max_severity,
     )
     db.session.add(log)
     return log
@@ -490,7 +518,8 @@ def regenerate_recipient_preview(id, recipient_id):
             claude, recipient_dict, learned_website_insights,
             previous_observations=previous_observations,
         )
-        website_insights = wa_result['analysis'] if wa_result else None
+        website_insights = wa_result.get('analysis_text') if wa_result else None
+        website_analysis_data = wa_result.get('analysis') if wa_result else None
         team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 
         # Log the analysis for learning
@@ -511,9 +540,14 @@ def regenerate_recipient_preview(id, recipient_id):
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
         recipient.approved = False  # Reset approval after regeneration
-        # Store content warnings (e.g. missing website insights)
-        if result.get('content_warnings'):
-            recipient.error_message = ' | '.join(result['content_warnings'])
+        # Build content warnings including severity-based flags
+        content_warnings = result.get('content_warnings', [])
+        if website_analysis_data:
+            severity = ClaudeService.get_max_severity(website_analysis_data)
+            if not severity:
+                content_warnings.append('No significant website issues found for outreach')
+        if content_warnings:
+            recipient.error_message = ' | '.join(content_warnings)
         else:
             recipient.error_message = None
         db.session.commit()
@@ -522,6 +556,10 @@ def regenerate_recipient_preview(id, recipient_id):
         resp['spam_check'] = check_spam_score(
             recipient.personalized_subject, recipient.personalized_body
         )
+        if website_analysis_data:
+            resp['website_severity'] = ClaudeService.get_max_severity(website_analysis_data)
+        if recipient.error_message and recipient.personalized_body:
+            resp['content_warnings'] = recipient.error_message.split(' | ')
         return jsonify(resp)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -615,7 +653,8 @@ def generate_preview(id):
                     wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
                     if cache_key and wa_result:
                         website_analysis_cache[cache_key] = wa_result
-                website_insights = wa_result['analysis'] if wa_result else None
+                website_insights = wa_result.get('analysis_text') if wa_result else None
+                website_analysis_data = wa_result.get('analysis') if wa_result else None
                 team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 
                 # Log the analysis for the learning feedback loop
@@ -635,9 +674,14 @@ def generate_preview(id):
                 )
                 recipient.personalized_subject = result.get('subject', campaign.template.subject)
                 recipient.personalized_body = result.get('body', campaign.template.body)
-                # Store content warnings (e.g. missing website insights)
-                if result.get('content_warnings'):
-                    recipient.error_message = ' | '.join(result['content_warnings'])
+                # Build content warnings including severity-based flags
+                content_warnings = result.get('content_warnings', [])
+                if website_analysis_data:
+                    severity = ClaudeService.get_max_severity(website_analysis_data)
+                    if not severity:
+                        content_warnings.append('No significant website issues found for outreach')
+                if content_warnings:
+                    recipient.error_message = ' | '.join(content_warnings)
                 else:
                     recipient.error_message = None
                 generated += 1

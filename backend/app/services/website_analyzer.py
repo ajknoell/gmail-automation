@@ -736,11 +736,16 @@ class WebsiteAnalyzer:
         if not analysis:
             return None
 
+        # Convert structured analysis to plain text for email templates
+        from .claude_service import ClaudeService as _CS
+        analysis_text = _CS.format_analysis_as_text(analysis)
+
         # --- Step 5: Extract team contacts with marketing/web roles ---
         team_contacts = cls.extract_team_contacts(text) if text else []
 
         return {
-            'analysis': analysis,
+            'analysis': analysis,            # structured dict with issues/severity
+            'analysis_text': analysis_text,   # plain text for email personalization
             'url': url,
             'company': company,
             'team_contacts': team_contacts,

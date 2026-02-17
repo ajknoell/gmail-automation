@@ -171,6 +171,10 @@ def _run_migrations(app):
     _add_column('tags', 'workspace_id', 'INTEGER')
     _add_column('email_logs', 'workspace_id', 'INTEGER')
 
+    # Website analysis structured data migrations
+    _add_column('website_analysis_logs', 'analysis_json', 'TEXT')
+    _add_column('website_analysis_logs', 'max_severity', 'VARCHAR(20)')
+
     # Create index on tracking_id
     try:
         db.session.execute(text('CREATE INDEX IF NOT EXISTS idx_email_logs_tracking_id ON email_logs(tracking_id)'))

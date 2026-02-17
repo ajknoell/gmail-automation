@@ -1032,6 +1032,25 @@ function CampaignDetail() {
                     </td>
                     <td>
                       <span className={`badge badge-${recipient.status}`}>{recipient.status}</span>
+                      {recipient.website_severity && (
+                        <span
+                          title={`Website issue severity: ${recipient.website_severity}`}
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: '0.35rem',
+                            padding: '0.1rem 0.4rem',
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            borderRadius: '0.25rem',
+                            textTransform: 'uppercase',
+                            background: recipient.website_severity === 'critical' ? '#FEE2E2' : '#FEF3C7',
+                            color: recipient.website_severity === 'critical' ? '#DC2626' : '#D97706',
+                            cursor: 'help',
+                          }}
+                        >
+                          {recipient.website_severity}
+                        </span>
+                      )}
                       {recipient.content_warnings && recipient.content_warnings.length > 0 && (
                         <span
                           title={`Content warning:\n${recipient.content_warnings.join('\n')}`}
@@ -1277,6 +1296,20 @@ function CampaignDetail() {
                   {recipient.company && <div><strong>Company:</strong> {recipient.company}</div>}
                   <div style={{ marginTop: '0.25rem' }}>
                     <span className={`badge badge-${recipient.status}`} style={{ fontSize: '0.75rem' }}>{recipient.status}</span>
+                    {recipient.website_severity && (
+                      <span style={{
+                        marginLeft: '0.35rem',
+                        padding: '0.1rem 0.4rem',
+                        fontSize: '0.65rem',
+                        fontWeight: 600,
+                        borderRadius: '0.25rem',
+                        textTransform: 'uppercase',
+                        background: recipient.website_severity === 'critical' ? '#FEE2E2' : '#FEF3C7',
+                        color: recipient.website_severity === 'critical' ? '#DC2626' : '#D97706',
+                      }}>
+                        {recipient.website_severity}
+                      </span>
+                    )}
                     {recipient.approved && <span style={{ color: '#10B981', marginLeft: '0.5rem', fontSize: '0.75rem' }}>Approved</span>}
                   </div>
                 </div>
