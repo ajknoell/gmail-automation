@@ -369,6 +369,8 @@ CRITICAL RULES — READ CAREFULLY:
    - If the site already has customer reviews/testimonials visible, do NOT suggest adding reviews.
    - If the site already has a photo gallery, do NOT suggest adding a gallery.
    - If the site already has clear calls-to-action, do NOT suggest adding CTAs.
+   - If the copyright year is current or recent (within 1 year), do NOT mention it. A 2026 copyright in 2026 is correct, not a problem.
+   - NEVER invent problems. If you cannot identify a real, visible issue, pick a different angle. Do not fabricate observations about things that are actually fine.
    - Look at the screenshot carefully before each suggestion and ask yourself: "Is this already on their site?" If yes, find something else.
 
 2. PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery." Most small business sites have too much, not too little.
@@ -394,11 +396,11 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Be DIRECT. EXACTLY ONE sentence per observation. Not two, not three. ONE.
-- BAD: "Your homepage has three dense paragraphs before visitors see your services. Moving those project galleries up top would get more people clicking through." (TWO sentences, too wordy)
-- GOOD: "Making your project photos full-size instead of tiny thumbnails would let visitors see your work instantly"
-- Don't describe what you see. Just name the fix and the payoff.
-- STRICTLY one sentence each, MAX 20 words. If it's longer, cut it.
+- EXACTLY ONE SENTENCE per observation. This is non-negotiable. If your observation has a period followed by more words, you wrote too much. Cut it to one sentence.
+- BAD: "The hero image looks polished, but swapping those stock photos for actual projects would build credibility with visitors. People want to see your real work." (TWO sentences. WRONG.)
+- GOOD: "Swapping the stock photos for real project shots would build instant credibility"
+- Just name the fix and the payoff. Do not describe what the site currently looks like first.
+- MAX 20 words per observation. Count them. If over 20, rewrite shorter.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
