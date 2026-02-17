@@ -1,8 +1,16 @@
 import base64
 import re
+import time
 import requests
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
+
+
+# Cache website fetch results (screenshots, text, health issues) keyed by URL.
+# Avoids re-fetching and re-screenshotting the same site on regeneration.
+# Entries expire after 10 minutes.
+_website_cache: Dict[str, dict] = {}
+_CACHE_TTL = 600  # seconds
 
 
 class _TextExtractor(HTMLParser):
@@ -650,37 +658,53 @@ class WebsiteAnalyzer:
         if _parsed.query:
             screenshot_url += f'?{_parsed.query}'
 
-        # --- Step 1: Pre-flight health checks ---
-        health_issues = _check_website_health(screenshot_url)
+        # Check cache — skip expensive fetch/screenshot if we already have
+        # recent data for this URL (e.g. on regeneration).
+        cache_key = screenshot_url.lower()
+        cached = _website_cache.get(cache_key)
+        if cached and (time.time() - cached['ts']) < _CACHE_TTL:
+            screenshot_b64 = cached['screenshot_b64']
+            mobile_screenshot_b64 = cached['mobile_screenshot_b64']
+            text = cached['text']
+            health_issues = cached['health_issues']
+        else:
+            # --- Step 1: Pre-flight health checks ---
+            health_issues = _check_website_health(screenshot_url)
 
-        # --- Step 2: Capture screenshots (desktop + mobile) ---
-        # Never bypass SSL errors — let the screenshot show exactly what
-        # visitors see (the scary browser warning). This ensures Claude
-        # treats it as the critical issue it is instead of analyzing the
-        # site behind the warning.
-        screenshot_b64 = _capture_screenshot(screenshot_url)
-        mobile_screenshot_b64 = _capture_mobile_screenshot(screenshot_url)
+            # --- Step 2: Capture screenshots (desktop + mobile) ---
+            # Never bypass SSL errors — let the screenshot show exactly what
+            # visitors see (the scary browser warning).
+            screenshot_b64 = _capture_screenshot(screenshot_url)
+            mobile_screenshot_b64 = _capture_mobile_screenshot(screenshot_url)
 
-        # --- Step 3: Fetch text as supplementary context ---
-        text = None
-        # Skip text fetch if the site has connection-level or SSL issues
-        connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP', 'SSL_')
-        if not any(tag in issue for issue in health_issues for tag in connection_failures):
-            try:
-                text = cls.fetch_website(url)
-                if not text or len(text) < 50:
-                    text = None
-            except Exception:
-                text = None
-
-            # --- Step 3b: Fetch key inner pages for richer context ---
-            if text:
+            # --- Step 3: Fetch text as supplementary context ---
+            text = None
+            connection_failures = ('CONNECTION_FAILED', 'TIMEOUT', 'REDIRECT_LOOP', 'SSL_')
+            if not any(tag in issue for issue in health_issues for tag in connection_failures):
                 try:
-                    inner_text = cls.fetch_inner_pages(url)
-                    if inner_text:
-                        text = text + '\n\n' + inner_text
+                    text = cls.fetch_website(url)
+                    if not text or len(text) < 50:
+                        text = None
                 except Exception:
-                    pass
+                    text = None
+
+                # --- Step 3b: Fetch key inner pages for richer context ---
+                if text:
+                    try:
+                        inner_text = cls.fetch_inner_pages(url)
+                        if inner_text:
+                            text = text + '\n\n' + inner_text
+                    except Exception:
+                        pass
+
+            # Store in cache for fast regeneration
+            _website_cache[cache_key] = {
+                'screenshot_b64': screenshot_b64,
+                'mobile_screenshot_b64': mobile_screenshot_b64,
+                'text': text,
+                'health_issues': health_issues,
+                'ts': time.time(),
+            }
 
         # Need at least one data source (issues alone count — they tell us
         # plenty about what visitors experience)

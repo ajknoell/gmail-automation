@@ -968,8 +968,13 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
                 body = _strip_ai_dashes(result.get('body', resolved_body))
 
                 # Ensure numbered observations aren't smashed into one paragraph.
-                # If "2." appears mid-line (not at the start), insert a line break.
-                body = re.sub(r'(?<!\n)(\s*)(2\.)\s', r'\n\n\2 ', body)
+                # If "2." appears without a preceding line break or <br>, add spacing.
+                # Handle both plain text (\n) and HTML (<br>) formats.
+                if '<br' not in body and '<p' not in body:
+                    # Plain text body — convert \n to <br> for HTML rendering
+                    body = body.replace('\n', '<br>')
+                # Ensure "2." starts on its own line
+                body = re.sub(r'(?<!<br>)(?<!<br/>)(?<!<br />)(\s*)(2\.)\s', r'<br><br>\2 ', body)
 
                 out = {
                     'subject': _strip_ai_dashes(result.get('subject', resolved_subject)),
