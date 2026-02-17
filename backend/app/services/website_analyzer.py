@@ -179,10 +179,12 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
                     )
                     break
 
-            # Check for outdated copyright year
+            # Check for outdated copyright year — scan the FULL page
+            # because copyright notices are almost always in the footer.
             from datetime import datetime as _dt
+            full_lower = resp.text.lower()
             copyright_years = re.findall(
-                r'(?:©|\(c\)|copyright)\s*(\d{4})', body_lower
+                r'(?:©|\(c\)|copyright)\s*(\d{4})', full_lower
             )
             if copyright_years:
                 newest_year = max(int(y) for y in copyright_years)

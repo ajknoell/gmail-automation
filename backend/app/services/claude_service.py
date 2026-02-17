@@ -343,13 +343,16 @@ YOUR TASK: Find 2 opportunities where a small improvement could bring them more 
 
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
-2. UX & READABILITY PROBLEMS: These are the most common real issues. Look carefully:
-   - CONTENT OVERLOAD: Too much text, walls of words, paragraphs that go on forever. If a visitor would feel overwhelmed or not know where to look first, that's a real problem. "Streamlining your homepage so the key message jumps out in 3 seconds would keep more visitors engaged."
+2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
+   - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
+   - POOR IMAGE CHOICES: Dark, unclear, or generic stock photos that don't show the actual business, their work, or their team. A renovation company showing abstract ceiling shots instead of beautiful before/afters is a missed opportunity.
+   - CONTENT OVERLOAD: Too much text, walls of words, paragraphs that go on forever. If a visitor would feel overwhelmed or not know where to look first, that's a real problem.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
-   - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention. When everything screams "look at me," nothing wins.
-   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read. If the site forces reading, most people leave.
-   - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's a bigger problem than missing a gallery.
-   These are MORE impactful than suggesting new features. A clean, scannable site converts better than a cluttered site with more features.
+   - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
+   - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read.
+   - UNCLEAR VALUE PROPOSITION: If a visitor can't tell in 5 seconds what this business does and why they should care, that's bigger than any missing feature.
+   - DATED/STALE FEEL: Old copyright year in the footer, outdated design patterns, or a site that looks like it was built years ago and never updated. This makes the business look inactive.
+   These design issues are MORE impactful than suggesting new features. A well-designed site with good photos converts better than a cluttered site with more features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features (galleries, calculators, review sections) if the site's existing content and layout are already clean and well-organized. A messy site doesn't need more stuff, it needs less clutter.
 
@@ -497,11 +500,12 @@ URL: {url}
 {learned_guidance}{issues_block}{text_block}
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
-2. UX & READABILITY PROBLEMS: These are the most common real issues. Even from text alone, you can detect:
+2. CONTENT & STRUCTURE PROBLEMS: These are the most common real issues. Even from text alone, you can detect:
    - CONTENT OVERLOAD: Massive amounts of text, paragraphs that go on forever, too many topics crammed together. If the scraped text feels overwhelming to read, imagine how a visitor feels.
    - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
    - UNCLEAR VALUE PROPOSITION: If you can't tell in the first few sentences what this business does best and why someone should call them, that's the #1 issue.
    - HARD TO SCAN: No clear sections, everything runs together, no concise messaging.
+   - DATED/STALE FEEL: If the health checks flagged an old copyright year, the site likely hasn't been updated in years. This makes the business look inactive.
    These content quality issues are MORE impactful than suggesting new features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content is already clean and focused.
