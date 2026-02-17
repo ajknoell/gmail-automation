@@ -373,6 +373,8 @@ URL: {url}
 {learned_guidance}{issues_block}{text_supplement}{previous_block}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
+BEFORE YOU WRITE ANYTHING, silently inventory what the site IS doing well: What services are listed? Where? Is there a clear hero message? Navigation with service categories? Phone number visible? Reviews section? Gallery? CTA buttons? Only AFTER cataloging what exists should you look for genuine gaps. If the site already shows its services clearly in the header, nav, or hero, do NOT claim the messaging is "general" or services are "unclear."
+
 ANALYZE LIKE A MARKETING STRATEGIST AND WEB EXPERT, NOT JUST A DESIGNER:
 Think about the site through the lens of conversion rate optimization (CRO), proven marketing principles, and modern web development best practices:
 
@@ -427,6 +429,8 @@ BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic a
 9. NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler, not a real observation. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features unless you can see the site is clearly missing something critical. If you can't find two genuinely specific observations, make both about content quality and presentation.
 10. NEVER cite a specific copyright year (e.g. "your copyright says 2016"). Small footer text in screenshots is frequently misread. If the health checks flagged OUTDATED_COPYRIGHT, you may say the design feels dated or could use a refresh — but never mention a year.
 11. NEVER call a tagline, slogan, or headline "generic" if it contains the company name or a play on the company name. Businesses often use puns and wordplay in their branding (e.g. a company called "Abodie" using "Your Humble Abodie Awaits" as a play on "abode"). Criticizing branded wordplay as "generic language" shows you didn't even understand their name. Before calling any headline generic, check whether it incorporates the company name or a clever variation of it.
+12. NEVER claim services, offerings, or specializations are "not shown," "unclear," "buried," or use "general messaging" if they ARE visible in the screenshot. Check the header bar, navigation menus, hero text, and any dropdowns carefully. For example, a restoration company with "WATER | FIRE | MOLD | ASBESTOS" across the top and a services dropdown is CLEARLY showing their services. Saying "your homepage leads with general messaging instead of showing specific services" when the services are right there is embarrassingly wrong and will kill credibility instantly.
+13. Before writing each observation, mentally list what IS visible on the site. If your observation contradicts something visible, throw it out and find a real issue. Generic safe-sounding observations that could apply to any website (e.g. "lead with your specific services," "show visitors what makes you different") are almost always wrong because most sites already do this.
 
 4. Name the issue AND the benefit in one short sentence:
    - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
