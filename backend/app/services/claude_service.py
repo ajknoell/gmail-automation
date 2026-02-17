@@ -345,7 +345,7 @@ PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
 2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
    - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
-   - POOR IMAGE CHOICES: Dark, unclear, or generic stock photos that don't show the actual business, their work, or their team. A renovation company showing abstract ceiling shots instead of beautiful before/afters is a missed opportunity.
+   - STOCK PHOTOS: If the images look generic, posed, or like they came from a photo library, call it out. A real business should show THEIR team, THEIR work, THEIR results. "Those look like stock photos" is a valid, powerful observation.
    - CONTENT OVERLOAD: Too much text, walls of words, paragraphs that go on forever. If a visitor would feel overwhelmed or not know where to look first, that's a real problem.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
    - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
@@ -372,13 +372,11 @@ CRITICAL RULES — READ CAREFULLY:
 
 3. BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
-4. Frame each suggestion as a BENEFIT they'd gain, not a problem they have:
-   - Good: "Right now visitors see a warning before your site loads, fixing that would instantly restore trust and stop losing potential customers at the door"
-   - Good: "Trimming the homepage down to your top 3 services with clear photos would help visitors find what they need fast instead of scrolling through everything"
-   - Good: "A quick-quote calculator could turn browsing visitors into real leads"
+4. Name the issue AND the benefit in one short sentence:
+   - Good: "Replacing the stock photos with real project shots would build instant trust"
+   - Good: "A quick-quote form could turn browsers into actual leads"
    - Bad: "Your SSL certificate is expired" (too technical)
-   - Bad: "You're missing a quote calculator" (names the problem, not the benefit)
-   - Bad: "Add a photo gallery" (generic feature suggestion that ignores bigger issues)
+   - Bad: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen..." (way too wordy, just say what the problem is)
 
 5. Tie every suggestion to a business outcome: more calls, more trust, more conversions, stronger first impression.
 
@@ -393,11 +391,12 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Helpful neighbor who happens to be a web designer
-- Lead with the benefit, paint the picture of what's possible
-- Never critical, never condescending — even for serious issues, be helpful not alarming
-- One sentence each, max 25 words
-- Warm and conversational
+- Be DIRECT. Say what a smart friend would say in one sentence, not what a consultant would write in a paragraph.
+- BAD: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen, while your actual content gets pushed down below the fold"
+- GOOD: "Swapping those stock photos for real shots of your team and finished projects would make visitors trust you instantly"
+- Don't describe what you see in detail. Just name the issue and the fix in plain language.
+- One sentence each, MAX 20 words. If it's longer, cut it.
+- Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
 YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
@@ -539,13 +538,12 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Helpful and respectful — like a neighbor who happens to be a web designer
-- ALWAYS lead with the benefit — even for critical issues: "Getting that security warning sorted out would instantly restore visitor trust and stop you from losing customers at the door"
-- Never just name a problem — name the OUTCOME of fixing it: more calls, more trust, more customers
+- Be DIRECT. Say what a smart friend would say in one sentence, not what a consultant would write in a paragraph.
+- Don't describe what you see in detail. Just name the issue and the fix in plain language.
+- Name the OUTCOME of fixing it: more calls, more trust, more customers.
 - Avoid words like "broken", "failing", "terrible", "nobody", "zero", "missing", "lacking"
-- Show you see the potential in their business and want to help them unlock it
-- One sentence each, max 25 words
-- Warm and conversational
+- One sentence each, MAX 20 words. If it's longer, cut it.
+- Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
 YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
