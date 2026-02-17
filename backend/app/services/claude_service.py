@@ -406,13 +406,13 @@ PRIORITY ORDER (follow this strictly):
    - BURIED DIFFERENTIATORS: If the business has something genuinely unique (specific specialization, years of experience, guarantees) but it's not prominent, that's worth noting. But ONLY if you can clearly see it's buried — don't guess.
    - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks.
    - PHOTOS: Almost NEVER flag photos as stock. Portfolio/gallery photos are the business's own work. Family/team photos are their real people. Only flag stock if you see watermarks or obviously unrelated generic subjects. When in doubt, skip this entirely.
-   - DATED/STALE FEEL: NEVER cite a specific copyright year — you cannot reliably read small footer text from screenshots. If the health checks above flagged OUTDATED_COPYRIGHT, use that as a signal that the design likely needs a refresh, but frame it as the design looking dated, NOT as "your copyright says 20XX." NEVER question whether the business is still active.
+   - DATED/STALE FEEL: NEVER cite a specific copyright year — you cannot reliably read small footer text from screenshots. If the health checks above flagged OUTDATED_COPYRIGHT, use that as a signal that the design likely needs a refresh, but frame it as the design looking dated, NOT as "your copyright says 20XX." NEVER question whether the business is still active, directly OR indirectly. Saying "visitors might wonder if you're still booking projects" or "homeowners may question if you're still in business" is just as offensive as saying it yourself. Every business you're analyzing IS active.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content and layout are already clean. A messy site doesn't need more stuff.
 
 ACCURACY RULES — DO NOT MAKE CLAIMS YOU CAN'T VERIFY:
 1. ONLY describe what you can clearly see in the screenshot. If you can't tell whether something is "buried" or "mid-page" from the screenshot, don't claim it is.
-2. NEVER say something is "probably your biggest" anything. You don't know their business strategy. Describe what you see, not what you assume.
+2. NEVER say something is "your biggest," "your most important," "your strongest," or "probably your biggest" anything. You don't know their business strategy or what matters most to them. Describe what you see, not what you assume about their priorities.
 3. NEVER tell them to move specific content to specific positions unless you can clearly see the issue in the screenshot. "Your financing offer could get more visibility" is safer than "move your $97/month offer above the fold."
 4. DO NOT invent problems. If the site is genuinely good, find a smaller, safe observation. A weak but accurate observation is better than a bold but wrong one.
 5. If the site already has reviews, galleries, CTAs, or other features visible, do NOT suggest adding them.
@@ -574,7 +574,7 @@ PRIORITY ORDER (follow this strictly):
    - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
    - UNCLEAR VALUE PROPOSITION: If you can't tell in the first few sentences what this business does best and why someone should call them, that's the #1 issue.
    - HARD TO SCAN: No clear sections, everything runs together, no concise messaging.
-   - DATED/STALE FEEL: If the health checks flagged OUTDATED_COPYRIGHT, use it as a signal the design likely needs a refresh. NEVER cite a specific copyright year in your observations — just frame it as the design looking dated. NEVER say the business looks inactive or question whether they're still operating.
+   - DATED/STALE FEEL: If the health checks flagged OUTDATED_COPYRIGHT, use it as a signal the design likely needs a refresh. NEVER cite a specific copyright year in your observations — just frame it as the design looking dated. NEVER say the business looks inactive or question whether they're still operating, directly OR indirectly (e.g. "visitors might wonder if you're still booking" is just as bad). Every business you're analyzing IS active.
    These content quality issues are MORE impactful than suggesting new features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content is already clean and focused.
@@ -944,6 +944,7 @@ HUMILITY RULE:
 - NEVER try to sound smarter than the recipient about their own business
 - NEVER contradict what their website clearly states (e.g. don't say "visitors won't know what you do" if the site explains it)
 - NEVER call their tagline, slogan, or headline "generic" if it contains their company name or a play on it. Businesses use puns and wordplay in branding (e.g. "Abodie" → "Your Humble Abodie Awaits"). Criticizing branded wordplay shows you didn't understand their name.
+- NEVER imply the business might be inactive, closed, or not booking — directly or indirectly. Phrases like "visitors might wonder if you're still taking on projects" or "homeowners may question if you're still in business" are just as insulting as saying it yourself. The business IS active. Focus on helping them look their best, not casting doubt.
 - Show you've done homework, but stay humble — they're the expert
 - Keep observations respectful and accurate. When in doubt, acknowledge what they're doing well before suggesting opportunities
 
