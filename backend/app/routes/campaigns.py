@@ -222,10 +222,10 @@ def upload_recipients(id):
 
 @campaigns_bp.route('/<int:id>/recipients', methods=['DELETE'])
 def clear_recipients(id):
-    """Remove all recipients from a draft campaign."""
+    """Remove all recipients from a campaign (not while running)."""
     campaign = Campaign.query.get_or_404(id)
-    if campaign.status != 'draft':
-        return jsonify({'error': 'Can only clear recipients from draft campaigns'}), 400
+    if campaign.status == 'running':
+        return jsonify({'error': 'Cannot clear recipients while campaign is running'}), 400
 
     Recipient.query.filter_by(campaign_id=id).delete()
     campaign.total_recipients = 0
@@ -235,10 +235,10 @@ def clear_recipients(id):
 
 @campaigns_bp.route('/<int:id>/recipients/<int:recipient_id>', methods=['DELETE'])
 def delete_recipient(id, recipient_id):
-    """Remove a single recipient from a draft campaign."""
+    """Remove a single recipient from a campaign (not while running)."""
     campaign = Campaign.query.get_or_404(id)
-    if campaign.status != 'draft':
-        return jsonify({'error': 'Can only remove recipients from draft campaigns'}), 400
+    if campaign.status == 'running':
+        return jsonify({'error': 'Cannot remove recipients while campaign is running'}), 400
 
     recipient = Recipient.query.filter_by(id=recipient_id, campaign_id=id).first_or_404()
     db.session.delete(recipient)
