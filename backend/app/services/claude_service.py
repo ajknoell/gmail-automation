@@ -406,7 +406,7 @@ PRIORITY ORDER (follow this strictly):
    - BURIED DIFFERENTIATORS: If the business has something genuinely unique (specific specialization, years of experience, guarantees) but it's not prominent, that's worth noting. But ONLY if you can clearly see it's buried — don't guess.
    - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks.
    - PHOTOS: Almost NEVER flag photos as stock. Portfolio/gallery photos are the business's own work. Family/team photos are their real people. Only flag stock if you see watermarks or obviously unrelated generic subjects. When in doubt, skip this entirely.
-   - DATED/STALE FEEL: Only mention the copyright year if it is before 2020. A copyright of 2020 or later is NOT worth mentioning. NEVER question whether the business is still active.
+   - DATED/STALE FEEL: NEVER cite a specific copyright year — you cannot reliably read small footer text from screenshots. If the health checks above flagged OUTDATED_COPYRIGHT, use that as a signal that the design likely needs a refresh, but frame it as the design looking dated, NOT as "your copyright says 20XX." NEVER question whether the business is still active.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content and layout are already clean. A messy site doesn't need more stuff.
 
@@ -425,6 +425,7 @@ PREFER observations about HOW the site presents its content over suggestions to 
 BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
 9. NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler, not a real observation. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features unless you can see the site is clearly missing something critical. If you can't find two genuinely specific observations, make both about content quality and presentation.
+10. NEVER cite a specific copyright year (e.g. "your copyright says 2016"). Small footer text in screenshots is frequently misread. If the health checks flagged OUTDATED_COPYRIGHT, you may say the design feels dated or could use a refresh — but never mention a year.
 
 4. Name the issue AND the benefit in one short sentence:
    - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
@@ -572,7 +573,7 @@ PRIORITY ORDER (follow this strictly):
    - UNCLEAR STRUCTURE: Sections that blur together, no clear hierarchy of information, everything competing for attention.
    - UNCLEAR VALUE PROPOSITION: If you can't tell in the first few sentences what this business does best and why someone should call them, that's the #1 issue.
    - HARD TO SCAN: No clear sections, everything runs together, no concise messaging.
-   - DATED/STALE FEEL: If the health checks flagged a copyright year before 2020, suggest a website refresh. NEVER say the business looks inactive or question whether they're still operating — just frame it as a refresh opportunity to make the site feel more current.
+   - DATED/STALE FEEL: If the health checks flagged OUTDATED_COPYRIGHT, use it as a signal the design likely needs a refresh. NEVER cite a specific copyright year in your observations — just frame it as the design looking dated. NEVER say the business looks inactive or question whether they're still operating.
    These content quality issues are MORE impactful than suggesting new features.
 3. FUNCTIONAL ISSUES: Broken layouts, pages that don't render, missing content sections.
 4. FEATURE SUGGESTIONS: Only suggest adding new features if the existing content is already clean and focused.
@@ -949,6 +950,10 @@ NO TECH JARGON RULE:
 - NEVER say: "parked domain", "SSL", "DNS", "redirect", "server error", "placeholder", "meta tags", "SEO", "rendering", "responsive", "CMS", "hosting"
 - Describe problems as the VISITOR EXPERIENCE: "when someone visits your site, they see a generic page instead of your business" — not "your domain is parked"
 - If the website observations contain technical language, REWRITE them in plain English in the final email
+
+COPYRIGHT YEAR RULE:
+- NEVER mention a specific copyright year in the email (e.g. "your copyright says 2016"). Copyright years in website analysis are often misread and citing them makes you look careless.
+- If the research notes mention an outdated design or dated feel, say the site "looks like it could use a refresh" or "the design feels a few years behind" — never cite a year.
 
 {_wi_note}
 
