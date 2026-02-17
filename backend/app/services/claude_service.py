@@ -424,6 +424,8 @@ PREFER observations about HOW the site presents its content over suggestions to 
 
 BE SPECIFIC to what you actually see (or don't see) in the screenshot. Generic advice that could apply to any website is useless.
 
+9. NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler, not a real observation. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features unless you can see the site is clearly missing something critical. If you can't find two genuinely specific observations, make both about content quality and presentation.
+
 4. Name the issue AND the benefit in one short sentence:
    - Good: "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly"
    - Good: "A quick-quote form could turn browsers into actual leads"
@@ -580,6 +582,7 @@ IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If the text mentions galleries, portfolios, or project showcases, the site likely ALREADY has them — do NOT suggest adding them.
 - If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
 - PREFER observations about content QUALITY over suggestions to add new content. "Tightening up the homepage so visitors immediately see your top services" beats "add a photo gallery."
+- NEVER suggest "adding contact information," "making it easier to get in touch," "adding a phone number," or any variation. Every business site has contact info. This is lazy filler. Similarly, never suggest adding "social media links," "testimonials," "reviews," "a blog," or other generic features. If you can't find two genuinely specific observations, make both about content quality and presentation.
 
 IMPORTANT — TEXT SCRAPING LIMITATIONS:
 - This text was scraped WITHOUT JavaScript execution. Animated counters and stats that use JavaScript to count up from 0 will appear as "0" in this text even though they display real numbers on the live site. Do NOT flag counters showing "0" as a problem.
@@ -731,11 +734,13 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         # Any remaining custom fields
         known_fields = {
             'context', 'notes', 'research_notes', 'title', 'role', 'job_title',
-            'industry', 'sector', 'company_size', 'employees', 'funding_stage',
-            'funding', 'revenue', 'arr', 'recent_news', 'news', 'recent_launch',
-            'product_launch', 'pain_points', 'challenges', 'linkedin', 'linkedin_url',
-            'twitter', 'twitter_handle', 'referral', 'mutual_connection', 'referred_by',
-            'previous_interaction', 'met_at'
+            'industry', 'sector', 'company', 'company_size', 'employees',
+            'funding_stage', 'funding', 'revenue', 'arr', 'recent_news', 'news',
+            'recent_launch', 'product_launch', 'pain_points', 'challenges',
+            'linkedin', 'linkedin_url', 'twitter', 'twitter_handle', 'referral',
+            'mutual_connection', 'referred_by', 'previous_interaction', 'met_at',
+            'name', 'email', 'website', 'url', 'site', 'website_url',
+            'company_url', 'domain', 'company_domain', 'web',
         }
         other_fields = {k: v for k, v in custom_fields.items() if k.lower() not in known_fields and v}
         if other_fields:
@@ -976,6 +981,11 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
             if json_match:
                 result = json.loads(json_match.group())
                 body = _strip_ai_dashes(result.get('body', resolved_body))
+                # Strip business suffixes (LLC, Inc, etc.) from body too
+                body = re.sub(
+                    r'[,\s]+(LLC|L\.L\.C\.|INC\.?|INCORPORATED|CORP\.?|CORPORATION|LTD\.?|LIMITED|PLLC)\b\.?',
+                    '', body, flags=re.IGNORECASE
+                )
 
                 # Ensure numbered observations aren't smashed into one paragraph.
                 # If "2." appears without a preceding line break or <br>, add spacing.
@@ -986,8 +996,14 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
                 # Ensure "2." starts on its own line
                 body = re.sub(r'(?<!<br>)(?<!<br/>)(?<!<br />)(\s*)(2\.)\s', r'<br><br>\2 ', body)
 
+                subject = _strip_ai_dashes(result.get('subject', resolved_subject))
+                # Strip business suffixes (LLC, Inc, etc.) that may have leaked into the subject
+                subject = re.sub(
+                    r'[,\s]+(LLC|L\.L\.C\.|INC\.?|INCORPORATED|CORP\.?|CORPORATION|LTD\.?|LIMITED|PLLC)\b\.?',
+                    '', subject, flags=re.IGNORECASE
+                )
                 out = {
-                    'subject': _strip_ai_dashes(result.get('subject', resolved_subject)),
+                    'subject': subject,
                     'body': body
                 }
                 if content_warnings:
