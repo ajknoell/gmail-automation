@@ -188,8 +188,7 @@ def _check_website_health(url: str, timeout: int = 10) -> List[str]:
             )
             if copyright_years:
                 newest_year = max(int(y) for y in copyright_years)
-                current_year = _dt.now().year
-                if current_year - newest_year >= 2:
+                if newest_year < 2020:
                     issues.append(
                         f'OUTDATED_COPYRIGHT: The website\'s copyright year is {newest_year} '
                         f'— the site design is likely due for a refresh. This is a design refresh opportunity, not a sign the business is inactive.'
