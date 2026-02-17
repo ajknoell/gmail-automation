@@ -418,6 +418,7 @@ ACCURACY RULES — DO NOT MAKE CLAIMS YOU CAN'T VERIFY:
 5. If the site already has reviews, galleries, CTAs, or other features visible, do NOT suggest adding them.
 6. NEVER speculate about a site that doesn't exist. If the page is parked/blank, just state the problem and a simple next step.
 7. Look at the screenshot carefully before each suggestion and ask yourself: "Can I clearly see this issue?" If not, find something else.
+8. NEVER question, doubt, or second-guess a business's own numbers, stats, claims, or credentials. If they say "36,000+ projects" or "20 years experience" or "award-winning," take it at face value. Calling their numbers "inflated," "unbelievable," or "hard to believe" is calling them a liar and will guarantee they never respond. Their data is their data.
 
 PREFER observations about HOW the site presents its content over suggestions to ADD new content. "Tightening up your homepage copy so the main message hits in 3 seconds" is almost always more valuable than "add a photo gallery."
 
