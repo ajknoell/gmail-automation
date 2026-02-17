@@ -66,6 +66,26 @@ class StepRunner:
                 if not recipient:
                     continue
 
+                # Defensive check: skip if recipient replied or bounced since scheduling
+                has_reply_or_bounce = (
+                    EmailLog.query
+                    .filter_by(campaign_id=campaign_id, recipient_id=sr.recipient_id)
+                    .filter(
+                        db.or_(
+                            EmailLog.replied_at.isnot(None),
+                            EmailLog.bounced_at.isnot(None),
+                        )
+                    )
+                    .first()
+                )
+                if has_reply_or_bounce:
+                    sr.status = 'skipped'
+                    sr.skip_reason = 'replied' if has_reply_or_bounce.replied_at else 'bounced'
+                    step.skipped_count = (step.skipped_count or 0) + 1
+                    db.session.commit()
+                    continue
+
+
                 try:
                     subject = sr.personalized_subject or 'Follow-up'
                     body = sr.personalized_body or ''

@@ -35,6 +35,7 @@ import {
 import AttachmentPicker from '../components/AttachmentPicker';
 import RichTextEditor from '../components/RichTextEditor';
 import SequenceBuilder from '../components/SequenceBuilder';
+import ColdCallModal from '../components/ColdCallModal';
 
 function CampaignDetail() {
   const { id } = useParams();
@@ -54,6 +55,7 @@ function CampaignDetail() {
   const [previewRecipientId, setPreviewRecipientId] = useState(null);
   const [steps, setSteps] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [coldCallRecipientId, setColdCallRecipientId] = useState(null);
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
 
@@ -773,6 +775,7 @@ function CampaignDetail() {
                   {hasSentEmails && <th>Bounced</th>}
                   <th>Preview</th>
                   <th>Send</th>
+                  <th>Call</th>
                   {campaign.status === 'draft' && <th></th>}
                 </tr>
               </thead>
@@ -938,6 +941,16 @@ function CampaignDetail() {
                           {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
                         </button>
                       )}
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setColdCallRecipientId(recipient.id)}
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.85rem' }}
+                        title="Log cold call"
+                      >
+                        &#128222;
+                      </button>
                     </td>
                     {campaign.status === 'draft' && (
                       <td>
@@ -1178,6 +1191,14 @@ function CampaignDetail() {
           </div>
         );
       })()}
+      {coldCallRecipientId && (
+        <ColdCallModal
+          recipientId={coldCallRecipientId}
+          campaignId={parseInt(id)}
+          onClose={() => setColdCallRecipientId(null)}
+          onSaved={() => setColdCallRecipientId(null)}
+        />
+      )}
     </div>
   );
 }
