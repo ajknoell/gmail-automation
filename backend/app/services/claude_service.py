@@ -1086,9 +1086,11 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
                 # 1. Convert any remaining \n to <br> (model may return mixed formats)
                 if '<p' not in body:
                     body = body.replace('\n', '<br>')
-                # 2. Collapse runs of 3+ <br> tags down to 2 (one blank line max)
+                # 2. Strip whitespace between <br> tags so they're adjacent for collapsing
+                body = re.sub(r'(<br\s*/?\s*>)\s+(?=<br)', r'\1', body)
+                # 3. Collapse runs of 3+ <br> tags down to 2 (one blank line max)
                 body = re.sub(r'(<br\s*/?\s*>){3,}', '<br><br>', body)
-                # 3. Ensure "2." starts on its own line if not already preceded by a break
+                # 4. Ensure "2." starts on its own line if not already preceded by a break
                 body = re.sub(r'(?<!<br>)(?<!<br/>)(?<!<br />)(\s*)(2\.)\s', r'<br><br>\2 ', body)
 
                 subject = _strip_ai_dashes(result.get('subject', resolved_subject))
