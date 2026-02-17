@@ -512,7 +512,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
             })
 
             message = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=250,
                 messages=[{
                     "role": "user",
@@ -661,7 +661,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
 
         try:
             message = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model="claude-sonnet-4-5-20250929",
                 max_tokens=250,
                 messages=[{"role": "user", "content": prompt}]
             )
