@@ -345,8 +345,9 @@ PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), fake virus/security warnings or scam popups appearing, real security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
 2. DESIGN & LAYOUT PROBLEMS: These are the most common real issues. Look carefully at the screenshot as an experienced designer would:
    - UNBALANCED LAYOUTS: Sections where one element (like a huge dark photo) dominates while the actual content is small or pushed aside. If a section looks lopsided or awkward, that's a real design issue.
+   - TINY PHOTOS / WRONG RATIO: If the business does visual work (construction, design, landscaping, food, etc.) and their project photos are small thumbnails buried under paragraphs of text, that's backwards. The WORK should be the hero. Big photos, minimal text. "Making your project photos the centerpiece instead of burying them under text would let visitors see your work instantly."
    - STOCK PHOTOS: If the images look generic, posed, or like they came from a photo library, call it out. A real business should show THEIR team, THEIR work, THEIR results. "Those look like stock photos" is a valid, powerful observation.
-   - CONTENT OVERLOAD: Too much text, walls of words, paragraphs that go on forever. If a visitor would feel overwhelmed or not know where to look first, that's a real problem.
+   - TEXT WALLS: Too much text under service cards, too many paragraphs before getting to the point. If text blocks dominate over visuals, the fix is usually "cut the text, grow the photos." One sentence per service is plenty.
    - POOR VISUAL HIERARCHY: Everything looks the same size/weight, nothing stands out, no clear path for the eye to follow. Headers that don't pop, sections that blur together.
    - CLUTTERED LAYOUT: Too many competing sections, banners, widgets, or calls-to-action all fighting for attention.
    - HARD TO SCAN: No bullet points, no short paragraphs, no visual breaks. Visitors scan, they don't read.
@@ -391,11 +392,11 @@ LANGUAGE RULE — NO TECH JARGON:
 - Always describe the VISITOR EXPERIENCE, not the technical cause
 
 TONE:
-- Be DIRECT. Say what a smart friend would say in one sentence, not what a consultant would write in a paragraph.
-- BAD: "Your 'About Us' page leads with this massive dark architectural photo that takes up most of the screen, while your actual content gets pushed down below the fold"
-- GOOD: "Swapping those stock photos for real shots of your team and finished projects would make visitors trust you instantly"
-- Don't describe what you see in detail. Just name the issue and the fix in plain language.
-- One sentence each, MAX 20 words. If it's longer, cut it.
+- Be DIRECT. EXACTLY ONE sentence per observation. Not two, not three. ONE.
+- BAD: "Your homepage has three dense paragraphs before visitors see your services. Moving those project galleries up top would get more people clicking through." (TWO sentences, too wordy)
+- GOOD: "Making your project photos full-size instead of tiny thumbnails would let visitors see your work instantly"
+- Don't describe what you see. Just name the fix and the payoff.
+- STRICTLY one sentence each, MAX 20 words. If it's longer, cut it.
 - Never condescending, but don't sugarcoat either. Honest and helpful.
 - NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead.
 
