@@ -10,7 +10,7 @@ class Campaign(db.Model):
     name = db.Column(db.String(100), nullable=False)
     template_id = db.Column(db.Integer, db.ForeignKey('templates.id'))
     gmail_account_id = db.Column(db.Integer, db.ForeignKey('oauth_tokens.id'))
-    status = db.Column(db.String(20), default='draft')  # draft, running, paused, completed, cancelled
+    status = db.Column(db.String(20), default='draft')  # draft, running, paused, completed, cancelled, sequence_active
     total_recipients = db.Column(db.Integer, default=0)
     sent_count = db.Column(db.Integer, default=0)
     failed_count = db.Column(db.Integer, default=0)
@@ -26,8 +26,11 @@ class Campaign(db.Model):
     recipients = db.relationship('Recipient', backref='campaign', lazy='dynamic', cascade='all, delete-orphan')
     email_logs = db.relationship('EmailLog', backref='campaign', lazy='dynamic', cascade='all, delete-orphan')
     gmail_account = db.relationship('OAuthToken', foreign_keys=[gmail_account_id])
+    steps = db.relationship('CampaignStep', backref='campaign', lazy='dynamic',
+                            cascade='all, delete-orphan',
+                            order_by='CampaignStep.position')
 
-    def to_dict(self, include_template=False):
+    def to_dict(self, include_template=False, include_steps=False):
         data = {
             'id': self.id,
             'name': self.name,
@@ -49,6 +52,8 @@ class Campaign(db.Model):
         }
         if include_template and self.template:
             data['template'] = self.template.to_dict()
+        if include_steps:
+            data['steps'] = [s.to_dict() for s in self.steps.order_by('position').all()]
         return data
 
     def get_attachments(self):

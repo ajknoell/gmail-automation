@@ -1378,6 +1378,139 @@ Return ONLY valid JSON:
             print(f"Meeting followup generation error: {e}")
             raise
 
+    def generate_sequence_followup(
+        self,
+        step_number: int,
+        original_subject: str,
+        conversation_history: list,
+        contact_info: Dict,
+        ai_prompt: str = None,
+        campaign_context: str = None,
+        web_research: str = None,
+        writing_style: Dict = None,
+        learned_insights: Dict = None,
+    ) -> Dict[str, str]:
+        """Generate a follow-up email for a multi-step campaign sequence.
+
+        Takes full conversation history, optional web research, and adjusts
+        tone based on step number (later steps = shorter/more casual).
+        """
+        # Build conversation history block
+        history_block = ""
+        for i, msg in enumerate(conversation_history, 1):
+            history_block += f"\n--- Email #{i} (sent {msg.get('sent_at', 'unknown')}) ---\n"
+            history_block += f"Subject: {msg['subject']}\n"
+            history_block += f"Body: {msg['body']}\n"
+
+        # Build web research block
+        research_block = ""
+        if web_research:
+            research_block = f"""
+WEB RESEARCH (recent information about their company/industry — use this to add VALUE):
+{web_research}
+
+Use this research to mention something timely and relevant — a recent development,
+industry trend, or company news that connects naturally to your follow-up.
+Do NOT dump all the research into the email. Pick ONE relevant detail.
+"""
+
+        # Build writing style instructions
+        style_instructions = ""
+        if writing_style:
+            style_parts = []
+            if writing_style.get('tone'):
+                style_parts.append(f"TONE: {writing_style['tone']}")
+            if writing_style.get('opening_style'):
+                style_parts.append(f"OPENING APPROACH: {writing_style['opening_style']}")
+            if writing_style.get('length'):
+                style_parts.append(f"LENGTH: {writing_style['length']}")
+            if writing_style.get('closing_style'):
+                style_parts.append(f"CLOSING/CTA STYLE: {writing_style['closing_style']}")
+            if writing_style.get('phrases_to_use'):
+                style_parts.append(f"PHRASES/PATTERNS TO USE: {writing_style['phrases_to_use']}")
+            if writing_style.get('phrases_to_avoid'):
+                style_parts.append(f"PHRASES TO AVOID: {writing_style['phrases_to_avoid']}")
+            if style_parts:
+                style_instructions = "WRITER'S PERSONAL STYLE (match this voice exactly):\n" + "\n".join(style_parts)
+
+        # Build data-driven insights block
+        insights_instructions = ""
+        if learned_insights:
+            li_parts = []
+            if learned_insights.get('subject_line_patterns'):
+                li_parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
+            if learned_insights.get('opening_patterns'):
+                li_parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
+            if learned_insights.get('cta_patterns'):
+                li_parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
+            if learned_insights.get('avoid_patterns'):
+                li_parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
+            if li_parts:
+                confidence = learned_insights.get('confidence', 'medium')
+                insights_instructions = (
+                    f"DATA-DRIVEN INSIGHTS (confidence: {confidence}):\n" + "\n".join(li_parts)
+                )
+
+        contact_name = contact_info.get('name') or 'there'
+        contact_company = contact_info.get('company') or 'their company'
+
+        prompt = f"""You are ghostwriting follow-up #{step_number} in a multi-step outreach sequence.
+This is NOT the first time reaching out — there have been {len(conversation_history)} previous email(s) in this thread.
+
+{style_instructions if style_instructions else "Write in a casual, warm, genuine tone."}
+
+{insights_instructions}
+
+PREVIOUS EMAILS IN THIS THREAD:
+{history_block}
+
+ABOUT THEM:
+- Name: {contact_name}
+- Company: {contact_company}
+{research_block}
+{f'CAMPAIGN CONTEXT: {campaign_context}' if campaign_context else ''}
+{f'SPECIAL INSTRUCTIONS: {ai_prompt}' if ai_prompt else ''}
+
+FOLLOW-UP #{step_number} RULES:
+1. This goes in the SAME email thread — do NOT re-introduce yourself or repeat your pitch
+2. Each follow-up must add NEW value — never just "checking in"
+3. Step 2: Light nudge with one new angle or insight
+4. Step 3+: Even shorter, more casual, possibly a simple question
+5. Reference something specific from the research if available
+6. Max 2-3 sentences. Brevity increases with each step.
+7. Never guilt-trip about not replying
+8. No "circling back", "bumping this", "just following up" — find a more natural way
+
+ABSOLUTE RULES:
+- NEVER fabricate facts, meetings, or connections
+- NEVER use tech jargon — write for a business owner
+- Sound human, not automated
+
+Return ONLY valid JSON:
+{{"subject": "Re: {original_subject}", "body": "your follow-up"}}"""
+
+        try:
+            message = self.client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text.strip()
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    'subject': result.get('subject', f'Re: {original_subject}'),
+                    'body': result.get('body', ''),
+                }
+
+            return {'subject': f'Re: {original_subject}', 'body': response_text}
+
+        except Exception as e:
+            print(f"Sequence follow-up generation error: {e}")
+            raise
+
     def generate_followup_email(
         self,
         original_subject: str,
