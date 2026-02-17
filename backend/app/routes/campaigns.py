@@ -366,6 +366,7 @@ def regenerate_recipient_preview(id, recipient_id):
 
     try:
         # Fetch and analyze recipient's website
+        # Pass previous observations so the model picks different angles on regeneration
         from app.services.website_analyzer import WebsiteAnalyzer
         learned_website_insights = _get_learned_website_insights()
         recipient_dict = {
@@ -374,7 +375,17 @@ def regenerate_recipient_preview(id, recipient_id):
             'company': recipient.company,
             'custom_fields': recipient.get_all_context()
         }
-        wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
+        # Extract just the numbered observations from the previous email body
+        previous_observations = None
+        if recipient.personalized_body:
+            import re as _re
+            obs_lines = _re.findall(r'^\s*[12]\.\s*.+', recipient.personalized_body, _re.MULTILINE)
+            if obs_lines:
+                previous_observations = '\n'.join(obs_lines)
+        wa_result = WebsiteAnalyzer.fetch_and_analyze(
+            claude, recipient_dict, learned_website_insights,
+            previous_observations=previous_observations,
+        )
         website_insights = wa_result['analysis'] if wa_result else None
         team_contacts = wa_result.get('team_contacts', []) if wa_result else []
 

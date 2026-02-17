@@ -626,7 +626,7 @@ class WebsiteAnalyzer:
         return cls.url_from_email(recipient.get('email', ''))
 
     @classmethod
-    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None) -> Optional[dict]:
+    def fetch_and_analyze(cls, claude_service, recipient: dict, learned_website_insights: dict = None, previous_observations: str = None) -> Optional[dict]:
         """Fetch recipient's website and generate improvement insights.
 
         Runs health checks first to detect critical issues (SSL errors,
@@ -706,6 +706,7 @@ class WebsiteAnalyzer:
             mobile_screenshot_b64=mobile_screenshot_b64,
             health_issues=health_issues,
             learned_website_insights=learned_website_insights,
+            previous_observations=previous_observations,
         )
         if not analysis:
             return None

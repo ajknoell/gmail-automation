@@ -243,6 +243,7 @@ class ClaudeService:
         mobile_screenshot_b64: str = None,
         health_issues: list = None,
         learned_website_insights: dict = None,
+        previous_observations: str = None,
     ) -> str:
         """Analyze a website and return 2 specific improvement observations for outreach emails.
 
@@ -250,6 +251,9 @@ class ClaudeService:
         observation will address the critical issue.  When a screenshot is
         provided, uses Claude's vision capabilities for accurate visual
         analysis.  Falls back to text-only analysis otherwise.
+
+        When ``previous_observations`` is provided (on regeneration), the
+        model is instructed to find completely different observations.
         """
 
         if screenshot_b64:
@@ -258,11 +262,13 @@ class ClaudeService:
                 mobile_screenshot_b64=mobile_screenshot_b64,
                 health_issues=health_issues,
                 learned_website_insights=learned_website_insights,
+                previous_observations=previous_observations,
             )
         return self._analyze_website_text(
             website_text, company_name, url,
             health_issues=health_issues,
             learned_website_insights=learned_website_insights,
+            previous_observations=previous_observations,
         )
 
     @staticmethod
@@ -307,6 +313,7 @@ class ClaudeService:
         mobile_screenshot_b64: str = None,
         health_issues: list = None,
         learned_website_insights: dict = None,
+        previous_observations: str = None,
     ) -> str:
         """Analyze a website screenshot (with optional supplementary text) via vision."""
 
@@ -350,11 +357,20 @@ critical issue OR a design improvement, depending on severity.
         if mobile_screenshot_b64:
             mobile_note = "\nYou are also seeing a MOBILE SCREENSHOT — compare the desktop and mobile views. If the mobile layout is broken, unusable, or missing key content, that's a strong observation."
 
+        previous_block = ""
+        if previous_observations:
+            previous_block = f"""
+PREVIOUS OBSERVATIONS (the user clicked "Regenerate" because these weren't good enough — you MUST pick completely different observations this time):
+{previous_observations}
+
+DO NOT repeat or rephrase any of the above. Find entirely new issues to highlight.
+"""
+
         prompt = f"""You're a web designer reviewing a potential client's website. You are looking at a SCREENSHOT of their live site — this is exactly what a visitor sees.{mobile_note}
 
 COMPANY: {company_name}
 URL: {url}
-{learned_guidance}{issues_block}{text_supplement}
+{learned_guidance}{issues_block}{text_supplement}{previous_block}
 YOUR TASK: Find 2 opportunities where a small improvement could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email.
 
 PRIORITY ORDER (follow this strictly):
@@ -482,6 +498,7 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         self, website_text: str, company_name: str, url: str,
         health_issues: list = None,
         learned_website_insights: dict = None,
+        previous_observations: str = None,
     ) -> str:
         """Analyze a website from scraped text only (fallback when no screenshot)."""
 
@@ -518,11 +535,21 @@ SCRAPED TEXT (raw HTML text extraction — NOT what a visitor actually sees):
 CRITICAL CONTEXT: This text was scraped from the raw HTML source. You cannot see the actual visual design, layout, or images. Be cautious about suggesting things that may already exist on the site visually but aren't captured in the raw text.
 """
 
+        previous_block = ""
+        if previous_observations:
+            previous_block = (
+                "\nPREVIOUS OBSERVATIONS (the user clicked Regenerate because these "
+                "were not good enough, you MUST pick completely different observations "
+                f"this time):\n{previous_observations}\n\n"
+                "DO NOT repeat or rephrase any of the above. Find entirely new issues "
+                "to highlight.\n"
+            )
+
         prompt = f"""You're a web designer who genuinely wants to help a potential client. Find 2 opportunities where a small improvement to their site could bring them more customers, more trust, or a stronger first impression. These go into a friendly cold outreach email — the goal is to show the VALUE of what better looks like, not to point out what's wrong.
 
 COMPANY: {company_name}
 URL: {url}
-{learned_guidance}{issues_block}{text_block}
+{learned_guidance}{issues_block}{text_block}{previous_block}
 PRIORITY ORDER (follow this strictly):
 1. CRITICAL ISSUES FIRST: Site not showing their actual business (generic/blank page), security warnings scaring visitors away, site not loading at all. If a critical issue was detected above, it MUST be observation #1.
    - PARKED / NOT-CONNECTED / BLANK PAGES: If the text is mostly boilerplate from a hosting provider or domain registrar, keep BOTH observations extremely short and concrete. Do NOT speculate about what the site could look like. Example:
