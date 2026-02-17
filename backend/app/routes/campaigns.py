@@ -274,6 +274,9 @@ def list_recipients(id):
             data['spam_check'] = check_spam_score(
                 r.personalized_subject or '', r.personalized_body
             )
+        # Surface content warnings (stored in error_message during generation)
+        if r.error_message and r.personalized_body:
+            data['content_warnings'] = r.error_message.split(' | ')
         result.append(data)
 
     return jsonify(result)
@@ -389,6 +392,11 @@ def regenerate_recipient_preview(id, recipient_id):
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
         recipient.approved = False  # Reset approval after regeneration
+        # Store content warnings (e.g. missing website insights)
+        if result.get('content_warnings'):
+            recipient.error_message = ' | '.join(result['content_warnings'])
+        else:
+            recipient.error_message = None
         db.session.commit()
 
         resp = recipient.to_dict()
@@ -505,6 +513,11 @@ def generate_preview(id):
                 )
                 recipient.personalized_subject = result.get('subject', campaign.template.subject)
                 recipient.personalized_body = result.get('body', campaign.template.body)
+                # Store content warnings (e.g. missing website insights)
+                if result.get('content_warnings'):
+                    recipient.error_message = ' | '.join(result['content_warnings'])
+                else:
+                    recipient.error_message = None
                 generated += 1
             except Exception as e:
                 # Do NOT set personalized_body on failure — leave the recipient

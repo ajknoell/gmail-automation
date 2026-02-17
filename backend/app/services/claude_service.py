@@ -596,8 +596,9 @@ YOUR RESPONSE MUST BE EXACTLY 2 LINES, NOTHING ELSE:
         # When available: do NOT pre-substitute — let Claude insert them
         # from the WEBSITE OBSERVATIONS prompt section so it can format
         # them naturally within the email.
-        # When not available: remove the placeholder entirely.
+        # When not available: remove the placeholder entirely and flag it.
         has_website_insights = bool(website_insights)
+        template_has_wi_placeholder = '{{website_insights}}' in template_body or '{{ website_insights }}' in template_body
 
         # Track which variables are missing
         missing_vars = []
@@ -723,6 +724,11 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
 {{"subject": "personalized subject line", "body": "personalized email body"}}
 """
 
+        # Build content warnings for the caller
+        content_warnings = []
+        if template_has_wi_placeholder and not has_website_insights:
+            content_warnings.append('Website insights unavailable — observations section removed from email')
+
         try:
             message = self.client.messages.create(
                 model="claude-sonnet-4-5-20250929",
@@ -736,25 +742,34 @@ IMPORTANT: Return ONLY valid JSON in this exact format, nothing else:
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group())
-                return {
+                out = {
                     'subject': _strip_ai_dashes(result.get('subject', resolved_subject)),
                     'body': _strip_ai_dashes(result.get('body', resolved_body))
                 }
+                if content_warnings:
+                    out['content_warnings'] = content_warnings
+                return out
 
             # Fallback if JSON parsing fails — return resolved template (variables filled in)
             print(f"JSON parse failed, returning resolved template. Response was: {response_text[:200]}")
-            return {
+            out = {
                 'subject': resolved_subject,
                 'body': resolved_body
             }
+            if content_warnings:
+                out['content_warnings'] = content_warnings
+            return out
 
         except Exception as e:
             print(f"Claude API error: {e}")
             # Even on error, return the resolved template so variables are filled in
-            return {
+            out = {
                 'subject': resolved_subject,
                 'body': resolved_body
             }
+            if content_warnings:
+                out['content_warnings'] = content_warnings
+            return out
 
     def generate_email(
         self,

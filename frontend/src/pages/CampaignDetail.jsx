@@ -706,6 +706,20 @@ function CampaignDetail() {
                     </td>
                     <td>
                       <span className={`badge badge-${recipient.status}`}>{recipient.status}</span>
+                      {recipient.content_warnings && recipient.content_warnings.length > 0 && (
+                        <span
+                          title={`Content warning:\n${recipient.content_warnings.join('\n')}`}
+                          style={{
+                            display: 'inline-block',
+                            marginLeft: '0.35rem',
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: '#F59E0B',
+                            cursor: 'help',
+                          }}
+                        />
+                      )}
                       {recipient.spam_check && recipient.spam_check.level !== 'low' && (
                         <span
                           title={`Spam risk: ${recipient.spam_check.level} (${recipient.spam_check.score}/100)\n${recipient.spam_check.reasons.join('\n')}`}
@@ -930,6 +944,27 @@ function CampaignDetail() {
                     {recipient.approved && <span style={{ color: '#10B981', marginLeft: '0.5rem', fontSize: '0.75rem' }}>Approved</span>}
                   </div>
                 </div>
+
+                {/* Content warnings (e.g. missing website insights) */}
+                {recipient.content_warnings && recipient.content_warnings.length > 0 && (
+                  <div style={{
+                    padding: '0.75rem 1rem',
+                    background: '#FFFBEB',
+                    border: '1px solid #FDE68A',
+                    borderRadius: '0.5rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.85rem',
+                  }}>
+                    <div style={{ fontWeight: 600, color: '#D97706', marginBottom: '0.25rem' }}>
+                      Content Warning
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#6B7280' }}>
+                      {recipient.content_warnings.map((warning, i) => (
+                        <li key={i}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Spam warning */}
                 {recipient.spam_check && recipient.spam_check.level !== 'low' && (
