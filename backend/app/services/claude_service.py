@@ -4,6 +4,18 @@ import json
 import re
 
 
+def _strip_business_suffixes(name: str) -> str:
+    """Remove legal/business suffixes like LLC, Inc., Corp, etc."""
+    # Remove trailing suffixes (with optional commas, dots, spaces)
+    name = re.sub(
+        r'[,\s]+(LLC|L\.L\.C\.|INC\.?|INCORPORATED|CORP\.?|CORPORATION|LTD\.?|LIMITED|LP|L\.P\.|PLLC|P\.?C\.?|DBA)\s*$',
+        '', name, flags=re.IGNORECASE
+    ).strip()
+    # Clean up any trailing comma or period left behind
+    name = name.rstrip(',. ')
+    return name
+
+
 def clean_company_name(company: str) -> str:
     """Extract a human-readable company name from a URL or domain.
 
@@ -11,7 +23,8 @@ def clean_company_name(company: str) -> str:
         'blglass.com'                  -> 'Blglass'
         'https://www.acme-corp.com'    -> 'Acme Corp'
         'blue-sky.io/about'            -> 'Blue Sky'
-        'Acme Inc.'                    -> 'Acme Inc.' (unchanged, not a URL)
+        'Acme Inc.'                    -> 'Acme'
+        'VE BUILDERS, LLC'             -> 'VE BUILDERS'
     """
     if not company:
         return company
@@ -34,15 +47,15 @@ def clean_company_name(company: str) -> str:
     if domain_match:
         cleaned = domain_match.group(1)
     elif cleaned == company.strip():
-        # Nothing was stripped, not a URL — return as-is
-        return company
+        # Nothing was stripped, not a URL — just strip business suffixes
+        return _strip_business_suffixes(company.strip())
 
     # Make the extracted name readable:
     # Insert spaces before capitals in camelCase (e.g. "blueGlass" -> "blue Glass")
     cleaned = re.sub(r'([a-z])([A-Z])', r'\1 \2', cleaned)
     # Replace hyphens and underscores with spaces
     cleaned = cleaned.replace('-', ' ').replace('_', ' ')
-    return cleaned.title()
+    return _strip_business_suffixes(cleaned.title())
 
 
 def _looks_like_company_name(name: str) -> bool:
