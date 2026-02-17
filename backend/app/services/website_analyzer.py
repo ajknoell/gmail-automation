@@ -11,21 +11,21 @@ class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self._parts = []
-        self._skip = False
-        self._skip_tags = {'script', 'style', 'noscript', 'svg', 'head'}
+        self._skip_depth = 0
+        self._skip_tags = {'script', 'style', 'noscript', 'svg', 'head', 'nav'}
 
     def handle_starttag(self, tag, attrs):
         if tag in self._skip_tags:
-            self._skip = True
+            self._skip_depth += 1
         if tag in ('br', 'p', 'div', 'h1', 'h2', 'h3', 'h4', 'li', 'tr'):
             self._parts.append('\n')
 
     def handle_endtag(self, tag):
-        if tag in self._skip_tags:
-            self._skip = False
+        if tag in self._skip_tags and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data):
-        if not self._skip:
+        if self._skip_depth == 0:
             self._parts.append(data)
 
     def get_text(self):

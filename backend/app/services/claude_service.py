@@ -316,10 +316,11 @@ class ClaudeService:
         if website_text:
             trimmed = website_text[:3000]
             text_supplement = f"""
-SUPPLEMENTARY TEXT (scraped from the HTML source — use ONLY to catch details
-that might not be visible in the screenshot, such as meta descriptions or
+SUPPLEMENTARY TEXT (scraped from the HTML source WITHOUT JavaScript — use ONLY
+to catch details not visible in the screenshot, such as meta descriptions or
 hidden content.  The screenshot is the primary source of truth for what
-visitors actually see):
+visitors actually see.  Animated counters/stats may show "0" in this text
+even though the screenshot shows real numbers; always trust the screenshot):
 {trimmed}
 """
 
@@ -543,9 +544,11 @@ IMPORTANT — AVOID FALSE SUGGESTIONS:
 - If you're unsure whether something exists on the site, do NOT suggest adding it. Find a different suggestion you're confident about.
 - PREFER observations about content QUALITY over suggestions to add new content. "Tightening up the homepage so visitors immediately see your top services" beats "add a photo gallery."
 
+IMPORTANT — TEXT SCRAPING LIMITATIONS:
+- This text was scraped WITHOUT JavaScript execution. Animated counters and stats that use JavaScript to count up from 0 will appear as "0" in this text even though they display real numbers on the live site. Do NOT flag counters showing "0" as a problem.
+- Navigation menus have been stripped, but some nav labels may still appear in the text. Do not treat stray menu labels as page content or filing decisions.
+
 RED FLAGS THAT THE SITE IS BROKEN/NON-FUNCTIONAL (check these FIRST, even without health-check data):
-- Counters or stats showing "0" — means the JavaScript animations never fire, so the page isn't rendering properly
-- A jumble of navigation labels, headings, and body text all mashed together with no clear page structure — means the layout isn't loading
 - Content that reads like a template dump (every section present but no visual hierarchy) — the site framework exists but isn't working
 - If you see these signs, the #1 issue is: the site isn't loading properly for visitors. Frame it helpfully, not harshly.
 
