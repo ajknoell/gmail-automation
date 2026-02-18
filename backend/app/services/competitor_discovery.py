@@ -70,8 +70,8 @@ class CompetitorService:
         query = re.sub(r'\{\{\w+\}\}', '', query).strip()
         return query
 
-    # Words/phrases that indicate a result title is a directory page, not a business
-    _SKIP_TITLE_PATTERNS = re.compile(
+    # Words/phrases that indicate a result is from a directory, not an actual business website
+    _DIRECTORY_PATTERNS = re.compile(
         r'\b(top \d+|best \d+|\d+ best|yelp|angi|homeadvisor|thumbtack|bbb|'
         r'better business|yellow pages|mapquest|nextdoor|bark\.com|houzz|'
         r'porch\.com|expertise\.com|google maps)\b',
@@ -89,44 +89,52 @@ class CompetitorService:
     def _extract_from_results(
         self, search_results: dict, company: str, max_count: int
     ) -> List[str]:
-        """Extract business names from Tavily answer + result titles. No LLM needed."""
+        """Extract business names from Tavily answer + result titles.
+
+        Priority order:
+        1. Tavily answer field (often the best summary)
+        2. Organic result titles (actual business websites)
+        3. Directory result titles (Yelp, Angi, etc.) as fallback
+        """
         company_lower = (company or '').lower().strip()
         seen = set()
-        names = []
 
         # 1) Parse the answer field — Tavily often lists businesses by name
+        answer_names = []
         answer = search_results.get('answer', '')
         if answer:
             # Numbered lists: "1. Smith Electric" or "1) Smith Electric"
             for m in re.finditer(r'\d+[.)]\s*\*{0,2}([A-Z][A-Za-z0-9\s&.\'-]+)', answer):
-                names.append(m.group(1).strip().rstrip('.'))
+                answer_names.append(m.group(1).strip().rstrip('.'))
             # Bold names: **Smith Electric**
             for m in re.finditer(r'\*\*([A-Z][A-Za-z0-9\s&.\'-]+?)\*\*', answer):
-                names.append(m.group(1).strip())
+                answer_names.append(m.group(1).strip())
 
-        # 2) Extract from result titles — these often ARE the business name
+        # 2) Split result titles into organic vs directory
+        organic_names = []
+        directory_names = []
         for r in search_results.get('results', []):
             title = r.get('title', '').strip()
             if not title:
                 continue
-            # Skip directory/aggregator pages
-            if self._SKIP_TITLE_PATTERNS.search(title):
-                continue
             # Strip trailing site name / metadata
             cleaned = self._TITLE_SUFFIXES.sub('', title).strip()
-            if cleaned and len(cleaned) > 2:
-                names.append(cleaned)
+            if not cleaned or len(cleaned) <= 2:
+                continue
+            if self._DIRECTORY_PATTERNS.search(title):
+                directory_names.append(cleaned)
+            else:
+                organic_names.append(cleaned)
 
-        # Dedupe and filter
+        # 3) Merge in priority order: answer first, then organic, then directory fallback
         result = []
-        for name in names:
+        for name in answer_names + organic_names + directory_names:
             name = name.strip().rstrip('.')
             key = name.lower()
             if key in seen:
                 continue
             if company_lower and company_lower in key:
                 continue
-            # Skip if too generic (single word under 4 chars) or too long
             if len(name) < 3 or len(name) > 60:
                 continue
             seen.add(key)
