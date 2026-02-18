@@ -43,8 +43,8 @@ class CompetitorService:
 
         results = self.web_search.search(
             query=query,
-            max_results=8,
-            search_depth='basic',
+            max_results=10,
+            search_depth='advanced',
             include_answer=True,
         )
 
@@ -257,16 +257,17 @@ class CompetitorService:
             import anthropic
             client = anthropic.Anthropic(api_key=self.api_key)
 
-            # Build a concise text block from the search results
+            # Build a concise text block from the search results — include URLs
             parts = []
             answer = search_results.get('answer', '')
             if answer:
                 parts.append(f"Search summary: {answer[:800]}")
-            for r in search_results.get('results', [])[:6]:
+            for r in search_results.get('results', [])[:8]:
                 title = r.get('title', '')
+                url = r.get('url', '')
                 content = r.get('content', '')[:200]
                 if title:
-                    parts.append(f"- {title}: {content}")
+                    parts.append(f"- {title} ({url}): {content}")
             text = '\n'.join(parts)
 
             response = client.messages.create(
@@ -275,16 +276,24 @@ class CompetitorService:
                 messages=[{
                     'role': 'user',
                     'content': (
-                        f"I searched for: \"{search_query}\"\n\n"
-                        f"From the results below, extract ONLY the names of real local "
-                        f"businesses that match this search (i.e. they are the type of "
-                        f"business someone searching for \"{search_query}\" would want to hire). "
+                        f"I searched Google for: \"{search_query}\"\n\n"
+                        f"From these search results, I need the names of real, local "
+                        f"businesses that someone would hire when searching for "
+                        f"\"{search_query}\". These should be actual companies that "
+                        f"DO this type of work — not companies in adjacent industries.\n\n"
+                        f"For example, if the search is for 'electricians in Springfield', "
+                        f"I want actual electrician companies like 'Joe's Electric' or "
+                        f"'Springfield Electrical Services' — NOT energy companies, lighting "
+                        f"companies, solar companies, or general contractors.\n\n"
                         f"Return a JSON array of business name strings, max {max_count}.\n\n"
                         f"RULES:\n"
                         f"- Exclude '{company}' and any variation of it\n"
-                        f"- ONLY include businesses that match the search intent\n"
-                        f"- Exclude directories, review sites, comparison pages, articles\n"
-                        f"- Exclude government agencies, schools, journals\n"
+                        f"- ONLY include businesses whose primary service matches the search\n"
+                        f"- Exclude companies in adjacent/related industries that don't do this exact work\n"
+                        f"- Exclude directories (Yelp, Angi, HomeAdvisor, etc.)\n"
+                        f"- Exclude review sites, comparison pages, 'Top 10' articles\n"
+                        f"- Exclude government agencies, schools, journals, PDFs\n"
+                        f"- Look at the URL — real local businesses have their own website domains\n"
                         f"- If no matching businesses found, return []\n\n"
                         f"RESULTS:\n{text}"
                     ),
