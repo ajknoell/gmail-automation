@@ -591,9 +591,15 @@ def _substitute_template_variables(text, recipient):
 
     def replace_var(match):
         key = match.group(1)
-        return variables.get(key, match.group(0))
+        # Support fallback syntax: {{city|state}} tries city first, then state
+        for part in key.split('|'):
+            part = part.strip()
+            val = variables.get(part, '')
+            if val:
+                return val
+        return match.group(0)
 
-    return re.sub(r'\{\{(\w+)\}\}', replace_var, text)
+    return re.sub(r'\{\{([\w| ]+)\}\}', replace_var, text)
 
 
 @campaigns_bp.route('/<int:id>/generate-preview', methods=['POST'])

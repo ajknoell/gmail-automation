@@ -898,21 +898,24 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         # Replace {{variable}} placeholders in template
         import re as _re
         def _replace_var(match):
-            var_name = match.group(1).strip()
-            # website_insights: pre-substitute directly when available
-            if var_name == 'website_insights':
-                if has_website_insights:
-                    return website_insights
-                return ''
-            val = variable_map.get(var_name)
-            if val is not None and val != '':
-                return val
+            raw = match.group(1).strip()
+            # Support fallback syntax: {{city|state}} tries city first, then state
+            for part in raw.split('|'):
+                var_name = part.strip()
+                # website_insights: pre-substitute directly when available
+                if var_name == 'website_insights':
+                    if has_website_insights:
+                        return website_insights
+                    continue
+                val = variable_map.get(var_name)
+                if val is not None and val != '':
+                    return val
             # For any truly missing variable, use empty string —
             # never insert markers that Claude might echo
             return ''
 
-        resolved_subject = _re.sub(r'\{\{(\s*\w+\s*)\}\}', _replace_var, template_subject)
-        resolved_body = _re.sub(r'\{\{(\s*\w+\s*)\}\}', _replace_var, template_body)
+        resolved_subject = _re.sub(r'\{\{([\s\w|]+)\}\}', _replace_var, template_subject)
+        resolved_body = _re.sub(r'\{\{([\s\w|]+)\}\}', _replace_var, template_body)
 
         # Clean up empty lines left by removed placeholders
         resolved_body = _re.sub(r'\n\s*\n\s*\n', '\n\n', resolved_body)

@@ -646,7 +646,8 @@ function Templates() {
                         );
                       })}
                       <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginTop: '0.25rem', borderTop: '1px solid #E5E7EB', paddingTop: '0.5rem' }}>
-                        You can also use any custom CSV column as a variable: {'{{your_column_name}}'}
+                        You can also use any custom CSV column as a variable: {'{{your_column_name}}'}<br/>
+                        Use fallbacks with <span style={{ fontFamily: 'monospace' }}>{'{{city|state}}'}</span> — tries city first, falls back to state if empty.
                       </div>
                     </div>
                   )}
