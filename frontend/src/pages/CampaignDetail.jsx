@@ -843,29 +843,57 @@ function CampaignDetail() {
 
           {campaign.status === 'draft' && (
             <div style={{ width: '100%', marginTop: '0.5rem' }}>
-              <details>
-                <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: '#374151', fontWeight: 500 }}>
-                  Competitor Discovery {campaign.competitor_search_query ? '(enabled)' : ''}
-                </summary>
-                <div style={{ marginTop: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: !!campaign.competitor_search_query ? '0.5rem' : 0 }}>
+                <label style={{ position: 'relative', display: 'inline-block', width: '36px', height: '20px', flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={!!campaign.competitor_search_query}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        updateCampaign(id, { competitor_search_query: '{{industry}} in {{city}} {{state}}' }).then(loadData);
+                      } else {
+                        updateCampaign(id, { competitor_search_query: null }).then(loadData);
+                      }
+                    }}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span style={{
+                    position: 'absolute', cursor: 'pointer', inset: 0, borderRadius: '10px',
+                    backgroundColor: campaign.competitor_search_query ? '#10B981' : '#D1D5DB',
+                    transition: 'background-color 0.2s',
+                  }}>
+                    <span style={{
+                      position: 'absolute', height: '16px', width: '16px', left: campaign.competitor_search_query ? '18px' : '2px',
+                      bottom: '2px', backgroundColor: 'white', borderRadius: '50%',
+                      transition: 'left 0.2s',
+                    }} />
+                  </span>
+                </label>
+                <span style={{ fontSize: '0.85rem', color: '#374151', fontWeight: 500 }}>Competitor Discovery</span>
+              </div>
+              {!!campaign.competitor_search_query && (
+                <div>
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. {{company}} top competitors {{industry}}"
+                    placeholder="e.g. {{industry}} in {{city}} {{state}}"
                     defaultValue={campaign.competitor_search_query || ''}
+                    key={campaign.competitor_search_query}
                     onBlur={(e) => {
-                      const val = e.target.value.trim() || null;
-                      if (val !== (campaign.competitor_search_query || null)) {
+                      const val = e.target.value.trim();
+                      if (!val) {
+                        updateCampaign(id, { competitor_search_query: null }).then(loadData);
+                      } else if (val !== campaign.competitor_search_query) {
                         updateCampaign(id, { competitor_search_query: val }).then(loadData);
                       }
                     }}
                     style={{ width: '100%', marginBottom: '0.25rem' }}
                   />
                   <span style={{ fontSize: '0.7rem', color: '#9CA3AF' }}>
-                    Uses Tavily web search. Available as {'{{competitor1}}'}, {'{{competitor2}}'}, or {'{{competitors}}'} in templates. Leave blank to disable.
+                    Searches the web and pulls the top businesses that show up, excluding the target company. Use {'{{competitor1}}'}, {'{{competitor2}}'}, or {'{{competitors}}'} in your template. Supports any CSV variable like {'{{city}}'}, {'{{state}}'}, {'{{industry}}'}.
                   </span>
                 </div>
-              </details>
+              )}
             </div>
           )}
 

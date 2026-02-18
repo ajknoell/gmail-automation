@@ -10,9 +10,9 @@ _CACHE_TTL = 600  # 10 minutes
 
 
 class CompetitorService:
-    """Discover competitors for a company using Tavily web search."""
+    """Discover competitors by searching for local businesses via Tavily."""
 
-    DEFAULT_QUERY = '{{company}} top competitors {{industry}}'
+    DEFAULT_QUERY = '{{industry}} in {{city}} {{state}}'
 
     def __init__(self, web_search_service, claude_service=None):
         self.web_search = web_search_service
@@ -25,27 +25,29 @@ class CompetitorService:
         industry: str = '',
         search_query: str = None,
         max_competitors: int = 5,
+        custom_fields: dict = None,
     ) -> List[str]:
-        """Find competitors for a company. Returns list of company names."""
-        if not company:
+        """Search for businesses in the same space and return names excluding the target company."""
+        query_template = search_query or self.DEFAULT_QUERY
+        query = self._build_query(query_template, company, industry, custom_fields)
+
+        if not query.strip():
             return []
 
-        query_template = search_query or self.DEFAULT_QUERY
-        cache_key = self._cache_key(domain or company, query_template)
+        cache_key = self._cache_key(query)
 
         cached = _competitor_cache.get(cache_key)
         if cached and (time.time() - cached['ts']) < _CACHE_TTL:
             return cached['competitors'][:max_competitors]
 
-        query = self._build_query(query_template, company, industry)
         results = self.web_search.search(
             query=query,
-            max_results=5,
+            max_results=8,
             search_depth='basic',
             include_answer=True,
         )
 
-        competitors = self._extract_competitor_names(results, company, max_competitors)
+        competitors = self._extract_business_names(results, company, max_competitors)
 
         _competitor_cache[cache_key] = {
             'competitors': competitors,
@@ -54,14 +56,22 @@ class CompetitorService:
 
         return competitors
 
-    def _build_query(self, template: str, company: str, industry: str) -> str:
+    def _build_query(self, template: str, company: str, industry: str, custom_fields: dict = None) -> str:
+        """Substitute all variables in the query template."""
         query = template
         query = query.replace('{{company}}', company or '')
         query = query.replace('{{industry}}', industry or '')
+        # Substitute any recipient custom field: {{city}}, {{state}}, {{zip}}, etc.
+        if custom_fields:
+            for key, val in custom_fields.items():
+                placeholder = '{{' + key + '}}'
+                if placeholder in query:
+                    query = query.replace(placeholder, str(val) if val else '')
+        # Remove any remaining unresolved placeholders
         query = re.sub(r'\{\{\w+\}\}', '', query).strip()
         return query
 
-    def _extract_competitor_names(
+    def _extract_business_names(
         self, search_results: dict, company: str, max_count: int
     ) -> List[str]:
         if self.claude:
@@ -75,15 +85,21 @@ class CompetitorService:
         self, search_results: dict, company: str, max_count: int
     ) -> List[str]:
         from app.services.web_search import WebSearchService
-        context = WebSearchService.format_for_prompt(search_results, max_chars=1500)
+        context = WebSearchService.format_for_prompt(search_results, max_chars=2000)
         if not context.strip():
             return []
 
+        company_lower = (company or '').lower()
+        exclude_note = f' Do not include "{company}" or any variation of it.' if company else ''
+
         prompt = (
-            f'From the search results below, extract up to {max_count} competitor '
-            f'company names for "{company}". Return ONLY a JSON array of strings, '
-            f'e.g. ["Acme Corp", "FooBar Inc"]. Do not include "{company}" itself. '
-            f'If no competitors are found, return [].\n\n'
+            f'From the search results below, extract up to {max_count} real business '
+            f'or company names that appear as local competitors or similar businesses.{exclude_note}\n\n'
+            f'Rules:\n'
+            f'- Return ONLY a JSON array of strings, e.g. ["Smith Electric", "ABC Plumbing"]\n'
+            f'- Extract actual business names, not generic terms or website names\n'
+            f'- Prefer businesses that appear in listings, directories, or review sites\n'
+            f'- If no business names are found, return []\n\n'
             f'Search results:\n{context}'
         )
 
@@ -99,9 +115,18 @@ class CompetitorService:
             text = re.sub(r'^```\w*\n?', '', text)
             text = re.sub(r'\n?```$', '', text)
             text = text.strip()
-        competitors = json.loads(text)
-        if isinstance(competitors, list):
-            return [str(c).strip() for c in competitors if c][:max_count]
+        names = json.loads(text)
+        if isinstance(names, list):
+            # Filter out the target company
+            filtered = []
+            for name in names:
+                name_str = str(name).strip()
+                if not name_str:
+                    continue
+                if company_lower and company_lower in name_str.lower():
+                    continue
+                filtered.append(name_str)
+            return filtered[:max_count]
         return []
 
     def _extract_heuristic(
@@ -110,18 +135,18 @@ class CompetitorService:
         answer = search_results.get('answer', '')
         if not answer:
             return []
+        company_lower = (company or '').lower()
         # Look for numbered lists: "1. CompanyName" or "1) CompanyName"
-        numbered = re.findall(r'\d+[.)]\s*([A-Z][A-Za-z0-9\s&.]+)', answer)
+        numbered = re.findall(r'\d+[.)]\s*([A-Z][A-Za-z0-9\s&.\'-]+)', answer)
         if numbered:
             names = [n.strip().rstrip('.') for n in numbered
-                     if company.lower() not in n.lower()]
+                     if not company_lower or company_lower not in n.lower()]
             return names[:max_count]
         return []
 
     @staticmethod
-    def _cache_key(domain: str, query_template: str) -> str:
-        raw = f'{domain.lower()}|{query_template}'
-        return hashlib.md5(raw.encode()).hexdigest()
+    def _cache_key(query: str) -> str:
+        return hashlib.md5(query.lower().encode()).hexdigest()
 
     @staticmethod
     def build_variable_map(competitors: List[str]) -> Dict[str, str]:

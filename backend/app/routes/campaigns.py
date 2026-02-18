@@ -553,6 +553,7 @@ def regenerate_recipient_preview(id, recipient_id):
                     domain=(wa_result.get('url') if wa_result else '') or recipient.email or '',
                     industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
                     search_query=campaign.competitor_search_query,
+                    custom_fields=custom_fields,
                 )
 
         result = claude.personalize_email(
@@ -675,7 +676,6 @@ def generate_preview(id):
 
         # Competitor discovery service (opt-in per campaign)
         competitor_service = None
-        competitor_cache = {}
         if campaign.competitor_search_query:
             tavily_key = Settings.get('tavily_api_key')
             if tavily_key:
@@ -709,21 +709,17 @@ def generate_preview(id):
                 if wa_result:
                     _log_website_analysis(g.workspace_id, recipient.id, wa_result)
 
-                # Competitor discovery (cached per domain)
+                # Competitor discovery (cached per resolved query)
                 competitors = []
                 if competitor_service:
-                    comp_key = cache_key or recipient.email or ''
-                    if comp_key in competitor_cache:
-                        competitors = competitor_cache[comp_key]
-                    else:
-                        custom_fields = recipient_dict.get('custom_fields', {})
-                        competitors = competitor_service.discover_competitors(
-                            company=recipient_dict.get('company', ''),
-                            domain=comp_key,
-                            industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
-                            search_query=campaign.competitor_search_query,
-                        )
-                        competitor_cache[comp_key] = competitors
+                    custom_fields = recipient_dict.get('custom_fields', {})
+                    competitors = competitor_service.discover_competitors(
+                        company=recipient_dict.get('company', ''),
+                        domain=cache_key or recipient.email or '',
+                        industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
+                        search_query=campaign.competitor_search_query,
+                        custom_fields=custom_fields,
+                    )
 
                 result = claude.personalize_email(
                     template_subject=campaign.template.subject,
@@ -786,6 +782,7 @@ def generate_preview(id):
                         domain=comp_key,
                         industry=cf.get('industry') or cf.get('sector', ''),
                         search_query=campaign.competitor_search_query,
+                        custom_fields=cf,
                     )
                 comps = non_ai_comp_cache.get(comp_key, [])
                 if comps:
