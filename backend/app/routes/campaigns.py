@@ -542,15 +542,10 @@ def regenerate_recipient_preview(id, recipient_id):
         # Competitor discovery
         competitors = []
         if campaign.competitor_search_query:
-            from app.services.competitor_discovery import CompetitorService
-            tavily_key = Settings.get('tavily_api_key')
             google_places_key = Settings.get('google_places_api_key')
-            web_search = None
-            if tavily_key:
-                from app.services.web_search import WebSearchService
-                web_search = WebSearchService(tavily_key)
-            if google_places_key or web_search:
-                comp_svc = CompetitorService(web_search, api_key, google_places_api_key=google_places_key)
+            if google_places_key:
+                from app.services.competitor_discovery import CompetitorService
+                comp_svc = CompetitorService(google_places_api_key=google_places_key)
                 custom_fields = recipient_dict.get('custom_fields', {})
                 competitors = comp_svc.discover_competitors(
                     company=recipient_dict.get('company', ''),
@@ -681,15 +676,10 @@ def generate_preview(id):
         # Competitor discovery service (opt-in per campaign)
         competitor_service = None
         if campaign.competitor_search_query:
-            from app.services.competitor_discovery import CompetitorService
-            tavily_key = Settings.get('tavily_api_key')
             google_places_key = Settings.get('google_places_api_key')
-            web_search = None
-            if tavily_key:
-                from app.services.web_search import WebSearchService
-                web_search = WebSearchService(tavily_key)
-            if google_places_key or web_search:
-                competitor_service = CompetitorService(web_search, api_key, google_places_api_key=google_places_key)
+            if google_places_key:
+                from app.services.competitor_discovery import CompetitorService
+                competitor_service = CompetitorService(google_places_api_key=google_places_key)
 
         for recipient in recipients:
             try:
@@ -769,16 +759,10 @@ def generate_preview(id):
         non_ai_comp_service = None
         non_ai_comp_cache = {}
         if campaign.competitor_search_query:
-            from app.services.competitor_discovery import CompetitorService
-            tavily_key = Settings.get('tavily_api_key')
             google_places_key = Settings.get('google_places_api_key')
-            anthropic_key = Settings.get('anthropic_api_key')
-            web_search = None
-            if tavily_key:
-                from app.services.web_search import WebSearchService
-                web_search = WebSearchService(tavily_key)
-            if google_places_key or web_search:
-                non_ai_comp_service = CompetitorService(web_search, anthropic_key, google_places_api_key=google_places_key)
+            if google_places_key:
+                from app.services.competitor_discovery import CompetitorService
+                non_ai_comp_service = CompetitorService(google_places_api_key=google_places_key)
 
         for recipient in recipients:
             extra_vars = None
