@@ -77,6 +77,22 @@ class CompetitorService:
         r'porch\.com|expertise\.com|google maps)\b',
         re.IGNORECASE,
     )
+    # Results that should be completely excluded — not businesses at all
+    _JUNK_TITLE_PATTERNS = re.compile(
+        r'\b(\.gov|government|department of|city of|county of|state of|'
+        r'municipality|public records|vendor list|dod |'
+        r'\.pdf|report|filing|permit|license lookup|registry|'
+        r'\.edu|university|college|school district|'
+        r'wikipedia|wiki|how to|what is|salary|job posting|careers at|'
+        r'news|article|blog post)\b',
+        re.IGNORECASE,
+    )
+    # URL patterns for non-business sites
+    _JUNK_URL_PATTERNS = re.compile(
+        r'\.(gov|edu|mil)(/|$)|\.pdf($|\?)|/wiki/|wikipedia\.org|'
+        r'indeed\.com|glassdoor|salary\.com|reddit\.com|quora\.com',
+        re.IGNORECASE,
+    )
     # Suffixes commonly appended to business names in search titles
     _TITLE_SUFFIXES = re.compile(
         r'\s*[-|–—:]\s*(yelp|reviews|ratings|angi|homeadvisor|thumbtack|'
@@ -95,6 +111,8 @@ class CompetitorService:
         1. Tavily answer field (often the best summary)
         2. Organic result titles (actual business websites)
         3. Directory result titles (Yelp, Angi, etc.) as fallback
+
+        Skips government, educational, PDF, and other non-business results entirely.
         """
         company_lower = (company or '').lower().strip()
         seen = set()
@@ -110,12 +128,18 @@ class CompetitorService:
             for m in re.finditer(r'\*\*([A-Z][A-Za-z0-9\s&.\'-]+?)\*\*', answer):
                 answer_names.append(m.group(1).strip())
 
-        # 2) Split result titles into organic vs directory
+        # 2) Split result titles into organic vs directory (skip junk entirely)
         organic_names = []
         directory_names = []
         for r in search_results.get('results', []):
             title = r.get('title', '').strip()
+            url = r.get('url', '')
             if not title:
+                continue
+            # Skip government, educational, PDF, and other non-business results
+            if self._JUNK_TITLE_PATTERNS.search(title):
+                continue
+            if url and self._JUNK_URL_PATTERNS.search(url):
                 continue
             # Strip trailing site name / metadata
             cleaned = self._TITLE_SUFFIXES.sub('', title).strip()
@@ -136,6 +160,9 @@ class CompetitorService:
             if company_lower and company_lower in key:
                 continue
             if len(name) < 3 or len(name) > 60:
+                continue
+            # Skip names that look institutional/governmental
+            if self._JUNK_TITLE_PATTERNS.search(name):
                 continue
             seen.add(key)
             result.append(name)
@@ -169,10 +196,12 @@ class CompetitorService:
         names = ', '.join(competitors)
         target = company or "the recipient's company"
         return (
-            f'KNOWN COMPETITORS: The following companies compete with '
+            f'KNOWN COMPETITORS: These local businesses compete with '
             f'{target}: {names}. '
-            f'If the email template references competitors by variable (e.g. '
-            f'{{{{competitor1}}}}), those have already been substituted. '
-            f'You may also naturally reference these competitors if it adds '
-            f'value to the email.'
+            f'Competitor variables like {{{{competitor1}}}} have already been '
+            f'substituted in the template. '
+            f'ONLY use competitor names that appear in this list. '
+            f'Do NOT make up competitors, reference search results, mention '
+            f'PDFs, government listings, or describe what "shows up on Google." '
+            f'If the template references competitors, those are already filled in.'
         )
