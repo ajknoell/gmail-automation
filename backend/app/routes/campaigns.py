@@ -4,7 +4,7 @@ from app.models import Campaign, Recipient, Template, EmailLog, Settings, OAuthT
 from app.models.campaign_step import CampaignStep
 from app.models.step_recipient import StepRecipient
 from app.models.settings import WorkspaceSettings
-from app.services.csv_parser import parse_file, detect_field_mapping
+from app.services.csv_parser import parse_file, detect_field_mapping, detect_address_column, parse_address
 from app.services.claude_service import ClaudeService, clean_company_name, _looks_like_company_name, resolve_recipient_fields
 from app.services.campaign_runner import CampaignRunner
 from app.services.spam_checker import check_spam_score
@@ -147,6 +147,9 @@ def upload_recipients(id):
         if not rows:
             return jsonify({'error': 'File contains no data rows'}), 400
 
+        # Detect address column for auto-splitting into street/city/state/zip
+        address_col = detect_address_column(headers)
+
         # Build map of existing emails to recipient objects for duplicate detection
         existing_recipients = {
             r.email.lower(): r
@@ -168,6 +171,13 @@ def upload_recipients(id):
             company = row.get(mapping.get('company', ''), '')
             custom = {k: v for k, v in row.items()
                      if k not in [mapping.get('email'), mapping.get('name'), mapping.get('company')]}
+
+            # Auto-split address column into street/city/state/zip
+            if address_col and address_col in custom:
+                addr_parts = parse_address(custom[address_col])
+                for field in ('street', 'city', 'state', 'zip'):
+                    if field in addr_parts and field not in custom:
+                        custom[field] = addr_parts[field]
 
             existing = existing_recipients.get(email.lower())
             if existing:

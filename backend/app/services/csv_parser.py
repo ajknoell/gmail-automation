@@ -1,6 +1,7 @@
 import csv
 import io
-from typing import List, Dict, Tuple
+import re
+from typing import List, Dict, Tuple, Optional
 
 def parse_csv(file_content: bytes) -> Tuple[List[str], List[Dict]]:
     """Parse CSV file and return headers and rows."""
@@ -84,6 +85,110 @@ def detect_field_mapping(headers: List[str]) -> Dict[str, str]:
                 mapping['company'] = header
 
     return mapping
+
+US_STATES = {
+    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC',
+}
+
+_ADDRESS_PATTERNS = ['address', 'business_address', 'street_address', 'mailing_address', 'location']
+
+
+def detect_address_column(headers: List[str]) -> Optional[str]:
+    """Detect a column that contains a full address."""
+    for header in headers:
+        lower = header.lower().strip().replace('-', '_').replace(' ', '_')
+        if any(p == lower or p in lower for p in _ADDRESS_PATTERNS):
+            return header
+    return None
+
+
+def parse_address(address: str) -> Dict[str, str]:
+    """Parse a US address string into street, city, state, and zip components.
+
+    Handles formats like:
+      "123 Main St, Austin, TX 78701"
+      "123 Main St, Suite 200, Austin, TX"
+      "123 Main St, Austin, Texas 78701"
+    """
+    if not address or not address.strip():
+        return {}
+
+    # Full state name -> abbreviation for common cases
+    state_names = {
+        'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+        'california': 'CA', 'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE',
+        'florida': 'FL', 'georgia': 'GA', 'hawaii': 'HI', 'idaho': 'ID',
+        'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS',
+        'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+        'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN',
+        'mississippi': 'MS', 'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE',
+        'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+        'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC',
+        'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR',
+        'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+        'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT',
+        'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA',
+        'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+        'district of columbia': 'DC',
+    }
+
+    parts = [p.strip() for p in address.split(',')]
+
+    if len(parts) < 2:
+        return {'street': address.strip()}
+
+    # Last part should contain state (+ optional zip)
+    last = parts[-1].strip()
+    # Try to extract state abbreviation and zip from last segment
+    # e.g. "TX 78701" or "TX" or "Texas 78701"
+    m = re.match(r'^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$', last)
+    if m and m.group(1).upper() in US_STATES:
+        state = m.group(1).upper()
+        zip_code = m.group(2)
+        city = parts[-2].strip()
+        street = ', '.join(parts[:-2]).strip()
+    elif last.upper() in US_STATES:
+        state = last.upper()
+        zip_code = ''
+        city = parts[-2].strip()
+        street = ', '.join(parts[:-2]).strip()
+    else:
+        # Try full state name: "Texas 78701" or "Texas"
+        found_state = None
+        found_zip = ''
+        last_lower = last.lower()
+        for name, abbr in state_names.items():
+            if last_lower.startswith(name):
+                found_state = abbr
+                remainder = last[len(name):].strip()
+                zip_m = re.match(r'^(\d{5}(?:-\d{4})?)$', remainder)
+                if zip_m:
+                    found_zip = zip_m.group(1)
+                break
+        if found_state:
+            state = found_state
+            zip_code = found_zip
+            city = parts[-2].strip()
+            street = ', '.join(parts[:-2]).strip()
+        else:
+            # Can't parse state — return the whole thing as street
+            return {'street': address.strip()}
+
+    result = {}
+    if street:
+        result['street'] = street
+    if city:
+        result['city'] = city
+    if state:
+        result['state'] = state
+    if zip_code:
+        result['zip'] = zip_code
+    return result
+
 
 def validate_email(email: str) -> bool:
     """Basic email validation."""
