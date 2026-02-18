@@ -48,13 +48,15 @@ class CompetitorService:
             include_answer=True,
         )
 
-        competitors = self._extract_from_results(results, company, max_competitors)
-
-        # If heuristics found fewer than 2 names, try Haiku for smarter extraction
-        if len(competitors) < 2 and self.api_key:
-            haiku_names = self._extract_with_haiku(results, company, max_competitors)
-            if len(haiku_names) > len(competitors):
-                competitors = haiku_names
+        # Primary: use Haiku for smart extraction (cheap and reliable)
+        # Fallback: heuristic regex if no API key or Haiku fails
+        competitors = []
+        if self.api_key:
+            competitors = self._extract_with_haiku(results, company, max_competitors)
+        if len(competitors) < 2:
+            heuristic = self._extract_from_results(results, company, max_competitors)
+            if len(heuristic) > len(competitors):
+                competitors = heuristic
 
         _competitor_cache[cache_key] = {
             'competitors': competitors,
@@ -230,12 +232,17 @@ class CompetitorService:
                 messages=[{
                     'role': 'user',
                     'content': (
-                        f"Extract ONLY real local business names from these search results. "
-                        f"Exclude the company '{company}'. "
-                        f"Exclude directories (Yelp, Angi, etc.), government agencies, "
-                        f"schools, news sites, and generic list articles. "
-                        f"Return ONLY a JSON array of business name strings, max {max_count}. "
-                        f"If no real businesses found, return [].\n\n{text}"
+                        f"From these search results, extract the names of real local "
+                        f"businesses (companies that actually provide services). "
+                        f"Return ONLY a JSON array of business name strings, max {max_count}.\n\n"
+                        f"RULES:\n"
+                        f"- Exclude '{company}' and any variation of it\n"
+                        f"- Exclude directory/review sites (Yelp, Angi, CB Insights, G2, etc.)\n"
+                        f"- Exclude page titles like 'Top X Alternatives' or 'Best X in Y'\n"
+                        f"- Exclude government agencies, schools, journals, news sites\n"
+                        f"- Each name should be a real business that a customer could hire\n"
+                        f"- If no real businesses found, return []\n\n"
+                        f"{text}"
                     ),
                 }],
             )
