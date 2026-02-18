@@ -4,6 +4,8 @@ import re
 import time
 from typing import Dict, List
 
+import requests
+
 
 # In-memory cache: cache_key -> {competitors: [...], ts: float}
 _competitor_cache: Dict[str, dict] = {}
@@ -11,13 +13,19 @@ _CACHE_TTL = 600  # 10 minutes
 
 
 class CompetitorService:
-    """Discover competitors by searching for local businesses via Tavily."""
+    """Discover competitors by searching for local businesses.
+
+    Primary: Google Places API (returns exact Google Maps results).
+    Fallback: Tavily web search + Haiku extraction.
+    """
 
     DEFAULT_QUERY = '{{industry}} in {{city}} {{state}}'
 
-    def __init__(self, web_search_service, anthropic_api_key: str = None):
+    def __init__(self, web_search_service=None, anthropic_api_key: str = None,
+                 google_places_api_key: str = None):
         self.web_search = web_search_service
         self.api_key = anthropic_api_key
+        self.google_places_key = google_places_api_key
 
     def discover_competitors(
         self,
@@ -41,22 +49,31 @@ class CompetitorService:
         if cached and (time.time() - cached['ts']) < _CACHE_TTL:
             return cached['competitors'][:max_competitors]
 
-        results = self.web_search.search(
-            query=query,
-            max_results=10,
-            search_depth='advanced',
-            include_answer=True,
-        )
-
-        # Primary: use Haiku for smart extraction (cheap and reliable)
-        # Fallback: heuristic regex if no API key or Haiku fails
         competitors = []
-        if self.api_key:
-            competitors = self._extract_with_haiku(results, company, query, max_competitors)
-        if len(competitors) < 2:
-            heuristic = self._extract_from_results(results, company, max_competitors)
-            if len(heuristic) > len(competitors):
-                competitors = heuristic
+
+        # Primary: Google Places API — returns the same businesses as Google Maps
+        if self.google_places_key:
+            competitors = self._search_google_places(query, company, max_competitors)
+
+        # Fallback: Tavily + Haiku extraction
+        if len(competitors) < 2 and self.web_search:
+            results = self.web_search.search(
+                query=query,
+                max_results=10,
+                search_depth='advanced',
+                include_answer=True,
+            )
+
+            tavily_competitors = []
+            if self.api_key:
+                tavily_competitors = self._extract_with_haiku(results, company, query, max_competitors)
+            if len(tavily_competitors) < 2:
+                heuristic = self._extract_from_results(results, company, max_competitors)
+                if len(heuristic) > len(tavily_competitors):
+                    tavily_competitors = heuristic
+
+            if len(tavily_competitors) > len(competitors):
+                competitors = tavily_competitors
 
         _competitor_cache[cache_key] = {
             'competitors': competitors,
@@ -64,6 +81,64 @@ class CompetitorService:
         }
 
         return competitors
+
+    def _search_google_places(self, query: str, company: str, max_count: int) -> List[str]:
+        """Search Google Places Text Search API for local businesses.
+
+        Returns business names from Google Maps — the same results users see
+        when they search on Google.
+        """
+        try:
+            response = requests.get(
+                'https://maps.googleapis.com/maps/api/place/textsearch/json',
+                params={
+                    'query': query,
+                    'key': self.google_places_key,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get('status') != 'OK':
+                print(f"Google Places API status: {data.get('status')} - {data.get('error_message', '')}")
+                return []
+
+            company_lower = (company or '').lower().strip()
+            # Strip common business suffixes for comparison
+            company_base = self._strip_business_suffix(company_lower)
+            names = []
+            for place in data.get('results', []):
+                name = place.get('name', '').strip()
+                if not name or len(name) < 3 or len(name) > 60:
+                    continue
+                # Skip if it matches the target company
+                name_lower = name.lower()
+                name_base = self._strip_business_suffix(name_lower)
+                if company_lower and (company_lower in name_lower or name_lower in company_lower
+                                      or company_base == name_base):
+                    continue
+                # Only include operational businesses
+                biz_status = place.get('business_status', '')
+                if biz_status and biz_status != 'OPERATIONAL':
+                    continue
+                names.append(name)
+                if len(names) >= max_count:
+                    break
+
+            return names
+        except Exception as e:
+            print(f"Google Places search failed: {e}")
+            return []
+
+    @staticmethod
+    def _strip_business_suffix(name: str) -> str:
+        """Strip LLC, Inc, Corp, etc. for comparison."""
+        return re.sub(
+            r'\s*(llc|inc|corp|ltd|co|company|incorporated|corporation|'
+            r'limited|group|services|enterprises?)\.?\s*$',
+            '', name, flags=re.IGNORECASE,
+        ).strip().rstrip(',').strip()
 
     @staticmethod
     def _clean_city(value: str) -> str:

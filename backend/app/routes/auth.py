@@ -184,6 +184,7 @@ def get_settings():
     """Get current settings (API keys masked, writing style per-workspace)."""
     anthropic_key = Settings.get('anthropic_api_key', '')
     tavily_key = Settings.get('tavily_api_key', '')
+    google_places_key = Settings.get('google_places_api_key', '')
 
     # Writing style: workspace-scoped, fallback to global
     writing_style_raw = WorkspaceSettings.get(g.workspace_id, 'writing_style') if g.workspace_id else None
@@ -193,6 +194,7 @@ def get_settings():
     return jsonify({
         'anthropic_api_key': '***' + anthropic_key[-4:] if anthropic_key and len(anthropic_key) > 4 else '',
         'tavily_api_key': '***' + tavily_key[-4:] if tavily_key and len(tavily_key) > 4 else '',
+        'google_places_api_key': '***' + google_places_key[-4:] if google_places_key and len(google_places_key) > 4 else '',
         'writing_style': json.loads(writing_style_raw) if writing_style_raw else None
     })
 
@@ -206,6 +208,9 @@ def save_settings():
 
     if 'tavily_api_key' in data:
         Settings.set('tavily_api_key', data['tavily_api_key'])
+
+    if 'google_places_api_key' in data:
+        Settings.set('google_places_api_key', data['google_places_api_key'])
 
     if 'writing_style' in data:
         # Save writing style per-workspace

@@ -27,10 +27,11 @@ const DEFAULT_WRITING_STYLE = {
 function Settings({ onStatusChange }) {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
-  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', writing_style: null });
+  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', google_places_api_key: '', writing_style: null });
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [apiKey, setApiKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
+  const [googlePlacesKey, setGooglePlacesKey] = useState('');
   const [writingStyle, setWritingStyle] = useState(DEFAULT_WRITING_STYLE);
   const [saving, setSaving] = useState(false);
   const [savingStyle, setSavingStyle] = useState(false);
@@ -141,6 +142,21 @@ function Settings({ onStatusChange }) {
       setSettings(settingsRes.data);
     } catch (error) {
       setMessage('Failed to save Tavily API key');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveGooglePlacesKey = async () => {
+    if (!googlePlacesKey.trim()) return;
+    setSaving(true);
+    try {
+      await saveSettings({ google_places_api_key: googlePlacesKey });
+      setMessage('Google Places API key saved successfully!');
+      setGooglePlacesKey('');
+      const settingsRes = await getSettings();
+      setSettings(settingsRes.data);
+    } catch (error) {
+      setMessage('Failed to save Google Places API key');
     }
     setSaving(false);
   };
@@ -308,6 +324,39 @@ function Settings({ onStatusChange }) {
             className="btn btn-primary"
             onClick={handleSaveTavilyKey}
             disabled={saving || !tavilyKey.trim()}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Google Places API Key (Competitor Discovery) */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Google Places API Key (Competitor Discovery) <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
+        <p className="text-sm text-light mb-2">
+          Used for competitor discovery — finds the same local businesses that show up in Google Maps.
+          Get a key at <a href="https://console.cloud.google.com/apis/library/places-backend.googleapis.com" target="_blank" rel="noopener noreferrer">Google Cloud Console</a> (enable "Places API").
+        </p>
+
+        {settings.google_places_api_key && (
+          <p className="mb-2">
+            Current key: <code>{settings.google_places_api_key.slice(0, 8)}...{settings.google_places_api_key.slice(-4)}</code>
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            type="password"
+            className="form-input"
+            placeholder="AIza..."
+            value={googlePlacesKey}
+            onChange={(e) => setGooglePlacesKey(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveGooglePlacesKey}
+            disabled={saving || !googlePlacesKey.trim()}
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
