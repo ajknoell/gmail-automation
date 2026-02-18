@@ -52,7 +52,7 @@ class CompetitorService:
         # Fallback: heuristic regex if no API key or Haiku fails
         competitors = []
         if self.api_key:
-            competitors = self._extract_with_haiku(results, company, max_competitors)
+            competitors = self._extract_with_haiku(results, company, query, max_competitors)
         if len(competitors) < 2:
             heuristic = self._extract_from_results(results, company, max_competitors)
             if len(heuristic) > len(competitors):
@@ -65,6 +65,45 @@ class CompetitorService:
 
         return competitors
 
+    @staticmethod
+    def _clean_city(value: str) -> str:
+        """Strip street address prefixes from a city value.
+
+        If the CSV city field contains '148 Rt 202 Somers' or '123 Main St Somers',
+        extract just the city name by removing leading number + street tokens.
+        """
+        if not value:
+            return ''
+        value = value.strip()
+        # If it doesn't start with a digit, it's probably already a clean city name
+        if not value[0].isdigit():
+            return value
+        # Strip leading "123 Main St" / "148 Rt 202" style prefixes
+        # Look for the last word(s) that aren't part of the street address
+        # Common pattern: digits + street words + city name
+        street_words = {
+            'st', 'street', 'ave', 'avenue', 'rd', 'road', 'dr', 'drive',
+            'ln', 'lane', 'blvd', 'boulevard', 'ct', 'court', 'pl', 'place',
+            'way', 'cir', 'circle', 'rt', 'route', 'hwy', 'highway',
+            'pkwy', 'parkway', 'n', 's', 'e', 'w', 'north', 'south',
+            'east', 'west', 'ne', 'nw', 'se', 'sw', 'ste', 'suite', 'apt',
+            'unit', 'fl', 'floor',
+        }
+        words = value.split()
+        # Walk through words: skip digits and known street tokens
+        city_start = 0
+        for i, word in enumerate(words):
+            clean_word = re.sub(r'[.,#]', '', word).lower()
+            if clean_word.isdigit() or clean_word in street_words:
+                city_start = i + 1
+            else:
+                # Once we hit a non-street word after the address portion, stop
+                if city_start > 0:
+                    break
+        if city_start > 0 and city_start < len(words):
+            return ' '.join(words[city_start:])
+        return value
+
     def _build_query(self, template: str, company: str, industry: str, custom_fields: dict = None) -> str:
         """Substitute all variables in the query template."""
         query = template
@@ -75,7 +114,11 @@ class CompetitorService:
             for key, val in custom_fields.items():
                 placeholder = '{{' + key + '}}'
                 if placeholder in query:
-                    query = query.replace(placeholder, str(val) if val else '')
+                    # Clean city values that may contain street addresses
+                    clean_val = val
+                    if key == 'city' and val:
+                        clean_val = self._clean_city(val)
+                    query = query.replace(placeholder, str(clean_val) if clean_val else '')
         # Remove any remaining unresolved placeholders
         query = re.sub(r'\{\{\w+\}\}', '', query).strip()
         return query
@@ -207,9 +250,9 @@ class CompetitorService:
         return result
 
     def _extract_with_haiku(
-        self, search_results: dict, company: str, max_count: int
+        self, search_results: dict, company: str, search_query: str, max_count: int
     ) -> List[str]:
-        """Use Haiku to extract business names from search results when heuristics fail."""
+        """Use Haiku to extract business names from search results."""
         try:
             import anthropic
             client = anthropic.Anthropic(api_key=self.api_key)
@@ -232,17 +275,18 @@ class CompetitorService:
                 messages=[{
                     'role': 'user',
                     'content': (
-                        f"From these search results, extract the names of real local "
-                        f"businesses (companies that actually provide services). "
-                        f"Return ONLY a JSON array of business name strings, max {max_count}.\n\n"
+                        f"I searched for: \"{search_query}\"\n\n"
+                        f"From the results below, extract ONLY the names of real local "
+                        f"businesses that match this search (i.e. they are the type of "
+                        f"business someone searching for \"{search_query}\" would want to hire). "
+                        f"Return a JSON array of business name strings, max {max_count}.\n\n"
                         f"RULES:\n"
                         f"- Exclude '{company}' and any variation of it\n"
-                        f"- Exclude directory/review sites (Yelp, Angi, CB Insights, G2, etc.)\n"
-                        f"- Exclude page titles like 'Top X Alternatives' or 'Best X in Y'\n"
-                        f"- Exclude government agencies, schools, journals, news sites\n"
-                        f"- Each name should be a real business that a customer could hire\n"
-                        f"- If no real businesses found, return []\n\n"
-                        f"{text}"
+                        f"- ONLY include businesses that match the search intent\n"
+                        f"- Exclude directories, review sites, comparison pages, articles\n"
+                        f"- Exclude government agencies, schools, journals\n"
+                        f"- If no matching businesses found, return []\n\n"
+                        f"RESULTS:\n{text}"
                     ),
                 }],
             )
