@@ -546,7 +546,7 @@ def regenerate_recipient_preview(id, recipient_id):
             if tavily_key:
                 from app.services.web_search import WebSearchService
                 from app.services.competitor_discovery import CompetitorService
-                comp_svc = CompetitorService(WebSearchService(tavily_key))
+                comp_svc = CompetitorService(WebSearchService(tavily_key), api_key)
                 custom_fields = recipient_dict.get('custom_fields', {})
                 competitors = comp_svc.discover_competitors(
                     company=recipient_dict.get('company', ''),
@@ -681,7 +681,7 @@ def generate_preview(id):
             if tavily_key:
                 from app.services.web_search import WebSearchService
                 from app.services.competitor_discovery import CompetitorService
-                competitor_service = CompetitorService(WebSearchService(tavily_key))
+                competitor_service = CompetitorService(WebSearchService(tavily_key), api_key)
 
         for recipient in recipients:
             try:
@@ -765,7 +765,8 @@ def generate_preview(id):
             if tavily_key:
                 from app.services.web_search import WebSearchService
                 from app.services.competitor_discovery import CompetitorService
-                non_ai_comp_service = CompetitorService(WebSearchService(tavily_key))
+                anthropic_key = Settings.get('anthropic_api_key')
+                non_ai_comp_service = CompetitorService(WebSearchService(tavily_key), anthropic_key)
 
         for recipient in recipients:
             extra_vars = None

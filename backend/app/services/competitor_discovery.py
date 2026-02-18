@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 import time
 from typing import Dict, List
@@ -14,8 +15,9 @@ class CompetitorService:
 
     DEFAULT_QUERY = '{{industry}} in {{city}} {{state}}'
 
-    def __init__(self, web_search_service):
+    def __init__(self, web_search_service, anthropic_api_key: str = None):
         self.web_search = web_search_service
+        self.api_key = anthropic_api_key
 
     def discover_competitors(
         self,
@@ -47,6 +49,12 @@ class CompetitorService:
         )
 
         competitors = self._extract_from_results(results, company, max_competitors)
+
+        # If heuristics found fewer than 2 names, try Haiku for smarter extraction
+        if len(competitors) < 2 and self.api_key:
+            haiku_names = self._extract_with_haiku(results, company, max_competitors)
+            if len(haiku_names) > len(competitors):
+                competitors = haiku_names
 
         _competitor_cache[cache_key] = {
             'competitors': competitors,
@@ -170,6 +178,58 @@ class CompetitorService:
                 break
 
         return result
+
+    def _extract_with_haiku(
+        self, search_results: dict, company: str, max_count: int
+    ) -> List[str]:
+        """Use Haiku to extract business names from search results when heuristics fail."""
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=self.api_key)
+
+            # Build a concise text block from the search results
+            parts = []
+            answer = search_results.get('answer', '')
+            if answer:
+                parts.append(f"Search summary: {answer[:800]}")
+            for r in search_results.get('results', [])[:6]:
+                title = r.get('title', '')
+                content = r.get('content', '')[:200]
+                if title:
+                    parts.append(f"- {title}: {content}")
+            text = '\n'.join(parts)
+
+            response = client.messages.create(
+                model='claude-haiku-4-5-20251001',
+                max_tokens=200,
+                messages=[{
+                    'role': 'user',
+                    'content': (
+                        f"Extract ONLY real local business names from these search results. "
+                        f"Exclude the company '{company}'. "
+                        f"Exclude directories (Yelp, Angi, etc.), government agencies, "
+                        f"schools, news sites, and generic list articles. "
+                        f"Return ONLY a JSON array of business name strings, max {max_count}. "
+                        f"If no real businesses found, return [].\n\n{text}"
+                    ),
+                }],
+            )
+
+            raw = response.content[0].text.strip()
+            # Extract JSON array from response
+            m = re.search(r'\[.*\]', raw, re.DOTALL)
+            if m:
+                names = json.loads(m.group())
+                company_lower = (company or '').lower().strip()
+                return [
+                    n for n in names
+                    if isinstance(n, str)
+                    and 3 <= len(n) <= 60
+                    and company_lower not in n.lower()
+                ][:max_count]
+        except Exception as e:
+            print(f"Haiku competitor extraction failed: {e}")
+        return []
 
     @staticmethod
     def _cache_key(query: str) -> str:
