@@ -745,6 +745,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         website_insights: str = None,
         learned_insights: Dict = None,
         team_contacts: list = None,
+        competitors: list = None,
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
 
@@ -889,6 +890,11 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
             if v:
                 variable_map[k] = str(v)
 
+        # Add competitor variables (competitor1, competitor2, competitors)
+        if competitors:
+            from app.services.competitor_discovery import CompetitorService
+            variable_map.update(CompetitorService.build_variable_map(competitors))
+
         # Handle website_insights separately from the variable_map.
         # When available: pre-substitute directly into the template body.
         # When not available: remove the placeholder entirely and flag it.
@@ -955,6 +961,12 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
             )
         else:
             _wi_note = ""
+
+        # Build competitor context note
+        _competitor_note = ""
+        if competitors:
+            from app.services.competitor_discovery import CompetitorService
+            _competitor_note = CompetitorService.build_ai_context(competitors, cleaned_company)
 
         # Build team contact note outside f-string (Python 3.9 backslash restriction)
         _team_note = ""
@@ -1040,6 +1052,8 @@ COPYRIGHT YEAR RULE:
 {_wi_note}
 
 {_team_note}
+
+{_competitor_note}
 
 {f"CAMPAIGN MUST-INCLUDE (weave this into EVERY email naturally): {campaign_context}" if campaign_context else ""}
 

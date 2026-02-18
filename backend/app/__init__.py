@@ -167,6 +167,7 @@ def _run_migrations(app):
     _add_column('contacts', 'workspace_id', 'INTEGER')
     _add_column('campaigns', 'workspace_id', 'INTEGER')
     _add_column('campaigns', 'attachments', 'TEXT')
+    _add_column('campaigns', 'competitor_search_query', 'TEXT')
     _add_column('templates', 'workspace_id', 'INTEGER')
     _add_column('tags', 'workspace_id', 'INTEGER')
     _add_column('email_logs', 'workspace_id', 'INTEGER')

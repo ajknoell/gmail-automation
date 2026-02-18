@@ -841,6 +841,34 @@ function CampaignDetail() {
             </div>
           )}
 
+          {campaign.status === 'draft' && (
+            <div style={{ width: '100%', marginTop: '0.5rem' }}>
+              <details>
+                <summary style={{ cursor: 'pointer', fontSize: '0.85rem', color: '#374151', fontWeight: 500 }}>
+                  Competitor Discovery {campaign.competitor_search_query ? '(enabled)' : ''}
+                </summary>
+                <div style={{ marginTop: '0.5rem' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. {{company}} top competitors {{industry}}"
+                    defaultValue={campaign.competitor_search_query || ''}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim() || null;
+                      if (val !== (campaign.competitor_search_query || null)) {
+                        updateCampaign(id, { competitor_search_query: val }).then(loadData);
+                      }
+                    }}
+                    style={{ width: '100%', marginBottom: '0.25rem' }}
+                  />
+                  <span style={{ fontSize: '0.7rem', color: '#9CA3AF' }}>
+                    Uses Tavily web search. Available as {'{{competitor1}}'}, {'{{competitor2}}'}, or {'{{competitors}}'} in templates. Leave blank to disable.
+                  </span>
+                </div>
+              </details>
+            </div>
+          )}
+
           {campaign.status === 'running' && (
             <>
               <button className="btn btn-warning" onClick={handlePause}>Pause</button>

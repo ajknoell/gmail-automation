@@ -64,7 +64,8 @@ def create_campaign():
         delay_seconds=data.get('delay_seconds', 30),
         use_ai_personalization=data.get('use_ai_personalization', True),
         ai_prompt=data.get('ai_prompt'),
-        campaign_context=data.get('campaign_context')
+        campaign_context=data.get('campaign_context'),
+        competitor_search_query=data.get('competitor_search_query'),
     )
 
     db.session.add(campaign)
@@ -95,6 +96,8 @@ def update_campaign(id):
         campaign.ai_prompt = data['ai_prompt']
     if 'campaign_context' in data:
         campaign.campaign_context = data['campaign_context']
+    if 'competitor_search_query' in data:
+        campaign.competitor_search_query = data['competitor_search_query']
     if 'attachments' in data:
         campaign.set_attachments(data['attachments'])
 
@@ -536,6 +539,22 @@ def regenerate_recipient_preview(id, recipient_id):
         if wa_result:
             _log_website_analysis(g.workspace_id, recipient.id, wa_result)
 
+        # Competitor discovery
+        competitors = []
+        if campaign.competitor_search_query:
+            tavily_key = Settings.get('tavily_api_key')
+            if tavily_key:
+                from app.services.web_search import WebSearchService
+                from app.services.competitor_discovery import CompetitorService
+                comp_svc = CompetitorService(WebSearchService(tavily_key), claude)
+                custom_fields = recipient_dict.get('custom_fields', {})
+                competitors = comp_svc.discover_competitors(
+                    company=recipient_dict.get('company', ''),
+                    domain=(wa_result.get('url') if wa_result else '') or recipient.email or '',
+                    industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
+                    search_query=campaign.competitor_search_query,
+                )
+
         result = claude.personalize_email(
             template_subject=campaign.template.subject,
             template_body=campaign.template.body,
@@ -546,6 +565,7 @@ def regenerate_recipient_preview(id, recipient_id):
             website_insights=website_insights,
             learned_insights=learned_insights,
             team_contacts=team_contacts,
+            competitors=competitors,
         )
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
@@ -574,7 +594,7 @@ def regenerate_recipient_preview(id, recipient_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def _substitute_template_variables(text, recipient):
+def _substitute_template_variables(text, recipient, extra_variables=None):
     """Replace {{variable}} placeholders with recipient data."""
     custom = recipient.get_custom_fields() or {}
     name, company = resolve_recipient_fields(
@@ -588,6 +608,8 @@ def _substitute_template_variables(text, recipient):
     }
     if custom:
         variables.update(custom)
+    if extra_variables:
+        variables.update(extra_variables)
 
     def replace_var(match):
         key = match.group(1)
@@ -651,6 +673,16 @@ def generate_preview(id):
         # domain don't trigger duplicate fetches / screenshots / API calls.
         website_analysis_cache = {}
 
+        # Competitor discovery service (opt-in per campaign)
+        competitor_service = None
+        competitor_cache = {}
+        if campaign.competitor_search_query:
+            tavily_key = Settings.get('tavily_api_key')
+            if tavily_key:
+                from app.services.web_search import WebSearchService
+                from app.services.competitor_discovery import CompetitorService
+                competitor_service = CompetitorService(WebSearchService(tavily_key), claude)
+
         for recipient in recipients:
             try:
                 recipient_dict = {
@@ -677,6 +709,22 @@ def generate_preview(id):
                 if wa_result:
                     _log_website_analysis(g.workspace_id, recipient.id, wa_result)
 
+                # Competitor discovery (cached per domain)
+                competitors = []
+                if competitor_service:
+                    comp_key = cache_key or recipient.email or ''
+                    if comp_key in competitor_cache:
+                        competitors = competitor_cache[comp_key]
+                    else:
+                        custom_fields = recipient_dict.get('custom_fields', {})
+                        competitors = competitor_service.discover_competitors(
+                            company=recipient_dict.get('company', ''),
+                            domain=comp_key,
+                            industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
+                            search_query=campaign.competitor_search_query,
+                        )
+                        competitor_cache[comp_key] = competitors
+
                 result = claude.personalize_email(
                     template_subject=campaign.template.subject,
                     template_body=campaign.template.body,
@@ -687,6 +735,7 @@ def generate_preview(id):
                     website_insights=website_insights,
                     learned_insights=learned_insights,
                     team_contacts=team_contacts,
+                    competitors=competitors,
                 )
                 recipient.personalized_subject = result.get('subject', campaign.template.subject)
                 recipient.personalized_body = result.get('body', campaign.template.body)
@@ -712,11 +761,40 @@ def generate_preview(id):
             db.session.commit()
     else:
         # Simple {{variable}} substitution without AI
+        # Set up competitor discovery for non-AI path too
+        non_ai_comp_service = None
+        non_ai_comp_cache = {}
+        if campaign.competitor_search_query:
+            tavily_key = Settings.get('tavily_api_key')
+            if tavily_key:
+                from app.services.web_search import WebSearchService
+                from app.services.competitor_discovery import CompetitorService
+                non_ai_comp_service = CompetitorService(WebSearchService(tavily_key))
+
         for recipient in recipients:
+            extra_vars = None
+            if non_ai_comp_service:
+                from app.services.website_analyzer import WebsiteAnalyzer as _WA
+                comp_key = (_WA.resolve_url({
+                    'email': recipient.email,
+                    'custom_fields': recipient.get_custom_fields(),
+                }) or recipient.email or '').lower()
+                if comp_key not in non_ai_comp_cache:
+                    cf = recipient.get_custom_fields()
+                    non_ai_comp_cache[comp_key] = non_ai_comp_service.discover_competitors(
+                        company=recipient.company or '',
+                        domain=comp_key,
+                        industry=cf.get('industry') or cf.get('sector', ''),
+                        search_query=campaign.competitor_search_query,
+                    )
+                comps = non_ai_comp_cache.get(comp_key, [])
+                if comps:
+                    extra_vars = CompetitorService.build_variable_map(comps)
+
             recipient.personalized_subject = _substitute_template_variables(
-                campaign.template.subject, recipient)
+                campaign.template.subject, recipient, extra_vars)
             recipient.personalized_body = _substitute_template_variables(
-                campaign.template.body, recipient)
+                campaign.template.body, recipient, extra_vars)
             generated += 1
         db.session.commit()
 
