@@ -106,6 +106,8 @@ class CompetitorService:
         r'\s*[-|–—:]\s*(yelp|reviews|ratings|angi|homeadvisor|thumbtack|'
         r'facebook|linkedin|bbb|google|mapquest|nextdoor|bark|houzz|porch|'
         r'expertise|updated \d{4}|phone|address|directions|hours|'
+        r'electrician.*|plumb.*|contractor.*|service.*|serving .*|'
+        r'your .*|local .*|residential .*|commercial .*|'
         r'\d{4}|\(\d{3}\).*|www\..*)$',
         re.IGNORECASE,
     )
@@ -129,12 +131,35 @@ class CompetitorService:
         answer_names = []
         answer = search_results.get('answer', '')
         if answer:
-            # Numbered lists: "1. Smith Electric" or "1) Smith Electric"
-            for m in re.finditer(r'\d+[.)]\s*\*{0,2}([A-Z][A-Za-z0-9\s&.\'-]+)', answer):
-                answer_names.append(m.group(1).strip().rstrip('.'))
+            # Process line-by-line to prevent greedy cross-line matching
+            for line in answer.split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                # Numbered lists: "1. Smith Electric" or "1) Smith Electric"
+                m = re.match(r'\d+[.)]\s*\*{0,2}([A-Z][A-Za-z0-9 &.\'-]+)', line)
+                if m:
+                    answer_names.append(m.group(1).strip().rstrip('.'))
+                    continue
+                # Bullet lists: "- Smith Electric" or "• Smith Electric"
+                m = re.match(r'[-•]\s+([A-Z][A-Za-z0-9 &.\'-]+)', line)
+                if m:
+                    answer_names.append(m.group(1).strip().rstrip('.'))
+                    continue
             # Bold names: **Smith Electric**
-            for m in re.finditer(r'\*\*([A-Z][A-Za-z0-9\s&.\'-]+?)\*\*', answer):
+            for m in re.finditer(r'\*\*([A-Z][A-Za-z0-9 &.\'-]+?)\*\*', answer):
                 answer_names.append(m.group(1).strip())
+            # Comma-separated lists: "...include ABC Electric, XYZ Services, and Smith Co"
+            comma_m = re.search(
+                r'(?:include|such as|like|are|:\s*)'
+                r'((?:[A-Z][A-Za-z0-9 &.\'-]+,\s*)+(?:and\s+)?[A-Z][A-Za-z0-9 &.\'-]+)',
+                answer,
+            )
+            if comma_m:
+                for part in re.split(r',\s*(?:and\s+)?', comma_m.group(1)):
+                    part = part.strip().rstrip('.')
+                    if part and part[0].isupper():
+                        answer_names.append(part)
 
         # 2) Split result titles into organic vs directory (skip junk entirely)
         organic_names = []
