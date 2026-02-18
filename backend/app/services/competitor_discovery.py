@@ -14,9 +14,8 @@ class CompetitorService:
 
     DEFAULT_QUERY = '{{industry}} in {{city}} {{state}}'
 
-    def __init__(self, web_search_service, claude_service=None):
+    def __init__(self, web_search_service):
         self.web_search = web_search_service
-        self.claude = claude_service
 
     def discover_competitors(
         self,
@@ -47,7 +46,7 @@ class CompetitorService:
             include_answer=True,
         )
 
-        competitors = self._extract_business_names(results, company, max_competitors)
+        competitors = self._extract_from_results(results, company, max_competitors)
 
         _competitor_cache[cache_key] = {
             'competitors': competitors,
@@ -71,78 +70,71 @@ class CompetitorService:
         query = re.sub(r'\{\{\w+\}\}', '', query).strip()
         return query
 
-    def _extract_business_names(
+    # Words/phrases that indicate a result title is a directory page, not a business
+    _SKIP_TITLE_PATTERNS = re.compile(
+        r'\b(top \d+|best \d+|\d+ best|yelp|angi|homeadvisor|thumbtack|bbb|'
+        r'better business|yellow pages|mapquest|nextdoor|bark\.com|houzz|'
+        r'porch\.com|expertise\.com|google maps)\b',
+        re.IGNORECASE,
+    )
+    # Suffixes commonly appended to business names in search titles
+    _TITLE_SUFFIXES = re.compile(
+        r'\s*[-|–—:]\s*(yelp|reviews|ratings|angi|homeadvisor|thumbtack|'
+        r'facebook|linkedin|bbb|google|mapquest|nextdoor|bark|houzz|porch|'
+        r'expertise|updated \d{4}|phone|address|directions|hours|'
+        r'\d{4}|\(\d{3}\).*|www\..*)$',
+        re.IGNORECASE,
+    )
+
+    def _extract_from_results(
         self, search_results: dict, company: str, max_count: int
     ) -> List[str]:
-        if self.claude:
-            try:
-                return self._extract_with_claude(search_results, company, max_count)
-            except Exception:
-                pass
-        return self._extract_heuristic(search_results, company, max_count)
+        """Extract business names from Tavily answer + result titles. No LLM needed."""
+        company_lower = (company or '').lower().strip()
+        seen = set()
+        names = []
 
-    def _extract_with_claude(
-        self, search_results: dict, company: str, max_count: int
-    ) -> List[str]:
-        from app.services.web_search import WebSearchService
-        context = WebSearchService.format_for_prompt(search_results, max_chars=2000)
-        if not context.strip():
-            return []
-
-        company_lower = (company or '').lower()
-        exclude_note = f' Do not include "{company}" or any variation of it.' if company else ''
-
-        prompt = (
-            f'From the search results below, extract up to {max_count} real business '
-            f'or company names that appear as local competitors or similar businesses.{exclude_note}\n\n'
-            f'Rules:\n'
-            f'- Return ONLY a JSON array of strings, e.g. ["Smith Electric", "ABC Plumbing"]\n'
-            f'- Extract actual business names, not generic terms or website names\n'
-            f'- Prefer businesses that appear in listings, directories, or review sites\n'
-            f'- If no business names are found, return []\n\n'
-            f'Search results:\n{context}'
-        )
-
-        response = self.claude.client.messages.create(
-            model='claude-haiku-4-5-20251001',
-            max_tokens=300,
-            messages=[{'role': 'user', 'content': prompt}],
-        )
-        import json
-        text = response.content[0].text.strip()
-        # Handle markdown code blocks
-        if text.startswith('```'):
-            text = re.sub(r'^```\w*\n?', '', text)
-            text = re.sub(r'\n?```$', '', text)
-            text = text.strip()
-        names = json.loads(text)
-        if isinstance(names, list):
-            # Filter out the target company
-            filtered = []
-            for name in names:
-                name_str = str(name).strip()
-                if not name_str:
-                    continue
-                if company_lower and company_lower in name_str.lower():
-                    continue
-                filtered.append(name_str)
-            return filtered[:max_count]
-        return []
-
-    def _extract_heuristic(
-        self, search_results: dict, company: str, max_count: int
-    ) -> List[str]:
+        # 1) Parse the answer field — Tavily often lists businesses by name
         answer = search_results.get('answer', '')
-        if not answer:
-            return []
-        company_lower = (company or '').lower()
-        # Look for numbered lists: "1. CompanyName" or "1) CompanyName"
-        numbered = re.findall(r'\d+[.)]\s*([A-Z][A-Za-z0-9\s&.\'-]+)', answer)
-        if numbered:
-            names = [n.strip().rstrip('.') for n in numbered
-                     if not company_lower or company_lower not in n.lower()]
-            return names[:max_count]
-        return []
+        if answer:
+            # Numbered lists: "1. Smith Electric" or "1) Smith Electric"
+            for m in re.finditer(r'\d+[.)]\s*\*{0,2}([A-Z][A-Za-z0-9\s&.\'-]+)', answer):
+                names.append(m.group(1).strip().rstrip('.'))
+            # Bold names: **Smith Electric**
+            for m in re.finditer(r'\*\*([A-Z][A-Za-z0-9\s&.\'-]+?)\*\*', answer):
+                names.append(m.group(1).strip())
+
+        # 2) Extract from result titles — these often ARE the business name
+        for r in search_results.get('results', []):
+            title = r.get('title', '').strip()
+            if not title:
+                continue
+            # Skip directory/aggregator pages
+            if self._SKIP_TITLE_PATTERNS.search(title):
+                continue
+            # Strip trailing site name / metadata
+            cleaned = self._TITLE_SUFFIXES.sub('', title).strip()
+            if cleaned and len(cleaned) > 2:
+                names.append(cleaned)
+
+        # Dedupe and filter
+        result = []
+        for name in names:
+            name = name.strip().rstrip('.')
+            key = name.lower()
+            if key in seen:
+                continue
+            if company_lower and company_lower in key:
+                continue
+            # Skip if too generic (single word under 4 chars) or too long
+            if len(name) < 3 or len(name) > 60:
+                continue
+            seen.add(key)
+            result.append(name)
+            if len(result) >= max_count:
+                break
+
+        return result
 
     @staticmethod
     def _cache_key(query: str) -> str:
