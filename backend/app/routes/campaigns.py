@@ -8,6 +8,7 @@ from app.services.csv_parser import parse_file, detect_field_mapping, detect_add
 from app.services.claude_service import ClaudeService, clean_company_name, _looks_like_company_name, resolve_recipient_fields
 from app.services.campaign_runner import CampaignRunner
 from app.services.spam_checker import check_spam_score
+from app.services.recipient_addition import RecipientAdditionService, RecipientAdditionException
 import re
 from datetime import datetime
 import json
@@ -593,6 +594,138 @@ def regenerate_recipient_preview(id, recipient_id):
         return jsonify(resp)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@campaigns_bp.route('/<int:id>/add-recipient', methods=['POST'])
+def add_recipient(id):
+    """Add a single recipient (directory or manual) to campaign."""
+    campaign = Campaign.query.get_or_404(id)
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    source = data.get('source')  # 'directory' or 'manual'
+    if not source:
+        return jsonify({'error': 'Source required (directory or manual)'}), 400
+
+    try:
+        if source == 'directory':
+            contact_id = data.get('contact_id')
+            if not contact_id:
+                return jsonify({'error': 'contact_id required for directory source'}), 400
+
+            recipient = RecipientAdditionService.add_directory_contact(id, contact_id)
+            return jsonify({
+                'success': True,
+                'recipient': recipient.to_dict(),
+                'message': f"Contact added. Will receive email immediately.",
+                'duplicate': False
+            }), 200
+
+        elif source == 'manual':
+            email = data.get('email', '').strip().lower()
+            name = data.get('name', '').strip()
+            company = data.get('company', '').strip()
+            custom_fields = data.get('custom_fields', {})
+
+            contact_data = {
+                'email': email,
+                'name': name,
+                'company': company,
+                'custom_fields': custom_fields
+            }
+
+            recipient = RecipientAdditionService.add_manual_contact(id, contact_data)
+            return jsonify({
+                'success': True,
+                'recipient': recipient.to_dict(),
+                'message': f"Contact {email} added. Will receive email immediately.",
+                'duplicate': False
+            }), 201
+
+        else:
+            return jsonify({'error': f'Invalid source: {source}. Use "directory" or "manual"'}), 400
+
+    except RecipientAdditionException as e:
+        # Check if it's a duplicate error
+        is_duplicate = 'already in campaign' in str(e)
+        return jsonify({
+            'error': str(e),
+            'duplicate': is_duplicate
+        }), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@campaigns_bp.route('/<int:id>/add-recipients-bulk', methods=['POST'])
+def add_recipients_bulk(id):
+    """Bulk import recipients from CSV file."""
+    campaign = Campaign.query.get_or_404(id)
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        content = file.read()
+
+        # Get optional field mapping from request
+        mapping = None
+        mapping_str = request.form.get('mapping')
+        if mapping_str:
+            try:
+                mapping = json.loads(mapping_str)
+            except json.JSONDecodeError:
+                return jsonify({'error': 'Invalid mapping JSON'}), 400
+
+        result = RecipientAdditionService.bulk_add_from_csv(id, content, mapping)
+
+        # Update campaign total_recipients count
+        campaign.total_recipients = Recipient.query.filter_by(campaign_id=id).count()
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'added': result['added'],
+            'updated': result['updated'],
+            'skipped': result['skipped'],
+            'duplicates': result['duplicates'],
+            'total_processed': result['total_processed'],
+            'message': f"Added {result['added']} new recipients, skipped {result['skipped']}, found {result['duplicates']} duplicates"
+        }), 200
+
+    except RecipientAdditionException as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to import CSV: {str(e)}'}), 500
+
+@campaigns_bp.route('/<int:id>/add-recipient-status', methods=['GET'])
+def add_recipient_status(id):
+    """Check if campaign can accept new recipients."""
+    campaign = Campaign.query.get_or_404(id)
+
+    is_valid, error = RecipientAdditionService.validate_can_add_recipients(id)
+
+    if not is_valid:
+        return jsonify({
+            'can_add': False,
+            'campaign_status': campaign.status,
+            'message': error
+        }), 200
+
+    # Get step count
+    step_count = CampaignStep.query.filter_by(campaign_id=id).count()
+    current_recipients = Recipient.query.filter_by(campaign_id=id).count()
+
+    return jsonify({
+        'can_add': True,
+        'campaign_status': campaign.status,
+        'step_count': step_count,
+        'current_recipients': current_recipients,
+        'message': f"Campaign is {campaign.status}. New recipients will start at step 1 and receive emails immediately."
+    }), 200
 
 def _substitute_template_variables(text, recipient, extra_variables=None):
     """Replace {{variable}} placeholders with recipient data."""

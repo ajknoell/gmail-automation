@@ -18,6 +18,8 @@ class Recipient(db.Model):
     approved = db.Column(db.Boolean, default=False)
     sent_at = db.Column(db.DateTime)
     error_message = db.Column(db.Text)
+    enrolled_at = db.Column(db.DateTime, default=datetime.utcnow)  # Track when recipient was added to campaign
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def get_custom_fields(self):
         if self.custom_fields:
@@ -41,7 +43,9 @@ class Recipient(db.Model):
             'personalized_body': self.personalized_body,
             'approved': self.approved,
             'sent_at': self.sent_at.isoformat() if self.sent_at else None,
-            'error_message': self.error_message
+            'error_message': self.error_message,
+            'enrolled_at': self.enrolled_at.isoformat() if self.enrolled_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
     def get_all_context(self):

@@ -1,5 +1,6 @@
 import threading
 import time
+import queue
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -12,6 +13,7 @@ class CampaignState:
     pause_event: threading.Event = field(default_factory=threading.Event)
     cancel_event: threading.Event = field(default_factory=threading.Event)
     progress: dict = field(default_factory=lambda: {'sent': 0, 'failed': 0, 'total': 0})
+    new_recipients_queue: queue.Queue = field(default_factory=queue.Queue)  # For dynamically added recipients
 
 class CampaignRunner:
     _instances: Dict[int, CampaignState] = {}
@@ -96,7 +98,40 @@ class CampaignRunner:
                     from app.routes.quick_send import _resolve_attachments
                     campaign_attachments = _resolve_attachments(att_list) or None
 
-            for recipient_id in recipient_ids:
+            # Use a list that can grow dynamically with new recipients
+            all_recipient_ids = list(recipient_ids)
+            processed_ids = set()
+
+            while processed_ids != set(all_recipient_ids) or not state.new_recipients_queue.empty():
+                # Check for new recipients in queue
+                try:
+                    while not state.new_recipients_queue.empty():
+                        new_id = state.new_recipients_queue.get_nowait()
+                        if new_id not in all_recipient_ids:
+                            all_recipient_ids.append(new_id)
+                            state.progress['total'] += 1
+                except queue.Empty:
+                    pass
+
+                # Find next unprocessed recipient
+                recipient_id = None
+                for rid in all_recipient_ids:
+                    if rid not in processed_ids:
+                        recipient_id = rid
+                        break
+
+                if recipient_id is None:
+                    # All recipients processed, check queue once more
+                    try:
+                        if not state.new_recipients_queue.empty():
+                            time.sleep(0.5)  # Brief wait before checking again
+                            continue
+                    except:
+                        pass
+                    break  # No more recipients to process
+
+                processed_ids.add(recipient_id)
+
                 # Check for cancellation
                 if state.cancel_event.is_set():
                     break
@@ -314,3 +349,25 @@ class CampaignRunner:
             if state:
                 return state.progress.copy()
             return None
+
+    @classmethod
+    def add_new_recipients(cls, campaign_id: int, recipient_ids: List[int]) -> bool:
+        """
+        Add new recipients to a running campaign.
+
+        Args:
+            campaign_id: ID of the campaign
+            recipient_ids: List of recipient IDs to add
+
+        Returns:
+            True if recipients were queued, False if campaign not running
+        """
+        with cls._lock:
+            state = cls._instances.get(campaign_id)
+            if not state:
+                return False
+
+            # Add recipient IDs to the queue
+            for rid in recipient_ids:
+                state.new_recipients_queue.put(rid)
+            return True
