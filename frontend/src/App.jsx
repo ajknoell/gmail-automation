@@ -12,6 +12,7 @@ import ReplyHub from './pages/ReplyHub';
 import Settings from './pages/Settings';
 import Listings from './pages/Listings';
 import Insights from './pages/Insights';
+import MapExplorer from './pages/MapExplorer';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import './App.css';
 
@@ -60,6 +61,7 @@ function App() {
               <NavLink to="/campaigns">Campaigns</NavLink>
               <NavLink to="/templates">Templates</NavLink>
               <NavLink to="/contacts">Contacts</NavLink>
+              <NavLink to="/map-explorer">Map Explorer</NavLink>
               <NavLink to="/listings">Listings</NavLink>
               <NavLink to="/settings">Settings</NavLink>
             </nav>
@@ -82,6 +84,7 @@ function App() {
             <Route path="/contacts" element={<Contacts />} />
             <Route path="/contacts/:id" element={<ContactDetail />} />
             <Route path="/replies" element={<ReplyHub />} />
+            <Route path="/map-explorer" element={<MapExplorer />} />
             <Route path="/listings" element={<Listings />} />
             <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
           </Routes>

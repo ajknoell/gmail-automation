@@ -210,4 +210,13 @@ export const parseEmailPreview = (data) => api.post('/api/listings/parse-email',
 export const ingestEmailListing = (data) => api.post('/api/listings/ingest-email', data);
 export const scanEmailAlerts = (data) => api.post('/api/listings/scan-email-alerts', data);
 
+// Map Explorer
+export const getMapApiKey = () => api.get('/api/map-explorer/maps-js-key');
+export const geocodeAddress = (address) =>
+  api.get('/api/map-explorer/geocode', { params: { address } });
+export const searchNearbyPlaces = (data) =>
+  api.post('/api/map-explorer/search', data);
+export const addPlaceToOutreach = (data) =>
+  api.post('/api/map-explorer/add-to-outreach', data);
+
 export default api;
