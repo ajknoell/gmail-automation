@@ -86,6 +86,22 @@ export const updateRecipient = (campaignId, recipientId, data) =>
 export const regenerateRecipientPreview = (campaignId, recipientId) =>
   api.post(`/api/campaigns/${campaignId}/recipients/${recipientId}/regenerate`);
 
+// Add Recipient to Running Campaign
+export const addRecipientToCampaign = (campaignId, data) =>
+  api.post(`/api/campaigns/${campaignId}/add-recipient`, data);
+export const addRecipientsBulkToCampaign = (campaignId, file, mapping) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (mapping) {
+    formData.append('mapping', JSON.stringify(mapping));
+  }
+  return api.post(`/api/campaigns/${campaignId}/add-recipients-bulk`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const checkAddRecipientStatus = (campaignId) =>
+  api.get(`/api/campaigns/${campaignId}/add-recipient-status`);
+
 // Campaign Steps
 export const getSteps = (campaignId) => api.get(`/api/campaigns/${campaignId}/steps`);
 export const createStep = (campaignId, data) => api.post(`/api/campaigns/${campaignId}/steps`, data);

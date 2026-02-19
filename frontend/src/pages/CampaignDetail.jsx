@@ -38,6 +38,7 @@ import AttachmentPicker from '../components/AttachmentPicker';
 import RichTextEditor from '../components/RichTextEditor';
 import SequenceBuilder from '../components/SequenceBuilder';
 import ColdCallModal from '../components/ColdCallModal';
+import AddContactToRunningCampaignModal from '../components/AddContactToRunningCampaignModal';
 
 function MoveModal({ campaigns, selectedCount, onMove, onClose, isMoving }) {
   const [targetMode, setTargetMode] = useState('existing');
@@ -174,6 +175,7 @@ function CampaignDetail() {
   const [steps, setSteps] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [coldCallRecipientId, setColdCallRecipientId] = useState(null);
+  const [showAddContactModal, setShowAddContactModal] = useState(false);
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
 
@@ -899,6 +901,7 @@ function CampaignDetail() {
 
           {campaign.status === 'running' && (
             <>
+              <button className="btn btn-primary" onClick={() => setShowAddContactModal(true)}>Add Contacts</button>
               <button className="btn btn-warning" onClick={handlePause}>Pause</button>
               <button className="btn btn-danger" onClick={handleCancel}>Cancel</button>
             </>
@@ -916,6 +919,7 @@ function CampaignDetail() {
               <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
                 Follow-up sequence is running. Steps will send automatically based on their delay settings.
               </span>
+              <button className="btn btn-primary" onClick={() => setShowAddContactModal(true)}>Add Contacts</button>
               <button className="btn btn-danger" onClick={handleCancel}>Cancel Sequence</button>
             </>
           )}
@@ -1503,6 +1507,15 @@ function CampaignDetail() {
           campaignId={parseInt(id)}
           onClose={() => setColdCallRecipientId(null)}
           onSaved={() => setColdCallRecipientId(null)}
+        />
+      )}
+      {showAddContactModal && (
+        <AddContactToRunningCampaignModal
+          campaignId={parseInt(id)}
+          onClose={() => setShowAddContactModal(false)}
+          onSuccess={() => {
+            loadData();
+          }}
         />
       )}
     </div>
