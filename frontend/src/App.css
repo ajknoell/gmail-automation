@@ -42,13 +42,30 @@ body {
 }
 
 .header-content {
-  max-width: 1200px;
-  margin: 0 auto;
   padding: 0 1rem;
   display: flex;
   align-items: center;
-  height: 64px;
-  gap: 2rem;
+  height: 52px;
+  gap: 0.75rem;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  border-radius: 0.375rem;
+  color: var(--text-light);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg);
+  color: var(--text);
 }
 
 .logo {
@@ -56,43 +73,21 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   color: var(--text);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
 .logo-icon {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
 }
 
-.nav {
+.header-right {
+  margin-left: auto;
   display: flex;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.nav-link {
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  text-decoration: none;
-  color: var(--text-light);
-  font-weight: 500;
-  transition: all 0.15s;
-}
-
-.nav-link:hover {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.nav-link.active {
-  background: var(--primary);
-  color: white;
-}
-
-.status-indicators {
-  display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .status-badge {
@@ -100,6 +95,7 @@ body {
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .status-badge.connected {
@@ -112,13 +108,114 @@ body {
   color: #991B1B;
 }
 
+/* App Body: sidebar + main */
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  background: var(--bg-white);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 52px);
+  position: sticky;
+  top: 52px;
+  overflow-y: auto;
+  transition: width 0.2s ease, opacity 0.2s ease;
+}
+
+.sidebar.collapsed {
+  width: 0;
+  overflow: hidden;
+  border-right: none;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 0.5rem 0;
+}
+
+.nav-section {
+  padding: 0.25rem 0;
+}
+
+.nav-section-label {
+  padding: 0.5rem 1rem 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  color: var(--text-light);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: all 0.1s;
+  border-left: 2px solid transparent;
+}
+
+.sidebar-link:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.sidebar-link.active {
+  background: rgba(79, 70, 229, 0.06);
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+.sidebar-link svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.sidebar-link.active svg {
+  opacity: 1;
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 0.5rem 0;
+}
+
 /* Main Content */
 .main {
   flex: 1;
+  min-width: 0;
+  padding: 1.5rem 2rem;
   max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    z-index: 90;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .sidebar.collapsed {
+    width: 0;
+  }
+
+  .main {
+    padding: 1rem;
+  }
 }
 
 /* Cards */
