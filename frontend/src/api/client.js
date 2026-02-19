@@ -188,6 +188,12 @@ export const createWorkspace = (data) => api.post('/api/workspaces/', data);
 export const updateWorkspace = (id, data) => api.put(`/api/workspaces/${id}`, data);
 export const deleteWorkspace = (id) => api.delete(`/api/workspaces/${id}`);
 
+// Features
+export const getEnabledFeatures = () => api.get('/api/features/enabled');
+export const getAllFeatures = () => api.get('/api/features');
+export const updateFeatureVisibility = (featureName, enabled) =>
+  api.put(`/api/features/${featureName}/visibility`, { enabled });
+
 // Insights / Feedback Loop
 export const getInsights = () => api.get('/api/insights');
 export const triggerAnalysis = () => api.post('/api/insights/analyze');

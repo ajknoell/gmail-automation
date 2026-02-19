@@ -13,7 +13,11 @@ import {
   getClayWebhookUrl,
   getAutopilotConfig,
   saveAutopilotConfig,
+  getAllFeatures,
+  getEnabledFeatures,
+  updateFeatureVisibility
 } from '../api/client';
+import { useFeatureVisibility } from '../hooks/useFeatureVisibility';
 
 const DEFAULT_WRITING_STYLE = {
   tone: 'Casual but buttoned up. California-friendly - warm and personable but still professional. NOT a New York finance bro vibe. Approachable and real.',
@@ -54,6 +58,9 @@ function Settings({ onStatusChange }) {
     human_review_keywords: 'price, cost, contract, legal, urgent, budget, invoice, payment, proposal, quote',
   });
   const [savingAutopilot, setSavingAutopilot] = useState(false);
+  const [allFeatures, setAllFeatures] = useState({});
+  const [featureVisibility, setFeatureVisibility] = useState({});
+  const { reloadFeatures } = useFeatureVisibility();
 
   const loadGmailAccounts = async () => {
     try {
@@ -99,7 +106,25 @@ function Settings({ onStatusChange }) {
       }
     }).catch(() => {});
 
-    // Reload writing style when workspace changes
+    // Load feature visibility
+    const loadFeatureVisibility = async () => {
+      try {
+        const allFeaturesRes = await getAllFeatures();
+        setAllFeatures(allFeaturesRes.data || {});
+        const enabledRes = await getEnabledFeatures();
+        const enabled = enabledRes.data.enabled_features || [];
+        const visibility = {};
+        Object.keys(allFeaturesRes.data || {}).forEach(feature => {
+          visibility[feature] = enabled.includes(feature);
+        });
+        setFeatureVisibility(visibility);
+      } catch (error) {
+        console.error('Failed to load feature visibility:', error);
+      }
+    };
+    loadFeatureVisibility();
+
+    // Reload writing style and features when workspace changes
     const handleWsChange = () => {
       getSettings().then((res) => {
         setSettings(res.data);
@@ -109,6 +134,7 @@ function Settings({ onStatusChange }) {
           setWritingStyle(DEFAULT_WRITING_STYLE);
         }
       });
+      loadFeatureVisibility();
     };
     window.addEventListener('workspace-changed', handleWsChange);
     return () => window.removeEventListener('workspace-changed', handleWsChange);
@@ -222,6 +248,21 @@ function Settings({ onStatusChange }) {
       setMessage('Default account updated');
     } catch (error) {
       setMessage('Failed to set default account');
+    }
+  };
+
+  const handleToggleFeatureVisibility = async (featureName) => {
+    try {
+      const newEnabled = !featureVisibility[featureName];
+      await updateFeatureVisibility(featureName, newEnabled);
+      setFeatureVisibility(prev => ({ ...prev, [featureName]: newEnabled }));
+      await reloadFeatures();
+      // Dispatch workspace-changed to update nav in other components
+      window.dispatchEvent(new CustomEvent('workspace-changed'));
+      setMessage(`${allFeatures[featureName]?.display_name || featureName} ${newEnabled ? 'enabled' : 'disabled'}`);
+    } catch (error) {
+      setMessage(`Failed to toggle ${featureName} visibility`);
+      console.error('Feature visibility toggle error:', error);
     }
   };
 
@@ -629,6 +670,30 @@ function Settings({ onStatusChange }) {
               {savingAutopilot ? 'Saving...' : 'Save Autopilot Settings'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Feature Visibility */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Feature Visibility <span style={{ fontSize: '12px', background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
+        <p className="text-sm text-light mb-4">
+          Control which features are visible in this workspace. Hidden features preserve their data — you can re-enable them anytime.
+        </p>
+
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          {Object.entries(allFeatures).map(([featureName, metadata]) => (
+            <label key={featureName} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.5rem', borderRadius: '0.5rem', background: '#F9FAFB' }}>
+              <input
+                type="checkbox"
+                checked={featureVisibility[featureName] || false}
+                onChange={() => handleToggleFeatureVisibility(featureName)}
+                style={{ cursor: 'pointer' }}
+              />
+              <span style={{ fontWeight: 500 }}>{metadata.display_name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
         </div>
       </div>
 
