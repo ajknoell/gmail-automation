@@ -55,6 +55,7 @@ class PlacesService:
         lng: float,
         radius: int = 5000,
         included_type: str = '',
+        included_types: Optional[List[str]] = None,
         keyword: str = '',
         min_rating: float = 0,
         max_results: int = 20,
@@ -62,10 +63,13 @@ class PlacesService:
         """Search for businesses using Places API (New) searchNearby.
 
         Uses POST https://places.googleapis.com/v1/places:searchNearby
+        Accepts either a single included_type or a list of included_types.
         Returns list of normalized business dicts.
         """
+        # Build the types list from either parameter
+        types_list = included_types or ([included_type] if included_type else [])
         cache_key = hashlib.md5(
-            f'{lat},{lng},{radius},{included_type},{keyword},{min_rating}'.encode()
+            f'{lat},{lng},{radius},{",".join(sorted(types_list))},{keyword},{min_rating}'.encode()
         ).hexdigest()
         cached = _nearby_cache.get(cache_key)
         if cached and (time.time() - cached['ts']) < _CACHE_TTL:
@@ -80,8 +84,8 @@ class PlacesService:
             },
             'maxResultCount': min(max_results, 20),
         }
-        if included_type:
-            body['includedTypes'] = [included_type]
+        if types_list:
+            body['includedTypes'] = types_list
 
         field_mask = ','.join([
             'places.id',

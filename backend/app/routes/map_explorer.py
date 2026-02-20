@@ -69,6 +69,7 @@ def search_nearby():
             lng=lng,
             radius=data.get('radius', 5000),
             included_type=data.get('type', ''),
+            included_types=data.get('types') or None,
             keyword=data.get('keyword', ''),
             min_rating=data.get('min_rating', 0),
             max_results=data.get('max_results', 20),

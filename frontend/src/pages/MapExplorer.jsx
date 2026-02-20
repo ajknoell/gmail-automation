@@ -196,7 +196,9 @@ function MapExplorer() {
   const [error, setError] = useState('');
 
   // Filters
-  const [businessType, setBusinessType] = useState('');
+  const [selectedTypes, setSelectedTypes] = useState([]); // array of type values
+  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+  const typeDropdownRef = useRef(null);
   const [keywordSearch, setKeywordSearch] = useState('');
   const [searchMode, setSearchMode] = useState('type'); // 'type' or 'keyword'
   const [radius, setRadius] = useState(5000);
@@ -249,6 +251,17 @@ function MapExplorer() {
     };
     window.addEventListener('workspace-changed', handleWsChange);
     return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, []);
+
+  // Close type dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target)) {
+        setTypeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Initialize map when Maps JS API is loaded
@@ -355,7 +368,7 @@ function MapExplorer() {
           lat,
           lng,
           radius,
-          type: businessType,
+          types: selectedTypes.length > 0 ? selectedTypes : undefined,
           min_rating: minRating,
           max_results: 20,
         });
@@ -373,7 +386,7 @@ function MapExplorer() {
   };
 
   // Re-search when filters change (if we already have a center)
-  const handleFilterSearch = useCallback(async (newType, newRadius, newRating, mode, keyword) => {
+  const handleFilterSearch = useCallback(async (types, newRadius, newRating, mode, keyword) => {
     if (!center) return;
     setError('');
     setSearching(true);
@@ -381,6 +394,7 @@ function MapExplorer() {
 
     const activeMode = mode !== undefined ? mode : searchMode;
     const activeKeyword = keyword !== undefined ? keyword : keywordSearch;
+    const activeTypes = types !== undefined ? types : selectedTypes;
 
     try {
       let searchRes;
@@ -398,7 +412,7 @@ function MapExplorer() {
           lat: center.lat,
           lng: center.lng,
           radius: newRadius,
-          type: newType,
+          types: activeTypes.length > 0 ? activeTypes : undefined,
           min_rating: newRating,
           max_results: 20,
         });
@@ -411,7 +425,7 @@ function MapExplorer() {
       setError('Search failed.');
     }
     setSearching(false);
-  }, [center, searchMode, keywordSearch]);
+  }, [center, searchMode, keywordSearch, selectedTypes]);
 
   // Add to outreach modal handlers
   const openAddModal = (place) => {
@@ -578,8 +592,8 @@ function MapExplorer() {
           <button
             onClick={() => {
               setSearchMode('type');
-              if (center && businessType) {
-                handleFilterSearch(businessType, radius, minRating, 'type');
+              if (center && selectedTypes.length > 0) {
+                handleFilterSearch(selectedTypes, radius, minRating, 'type');
               }
             }}
             style={{
@@ -615,31 +629,137 @@ function MapExplorer() {
 
         {searchMode === 'type' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Type:</label>
-            <select
-              value={businessType}
-              onChange={(e) => {
-                setBusinessType(e.target.value);
-                handleFilterSearch(e.target.value, radius, minRating, 'type');
-              }}
-              style={{
-                padding: '0.35rem 0.5rem',
-                border: '1px solid #D1D5DB',
-                borderRadius: '0.375rem',
-                fontSize: '0.8rem',
-                background: '#fff',
-                maxWidth: '200px',
-              }}
-            >
-              <option value="">All Types</option>
-              {BUSINESS_TYPE_GROUPS.map((group) => (
-                <optgroup key={group.label} label={group.label}>
-                  {group.types.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
+            <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Types:</label>
+            <div ref={typeDropdownRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setTypeDropdownOpen((o) => !o)}
+                style={{
+                  padding: '0.35rem 0.5rem',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.8rem',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  minWidth: '180px',
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedTypes.length === 0
+                    ? 'All Types'
+                    : `${selectedTypes.length} selected`}
+                </span>
+                <span style={{ fontSize: '0.6rem', lineHeight: 1 }}>{typeDropdownOpen ? '\u25B2' : '\u25BC'}</span>
+              </button>
+              {typeDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  zIndex: 1000,
+                  background: '#fff',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '0.5rem',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  width: '260px',
+                  maxHeight: '360px',
+                  overflowY: 'auto',
+                  marginTop: '2px',
+                }}>
+                  {/* Clear / Select all row */}
+                  <div style={{
+                    padding: '0.4rem 0.6rem',
+                    borderBottom: '1px solid #E5E7EB',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                  }}>
+                    <button
+                      onClick={() => {
+                        setSelectedTypes([]);
+                        handleFilterSearch([], radius, minRating, 'type');
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#3B82F6', cursor: 'pointer', fontWeight: 500, fontSize: '0.75rem', padding: 0 }}
+                    >
+                      Clear all
+                    </button>
+                    <span style={{ color: '#9CA3AF' }}>
+                      {selectedTypes.length} selected
+                    </span>
+                  </div>
+                  {BUSINESS_TYPE_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <div style={{
+                        padding: '0.35rem 0.6rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        color: '#6B7280',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.03em',
+                        background: '#F9FAFB',
+                        borderBottom: '1px solid #F3F4F6',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}>
+                        <span>{group.label}</span>
+                        <button
+                          onClick={() => {
+                            const groupValues = group.types.map((t) => t.value);
+                            const allSelected = groupValues.every((v) => selectedTypes.includes(v));
+                            let newTypes;
+                            if (allSelected) {
+                              newTypes = selectedTypes.filter((v) => !groupValues.includes(v));
+                            } else {
+                              newTypes = [...new Set([...selectedTypes, ...groupValues])];
+                            }
+                            setSelectedTypes(newTypes);
+                            handleFilterSearch(newTypes, radius, minRating, 'type');
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#3B82F6', cursor: 'pointer', fontSize: '0.65rem', padding: 0 }}
+                        >
+                          {group.types.every((t) => selectedTypes.includes(t.value)) ? 'Deselect' : 'Select all'}
+                        </button>
+                      </div>
+                      {group.types.map((t) => (
+                        <label
+                          key={t.value}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.3rem 0.6rem',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #F9FAFB',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#F3F4F6'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTypes.includes(t.value)}
+                            onChange={() => {
+                              const newTypes = selectedTypes.includes(t.value)
+                                ? selectedTypes.filter((v) => v !== t.value)
+                                : [...selectedTypes, t.value];
+                              setSelectedTypes(newTypes);
+                              handleFilterSearch(newTypes, radius, minRating, 'type');
+                            }}
+                            style={{ margin: 0 }}
+                          />
+                          {t.label}
+                        </label>
+                      ))}
+                    </div>
                   ))}
-                </optgroup>
-              ))}
-            </select>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
@@ -650,7 +770,7 @@ function MapExplorer() {
               onChange={(e) => setKeywordSearch(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && center && keywordSearch.trim()) {
-                  handleFilterSearch(businessType, radius, minRating, 'keyword', keywordSearch);
+                  handleFilterSearch(selectedTypes, radius, minRating, 'keyword', keywordSearch);
                 }
               }}
               placeholder="e.g. mobile dog groomer, vegan bakery"
@@ -666,7 +786,7 @@ function MapExplorer() {
             <button
               onClick={() => {
                 if (center && keywordSearch.trim()) {
-                  handleFilterSearch(businessType, radius, minRating, 'keyword', keywordSearch);
+                  handleFilterSearch(selectedTypes, radius, minRating, 'keyword', keywordSearch);
                 }
               }}
               disabled={searching || !keywordSearch.trim() || !center}
@@ -700,8 +820,8 @@ function MapExplorer() {
               const v = parseInt(e.target.value);
               setRadius(v);
             }}
-            onMouseUp={() => handleFilterSearch(businessType, radius, minRating)}
-            onTouchEnd={() => handleFilterSearch(businessType, radius, minRating)}
+            onMouseUp={() => handleFilterSearch(selectedTypes, radius, minRating)}
+            onTouchEnd={() => handleFilterSearch(selectedTypes, radius, minRating)}
             style={{ width: '120px' }}
           />
         </div>
@@ -713,7 +833,7 @@ function MapExplorer() {
             onChange={(e) => {
               const v = parseFloat(e.target.value);
               setMinRating(v);
-              handleFilterSearch(businessType, radius, v);
+              handleFilterSearch(selectedTypes, radius, v);
             }}
             style={{
               padding: '0.35rem 0.5rem',
