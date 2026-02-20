@@ -244,6 +244,8 @@ export const geocodeAddress = (address) =>
   api.get('/api/map-explorer/geocode', { params: { address } });
 export const searchNearbyPlaces = (data) =>
   api.post('/api/map-explorer/search', data);
+export const textSearchPlaces = (data) =>
+  api.post('/api/map-explorer/text-search', data);
 export const addPlaceToOutreach = (data) =>
   api.post('/api/map-explorer/add-to-outreach', data);
 

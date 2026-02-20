@@ -3,39 +3,153 @@ import {
   getMapApiKey,
   geocodeAddress,
   searchNearbyPlaces,
+  textSearchPlaces,
   addPlaceToOutreach,
   getCampaigns,
 } from '../api/client';
 
-const BUSINESS_TYPES = [
-  { value: '', label: 'All Types' },
-  { value: 'restaurant', label: 'Restaurant' },
-  { value: 'cafe', label: 'Cafe' },
-  { value: 'bar', label: 'Bar' },
-  { value: 'store', label: 'Retail Store' },
-  { value: 'plumber', label: 'Plumber' },
-  { value: 'electrician', label: 'Electrician' },
-  { value: 'dentist', label: 'Dentist' },
-  { value: 'doctor', label: 'Doctor' },
-  { value: 'lawyer', label: 'Lawyer' },
-  { value: 'accounting', label: 'Accounting' },
-  { value: 'real_estate_agency', label: 'Real Estate' },
-  { value: 'insurance_agency', label: 'Insurance' },
-  { value: 'car_repair', label: 'Auto Repair' },
-  { value: 'beauty_salon', label: 'Beauty Salon' },
-  { value: 'hair_care', label: 'Hair Care' },
-  { value: 'gym', label: 'Gym / Fitness' },
-  { value: 'veterinary_care', label: 'Veterinarian' },
-  { value: 'bakery', label: 'Bakery' },
-  { value: 'florist', label: 'Florist' },
-  { value: 'laundry', label: 'Laundry' },
-  { value: 'locksmith', label: 'Locksmith' },
-  { value: 'moving_company', label: 'Moving Company' },
-  { value: 'painter', label: 'Painter' },
-  { value: 'pet_store', label: 'Pet Store' },
-  { value: 'pharmacy', label: 'Pharmacy' },
-  { value: 'roofing_contractor', label: 'Roofing' },
-  { value: 'travel_agency', label: 'Travel Agency' },
+const BUSINESS_TYPE_GROUPS = [
+  {
+    label: 'Food & Dining',
+    types: [
+      { value: 'restaurant', label: 'Restaurant' },
+      { value: 'cafe', label: 'Cafe' },
+      { value: 'bar', label: 'Bar' },
+      { value: 'bakery', label: 'Bakery' },
+      { value: 'pizza_restaurant', label: 'Pizza Restaurant' },
+      { value: 'ice_cream_shop', label: 'Ice Cream Shop' },
+      { value: 'coffee_shop', label: 'Coffee Shop' },
+      { value: 'meal_delivery', label: 'Meal Delivery' },
+      { value: 'meal_takeaway', label: 'Meal Takeaway' },
+      { value: 'night_club', label: 'Night Club' },
+    ],
+  },
+  {
+    label: 'Shopping & Retail',
+    types: [
+      { value: 'store', label: 'General Store' },
+      { value: 'grocery_store', label: 'Grocery Store' },
+      { value: 'convenience_store', label: 'Convenience Store' },
+      { value: 'clothing_store', label: 'Clothing Store' },
+      { value: 'shoe_store', label: 'Shoe Store' },
+      { value: 'jewelry_store', label: 'Jewelry Store' },
+      { value: 'book_store', label: 'Book Store' },
+      { value: 'gift_shop', label: 'Gift Shop' },
+      { value: 'bicycle_store', label: 'Bicycle Store' },
+      { value: 'pet_store', label: 'Pet Store' },
+      { value: 'sporting_goods_store', label: 'Sporting Goods' },
+      { value: 'hardware_store', label: 'Hardware Store' },
+      { value: 'electronics_store', label: 'Electronics Store' },
+      { value: 'furniture_store', label: 'Furniture Store' },
+      { value: 'home_goods_store', label: 'Home Goods' },
+      { value: 'home_improvement_store', label: 'Home Improvement' },
+      { value: 'liquor_store', label: 'Liquor Store' },
+      { value: 'florist', label: 'Florist' },
+      { value: 'discount_store', label: 'Discount Store' },
+    ],
+  },
+  {
+    label: 'Health & Medical',
+    types: [
+      { value: 'doctor', label: 'Doctor' },
+      { value: 'dentist', label: 'Dentist' },
+      { value: 'pharmacy', label: 'Pharmacy' },
+      { value: 'veterinary_care', label: 'Veterinarian' },
+      { value: 'physiotherapist', label: 'Physiotherapist' },
+      { value: 'optician', label: 'Optician' },
+      { value: 'medical_lab', label: 'Medical Lab' },
+    ],
+  },
+  {
+    label: 'Beauty & Wellness',
+    types: [
+      { value: 'beauty_salon', label: 'Beauty Salon' },
+      { value: 'hair_salon', label: 'Hair Salon' },
+      { value: 'hair_care', label: 'Hair Care' },
+      { value: 'nail_salon', label: 'Nail Salon' },
+      { value: 'barbershop', label: 'Barbershop' },
+      { value: 'spa', label: 'Spa' },
+      { value: 'tattoo_shop', label: 'Tattoo Shop' },
+      { value: 'gym', label: 'Gym / Fitness' },
+    ],
+  },
+  {
+    label: 'Home & Trade Services',
+    types: [
+      { value: 'plumber', label: 'Plumber' },
+      { value: 'electrician', label: 'Electrician' },
+      { value: 'roofing_contractor', label: 'Roofing' },
+      { value: 'painter', label: 'Painter' },
+      { value: 'locksmith', label: 'Locksmith' },
+      { value: 'moving_company', label: 'Moving Company' },
+      { value: 'laundry', label: 'Laundry' },
+      { value: 'shoe_repair', label: 'Shoe Repair' },
+      { value: 'tailor', label: 'Tailor' },
+      { value: 'funeral_home', label: 'Funeral Home' },
+      { value: 'storage', label: 'Storage' },
+    ],
+  },
+  {
+    label: 'Auto & Transport',
+    types: [
+      { value: 'car_repair', label: 'Auto Repair' },
+      { value: 'car_wash', label: 'Car Wash' },
+      { value: 'car_dealer', label: 'Car Dealer' },
+      { value: 'car_rental', label: 'Car Rental' },
+      { value: 'gas_station', label: 'Gas Station' },
+      { value: 'electric_vehicle_charging_station', label: 'EV Charging' },
+    ],
+  },
+  {
+    label: 'Professional & Financial',
+    types: [
+      { value: 'lawyer', label: 'Lawyer' },
+      { value: 'accounting', label: 'Accounting' },
+      { value: 'real_estate_agency', label: 'Real Estate' },
+      { value: 'insurance_agency', label: 'Insurance' },
+      { value: 'consultant', label: 'Consultant' },
+      { value: 'travel_agency', label: 'Travel Agency' },
+      { value: 'courier_service', label: 'Courier Service' },
+    ],
+  },
+  {
+    label: 'Arts & Entertainment',
+    types: [
+      { value: 'art_gallery', label: 'Art Gallery' },
+      { value: 'museum', label: 'Museum' },
+      { value: 'movie_theater', label: 'Movie Theater' },
+      { value: 'bowling_alley', label: 'Bowling Alley' },
+      { value: 'amusement_center', label: 'Amusement Center' },
+      { value: 'event_venue', label: 'Event Venue' },
+      { value: 'wedding_venue', label: 'Wedding Venue' },
+    ],
+  },
+  {
+    label: 'Lodging',
+    types: [
+      { value: 'hotel', label: 'Hotel' },
+      { value: 'bed_and_breakfast', label: 'Bed & Breakfast' },
+      { value: 'campground', label: 'Campground' },
+      { value: 'rv_park', label: 'RV Park' },
+    ],
+  },
+  {
+    label: 'Education & Childcare',
+    types: [
+      { value: 'school', label: 'School' },
+      { value: 'preschool', label: 'Preschool' },
+      { value: 'child_care_agency', label: 'Child Care' },
+    ],
+  },
+  {
+    label: 'Other Niche',
+    types: [
+      { value: 'photo_studio', label: 'Photo Studio' },
+      { value: 'phone_repair', label: 'Phone Repair' },
+      { value: 'marina', label: 'Marina' },
+      { value: 'golf_course', label: 'Golf Course' },
+    ],
+  },
 ];
 
 const RATING_OPTIONS = [
@@ -83,6 +197,8 @@ function MapExplorer() {
 
   // Filters
   const [businessType, setBusinessType] = useState('');
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [searchMode, setSearchMode] = useState('type'); // 'type' or 'keyword'
   const [radius, setRadius] = useState(5000);
   const [minRating, setMinRating] = useState(0);
 
@@ -224,14 +340,26 @@ function MapExplorer() {
       setCenter({ lat, lng });
       setFormattedAddress(formatted_address);
 
-      const searchRes = await searchNearbyPlaces({
-        lat,
-        lng,
-        radius,
-        type: businessType,
-        min_rating: minRating,
-        max_results: 20,
-      });
+      let searchRes;
+      if (searchMode === 'keyword' && keywordSearch.trim()) {
+        searchRes = await textSearchPlaces({
+          query: keywordSearch.trim(),
+          lat,
+          lng,
+          radius,
+          min_rating: minRating,
+          max_results: 20,
+        });
+      } else {
+        searchRes = await searchNearbyPlaces({
+          lat,
+          lng,
+          radius,
+          type: businessType,
+          min_rating: minRating,
+          max_results: 20,
+        });
+      }
       setResults(searchRes.data.results || []);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found in this area. Try expanding your radius or changing the business type.');
@@ -245,21 +373,36 @@ function MapExplorer() {
   };
 
   // Re-search when filters change (if we already have a center)
-  const handleFilterSearch = useCallback(async (newType, newRadius, newRating) => {
+  const handleFilterSearch = useCallback(async (newType, newRadius, newRating, mode, keyword) => {
     if (!center) return;
     setError('');
     setSearching(true);
     setSelectedPlace(null);
 
+    const activeMode = mode !== undefined ? mode : searchMode;
+    const activeKeyword = keyword !== undefined ? keyword : keywordSearch;
+
     try {
-      const searchRes = await searchNearbyPlaces({
-        lat: center.lat,
-        lng: center.lng,
-        radius: newRadius,
-        type: newType,
-        min_rating: newRating,
-        max_results: 20,
-      });
+      let searchRes;
+      if (activeMode === 'keyword' && activeKeyword.trim()) {
+        searchRes = await textSearchPlaces({
+          query: activeKeyword.trim(),
+          lat: center.lat,
+          lng: center.lng,
+          radius: newRadius,
+          min_rating: newRating,
+          max_results: 20,
+        });
+      } else {
+        searchRes = await searchNearbyPlaces({
+          lat: center.lat,
+          lng: center.lng,
+          radius: newRadius,
+          type: newType,
+          min_rating: newRating,
+          max_results: 20,
+        });
+      }
       setResults(searchRes.data.results || []);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found with these filters. Try adjusting your criteria.');
@@ -268,7 +411,7 @@ function MapExplorer() {
       setError('Search failed.');
     }
     setSearching(false);
-  }, [center]);
+  }, [center, searchMode, keywordSearch]);
 
   // Add to outreach modal handlers
   const openAddModal = (place) => {
@@ -425,27 +568,123 @@ function MapExplorer() {
         flexWrap: 'wrap',
         alignItems: 'center',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Type:</label>
-          <select
-            value={businessType}
-            onChange={(e) => {
-              setBusinessType(e.target.value);
-              handleFilterSearch(e.target.value, radius, minRating);
+        {/* Search mode toggle */}
+        <div style={{
+          display: 'flex',
+          border: '1px solid #D1D5DB',
+          borderRadius: '0.375rem',
+          overflow: 'hidden',
+        }}>
+          <button
+            onClick={() => {
+              setSearchMode('type');
+              if (center && businessType) {
+                handleFilterSearch(businessType, radius, minRating, 'type');
+              }
             }}
             style={{
-              padding: '0.35rem 0.5rem',
-              border: '1px solid #D1D5DB',
-              borderRadius: '0.375rem',
-              fontSize: '0.8rem',
-              background: '#fff',
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              border: 'none',
+              cursor: 'pointer',
+              background: searchMode === 'type' ? '#3B82F6' : '#fff',
+              color: searchMode === 'type' ? '#fff' : '#374151',
             }}
           >
-            {BUSINESS_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
+            By Category
+          </button>
+          <button
+            onClick={() => {
+              setSearchMode('keyword');
+            }}
+            style={{
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              border: 'none',
+              borderLeft: '1px solid #D1D5DB',
+              cursor: 'pointer',
+              background: searchMode === 'keyword' ? '#3B82F6' : '#fff',
+              color: searchMode === 'keyword' ? '#fff' : '#374151',
+            }}
+          >
+            Custom Search
+          </button>
         </div>
+
+        {searchMode === 'type' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Type:</label>
+            <select
+              value={businessType}
+              onChange={(e) => {
+                setBusinessType(e.target.value);
+                handleFilterSearch(e.target.value, radius, minRating, 'type');
+              }}
+              style={{
+                padding: '0.35rem 0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem',
+                fontSize: '0.8rem',
+                background: '#fff',
+                maxWidth: '200px',
+              }}
+            >
+              <option value="">All Types</option>
+              {BUSINESS_TYPE_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.types.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Find:</label>
+            <input
+              type="text"
+              value={keywordSearch}
+              onChange={(e) => setKeywordSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && center && keywordSearch.trim()) {
+                  handleFilterSearch(businessType, radius, minRating, 'keyword', keywordSearch);
+                }
+              }}
+              placeholder="e.g. mobile dog groomer, vegan bakery"
+              style={{
+                padding: '0.35rem 0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem',
+                fontSize: '0.8rem',
+                background: '#fff',
+                minWidth: '250px',
+              }}
+            />
+            <button
+              onClick={() => {
+                if (center && keywordSearch.trim()) {
+                  handleFilterSearch(businessType, radius, minRating, 'keyword', keywordSearch);
+                }
+              }}
+              disabled={searching || !keywordSearch.trim() || !center}
+              style={{
+                padding: '0.3rem 0.6rem',
+                background: (searching || !keywordSearch.trim() || !center) ? '#9CA3AF' : '#3B82F6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: (searching || !keywordSearch.trim() || !center) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Go
+            </button>
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>
