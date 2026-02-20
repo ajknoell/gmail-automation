@@ -138,6 +138,11 @@ def create_app(config_class=None):
     trigger_interval = app.config.get('TRIGGER_CHECK_INTERVAL', 86400)
     TriggerMonitor.start_background_polling(app, interval=trigger_interval)
 
+    # Start insights auto-refresh scheduler (every 6 hours)
+    from app.services.insights_scheduler import InsightsScheduler
+    insights_interval = app.config.get('INSIGHTS_CHECK_INTERVAL', 21600)
+    InsightsScheduler.start_background_polling(app, interval=insights_interval)
+
     return app
 
 

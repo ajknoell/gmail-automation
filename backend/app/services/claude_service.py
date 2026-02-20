@@ -307,14 +307,87 @@ class ClaudeService:
             parts.append(f"DETAIL LEVEL: {learned_website_insights['length_and_detail']}")
         if learned_website_insights.get('top_recommendation'):
             parts.append(f"TOP PRIORITY: {learned_website_insights['top_recommendation']}")
-        if parts:
-            confidence = learned_website_insights.get('confidence', 'medium')
-            return (
-                f"\nDATA-DRIVEN GUIDANCE (learned from analyzing which website observations actually "
-                f"drive email replies — confidence: {confidence} — apply these patterns):\n"
-                + "\n".join(parts) + "\n"
+        if not parts:
+            return ""
+
+        confidence = learned_website_insights.get('confidence', 'medium')
+        if confidence == 'high':
+            header = (
+                "\nDATA-DRIVEN GUIDANCE (learned from analyzing which website observations actually "
+                "drive email replies — high confidence, based on substantial data — apply these patterns):\n"
             )
-        return ""
+        elif confidence == 'medium':
+            header = (
+                "\nDATA-DRIVEN GUIDANCE (from website observation analysis — moderate "
+                "confidence — use as guidelines, not strict rules):\n"
+            )
+        else:
+            header = (
+                "\nPRELIMINARY GUIDANCE (from limited website observation data — treat "
+                "as early signals, prioritize quality observations over these patterns):\n"
+            )
+        return header + "\n".join(parts) + "\n"
+
+    @staticmethod
+    def _build_insights_instructions(learned_insights: dict, full: bool = True) -> str:
+        """Build data-driven insights block with confidence-gated framing.
+
+        Args:
+            learned_insights: The learned_insights dict (or None).
+            full: If True, include all insight keys. If False, include only
+                  the subset relevant for follow-up emails.
+        """
+        if not learned_insights:
+            return ""
+
+        if full:
+            key_map = [
+                ('subject_line_patterns', 'SUBJECT LINES'),
+                ('opening_patterns', 'OPENINGS'),
+                ('personalization_depth', 'PERSONALIZATION'),
+                ('length_insights', 'LENGTH'),
+                ('cta_patterns', 'CALLS TO ACTION'),
+                ('tone_insights', 'TONE'),
+                ('avoid_patterns', 'AVOID'),
+            ]
+        else:
+            key_map = [
+                ('subject_line_patterns', 'SUBJECT LINES'),
+                ('opening_patterns', 'OPENINGS'),
+                ('cta_patterns', 'CALLS TO ACTION'),
+                ('avoid_patterns', 'AVOID'),
+            ]
+
+        parts = []
+        for key, label in key_map:
+            if learned_insights.get(key):
+                parts.append(f"{label}: {learned_insights[key]}")
+
+        if not parts:
+            return ""
+
+        confidence = learned_insights.get('confidence', 'medium')
+
+        if confidence == 'high':
+            header = (
+                "DATA-DRIVEN INSIGHTS (learned from analyzing which of your emails "
+                "actually get replies — high confidence, based on substantial data — "
+                "apply these patterns consistently):"
+            )
+        elif confidence == 'medium':
+            header = (
+                "DATA-DRIVEN INSIGHTS (learned from analyzing your email performance — "
+                "moderate confidence — apply these as guidelines, use your judgment "
+                "when they conflict with specific recipient context):"
+            )
+        else:
+            header = (
+                "PRELIMINARY DATA-DRIVEN INSIGHTS (based on limited data — treat "
+                "these as early signals, not rules — prioritize recipient-specific "
+                "context and template structure over these patterns when in doubt):"
+            )
+
+        return header + "\n" + "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Visual (screenshot) analysis — primary path
@@ -926,30 +999,8 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         # Clean up empty lines left by removed placeholders
         resolved_body = _re.sub(r'\n\s*\n\s*\n', '\n\n', resolved_body)
 
-        # Build data-driven insights block
-        insights_instructions = ""
-        if learned_insights:
-            parts = []
-            if learned_insights.get('subject_line_patterns'):
-                parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
-            if learned_insights.get('opening_patterns'):
-                parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
-            if learned_insights.get('personalization_depth'):
-                parts.append(f"PERSONALIZATION: {learned_insights['personalization_depth']}")
-            if learned_insights.get('length_insights'):
-                parts.append(f"LENGTH: {learned_insights['length_insights']}")
-            if learned_insights.get('cta_patterns'):
-                parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
-            if learned_insights.get('tone_insights'):
-                parts.append(f"TONE: {learned_insights['tone_insights']}")
-            if learned_insights.get('avoid_patterns'):
-                parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
-            if parts:
-                confidence = learned_insights.get('confidence', 'medium')
-                insights_instructions = (
-                    f"DATA-DRIVEN INSIGHTS (learned from analyzing which of your emails actually get replies — "
-                    f"confidence: {confidence} — apply these patterns):\n" + "\n".join(parts)
-                )
+        # Build data-driven insights block (confidence-gated)
+        insights_instructions = self._build_insights_instructions(learned_insights, full=True)
 
         # Build website observations note outside f-string (Python 3.9 doesn't allow backslashes in f-string expressions)
         if website_insights:
@@ -1346,30 +1397,8 @@ Return ONLY valid JSON in this exact format:
             if style_parts:
                 style_instructions = "WRITER'S PERSONAL STYLE (match this voice exactly):\n" + "\n".join(style_parts)
 
-        # Build data-driven insights block for quick email
-        insights_instructions = ""
-        if learned_insights:
-            li_parts = []
-            if learned_insights.get('subject_line_patterns'):
-                li_parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
-            if learned_insights.get('opening_patterns'):
-                li_parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
-            if learned_insights.get('personalization_depth'):
-                li_parts.append(f"PERSONALIZATION: {learned_insights['personalization_depth']}")
-            if learned_insights.get('length_insights'):
-                li_parts.append(f"LENGTH: {learned_insights['length_insights']}")
-            if learned_insights.get('cta_patterns'):
-                li_parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
-            if learned_insights.get('tone_insights'):
-                li_parts.append(f"TONE: {learned_insights['tone_insights']}")
-            if learned_insights.get('avoid_patterns'):
-                li_parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
-            if li_parts:
-                confidence = learned_insights.get('confidence', 'medium')
-                insights_instructions = (
-                    f"DATA-DRIVEN INSIGHTS (learned from analyzing which of your emails actually get replies — "
-                    f"confidence: {confidence} — apply these patterns):\n" + "\n".join(li_parts)
-                )
+        # Build data-driven insights block for quick email (confidence-gated)
+        insights_instructions = self._build_insights_instructions(learned_insights, full=True)
 
         prompt = f"""You are ghostwriting a personalized outreach email. Write exactly like the person whose style is described below.
 
@@ -1709,23 +1738,8 @@ Do NOT dump all the research into the email. Pick ONE relevant detail.
             if style_parts:
                 style_instructions = "WRITER'S PERSONAL STYLE (match this voice exactly):\n" + "\n".join(style_parts)
 
-        # Build data-driven insights block
-        insights_instructions = ""
-        if learned_insights:
-            li_parts = []
-            if learned_insights.get('subject_line_patterns'):
-                li_parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
-            if learned_insights.get('opening_patterns'):
-                li_parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
-            if learned_insights.get('cta_patterns'):
-                li_parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
-            if learned_insights.get('avoid_patterns'):
-                li_parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
-            if li_parts:
-                confidence = learned_insights.get('confidence', 'medium')
-                insights_instructions = (
-                    f"DATA-DRIVEN INSIGHTS (confidence: {confidence}):\n" + "\n".join(li_parts)
-                )
+        # Build data-driven insights block (confidence-gated, follow-up subset)
+        insights_instructions = self._build_insights_instructions(learned_insights, full=False)
 
         contact_name = contact_info.get('name') or 'there'
         contact_company = contact_info.get('company') or 'their company'
@@ -1842,23 +1856,8 @@ Do NOT dump all the research into the email. Pick ONE relevant detail.
             if style_parts:
                 style_instructions = "WRITER'S PERSONAL STYLE (match this voice exactly):\n" + "\n".join(style_parts)
 
-        # Build data-driven insights block
-        insights_instructions = ""
-        if learned_insights:
-            li_parts = []
-            if learned_insights.get('subject_line_patterns'):
-                li_parts.append(f"SUBJECT LINES: {learned_insights['subject_line_patterns']}")
-            if learned_insights.get('opening_patterns'):
-                li_parts.append(f"OPENINGS: {learned_insights['opening_patterns']}")
-            if learned_insights.get('cta_patterns'):
-                li_parts.append(f"CALLS TO ACTION: {learned_insights['cta_patterns']}")
-            if learned_insights.get('avoid_patterns'):
-                li_parts.append(f"AVOID: {learned_insights['avoid_patterns']}")
-            if li_parts:
-                confidence = learned_insights.get('confidence', 'medium')
-                insights_instructions = (
-                    f"DATA-DRIVEN INSIGHTS (confidence: {confidence}):\n" + "\n".join(li_parts)
-                )
+        # Build data-driven insights block (confidence-gated, follow-up subset)
+        insights_instructions = self._build_insights_instructions(learned_insights, full=False)
 
         contact_name = contact_info.get('name') or 'there'
         contact_company = contact_info.get('company') or 'their company'
