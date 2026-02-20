@@ -119,16 +119,43 @@ class GenerationRunner:
                         _substitute_template_variables,
                     )
 
-                # Spam check generated emails
+                # Spam check + confidence scoring on generated emails
+                from app.services.confidence_scorer import ConfidenceScorer
+                import json as _json_mod
+
                 for rid in recipient_ids:
                     if state.cancel_event.is_set():
                         break
                     r = Recipient.query.get(rid)
-                    if r and r.personalized_body:
-                        sc = check_spam_score(
-                            r.personalized_subject or '', r.personalized_body
+                    if not r or not r.personalized_body:
+                        continue
+
+                    sc = check_spam_score(
+                        r.personalized_subject or '', r.personalized_body
+                    )
+
+                    try:
+                        result = ConfidenceScorer.score(
+                            subject=r.personalized_subject or '',
+                            body=r.personalized_body,
+                            recipient_data={
+                                'name': r.name,
+                                'company': r.company,
+                                'custom_fields': r.get_custom_fields(),
+                            },
+                            spam_score=sc['score'],
+                            workspace_id=campaign.workspace_id,
                         )
-                        # We don't track spam_warnings count in state, that's fine
+                        r.confidence_score = result['confidence']
+                        r.confidence_breakdown = _json_mod.dumps(result['breakdown'])
+
+                        # Auto-approve if confidence threshold met
+                        if campaign.auto_send_enabled and result['confidence'] >= (campaign.auto_send_threshold or 0.8):
+                            r.approved = True
+                    except Exception:
+                        pass
+
+                db.session.commit()
 
             except Exception as e:
                 logger.error(f"Generation runner error for campaign {campaign_id}: {e}")
