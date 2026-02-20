@@ -42,6 +42,7 @@ def create_app(config_class=None):
     from app.routes.discovery import discovery_bp
     from app.routes.brief import brief_bp
     from app.routes.triggers import triggers_bp
+    from app.routes.features import features_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(map_explorer_bp, url_prefix='/api/map-explorer')
@@ -60,6 +61,7 @@ def create_app(config_class=None):
     app.register_blueprint(discovery_bp, url_prefix='/api/discovery')
     app.register_blueprint(brief_bp, url_prefix='/api/brief')
     app.register_blueprint(triggers_bp, url_prefix='/api/triggers')
+    app.register_blueprint(features_bp, url_prefix='/api/features')
 
     # Create database tables and run migrations
     with app.app_context():

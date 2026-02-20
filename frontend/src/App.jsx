@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { getAuthStatus } from './api/client';
+import { useFeatureVisibility } from './hooks/useFeatureVisibility';
 import Home from './pages/Home';
 import QuickSend from './pages/QuickSend';
 import Campaigns from './pages/Campaigns';
@@ -46,6 +47,7 @@ function App() {
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const isMobile = useIsMobile();
+  const { isFeatureEnabled } = useFeatureVisibility();
 
   const refreshStatus = () => {
     getAuthStatus()
@@ -132,38 +134,50 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2H13V14H3V2ZM5 5H11M5 8H11M5 11H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   <span>Daily Brief</span>
                 </NavLink>
-                <NavLink to="/insights">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 14V8M6 14V4M10 14V6M14 14V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  <span>Insights</span>
-                </NavLink>
+                {isFeatureEnabled('insights') && (
+                  <NavLink to="/insights">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 14V8M6 14V4M10 14V6M14 14V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                    <span>Insights</span>
+                  </NavLink>
+                )}
               </div>
 
               <div className="nav-section">
                 <div className="nav-section-label">Outreach</div>
-                <NavLink to="/quick-send">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L10 14L7 9M14 2L2 6L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                  <span>Quick Send</span>
-                </NavLink>
-                <NavLink to="/replies">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 7L2 4L14 2L12 14L8 9M6 7L8 9M6 7V11" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                  <span>Reply Hub</span>
-                </NavLink>
-                <NavLink to="/campaigns">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3H14V13H2V3ZM2 3L8 8.5L14 3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                  <span>Campaigns</span>
-                </NavLink>
-                <NavLink to="/templates">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 2H12C13 2 14 3 14 4V12C14 13 13 14 12 14H4C3 14 2 13 2 12V4C2 3 3 2 4 2ZM2 6H14" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                  <span>Templates</span>
-                </NavLink>
+                {isFeatureEnabled('quick_send') && (
+                  <NavLink to="/quick-send">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 2L7 9M14 2L10 14L7 9M14 2L2 6L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Quick Send</span>
+                  </NavLink>
+                )}
+                {isFeatureEnabled('replies') && (
+                  <NavLink to="/replies">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 7L2 4L14 2L12 14L8 9M6 7L8 9M6 7V11" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Reply Hub</span>
+                  </NavLink>
+                )}
+                {isFeatureEnabled('campaigns') && (
+                  <NavLink to="/campaigns">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3H14V13H2V3ZM2 3L8 8.5L14 3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Campaigns</span>
+                  </NavLink>
+                )}
+                {isFeatureEnabled('templates') && (
+                  <NavLink to="/templates">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 2H12C13 2 14 3 14 4V12C14 13 13 14 12 14H4C3 14 2 13 2 12V4C2 3 3 2 4 2ZM2 6H14" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Templates</span>
+                  </NavLink>
+                )}
               </div>
 
               <div className="nav-section">
                 <div className="nav-section-label">Data</div>
-                <NavLink to="/contacts">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 7C9.66 7 11 5.66 11 4S9.66 1 8 1 5 2.34 5 4 6.34 7 8 7ZM2 15V13C2 11.34 5 10 8 10S14 11.34 14 13V15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  <span>Contacts</span>
-                </NavLink>
+                {isFeatureEnabled('contacts') && (
+                  <NavLink to="/contacts">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 7C9.66 7 11 5.66 11 4S9.66 1 8 1 5 2.34 5 4 6.34 7 8 7ZM2 15V13C2 11.34 5 10 8 10S14 11.34 14 13V15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                    <span>Contacts</span>
+                  </NavLink>
+                )}
                 <NavLink to="/discovery">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.5 11C9 11 11 9 11 6.5S9 2 6.5 2 2 4 2 6.5 4 11 6.5 11ZM11 11L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   <span>Discovery</span>
@@ -172,10 +186,12 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1C5.24 1 3 3.24 3 6C3 9.5 8 15 8 15S13 9.5 13 6C13 3.24 10.76 1 8 1ZM8 7.5C7.17 7.5 6.5 6.83 6.5 6S7.17 4.5 8 4.5 9.5 5.17 9.5 6 8.83 7.5 8 7.5Z" stroke="currentColor" strokeWidth="1.5"/></svg>
                   <span>Map Explorer</span>
                 </NavLink>
-                <NavLink to="/listings">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                  <span>Listings</span>
-                </NavLink>
+                {isFeatureEnabled('listings') && (
+                  <NavLink to="/listings">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Listings</span>
+                  </NavLink>
+                )}
                 <NavLink to="/triggers">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1L3 9H8L7 15L13 7H8L9 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Triggers</span>
