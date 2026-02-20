@@ -67,7 +67,7 @@ BIO_AGE_PATTERNS = [
 FAMILY_BIZ_PATTERNS = [
     re.compile(r'(?:family[\s-]owned|family\s+business|family[\s-]run|family[\s-]operated)', re.IGNORECASE),
     re.compile(r'(?:father|mother|dad)\s+(?:and\s+)?(?:son|daughter)', re.IGNORECASE),
-    re.compile(r'(?:passed\s+down|handed\s+down|legacy)', re.IGNORECASE),
+    re.compile(r'(?:passed\s+down|handed\s+down|(?:family|generational)\s+legacy)', re.IGNORECASE),
 ]
 
 # Patterns that indicate succession already completed — younger owner now runs it
@@ -156,6 +156,9 @@ class EnrichmentService:
             if website_data.get('decision_maker'):
                 lead.decision_maker = website_data['decision_maker']
                 results['decision_maker'] = website_data['decision_maker']
+            elif lead.decision_maker and not re.match(r'^[A-Z][a-z]+ [A-Z][a-z]+', lead.decision_maker):
+                # Clear invalid decision_maker values from prior enrichments
+                lead.decision_maker = None
 
         # Step 2: Google search for LinkedIn company page
         linkedin_data = cls.search_linkedin_company(lead.name, lead.address)
@@ -311,18 +314,23 @@ class EnrichmentService:
     @classmethod
     def _extract_decision_maker(cls, html_text):
         """Try to extract owner/founder/CEO name from page text."""
-        # Common title patterns
+        # Strip HTML tags first to avoid matching inside tag attributes
+        clean_text = re.sub(r'<[^>]+>', ' ', html_text)
+
+        # Common title patterns — require word boundaries to avoid partial matches
+        title_group = r'\b(?:CEO|Chief\s*Executive|Founder|Owner|President|Managing\s*Director)\b'
+        name_group = r'([A-Z][a-z]{1,15} [A-Z][a-z]{1,15})'
         patterns = [
-            re.compile(r'(?:CEO|Chief\s*Executive|Founder|Owner|President|Managing\s*Director)[,:\s]*(?:&amp;|&|and)?\s*([A-Z][a-z]+ [A-Z][a-z]+)', re.IGNORECASE),
-            re.compile(r'([A-Z][a-z]+ [A-Z][a-z]+)\s*[,\-\|]\s*(?:CEO|Chief\s*Executive|Founder|Owner|President|Managing\s*Director)', re.IGNORECASE),
+            re.compile(title_group + r'[,:\s]*(?:&amp;|&|and)?\s*' + name_group),
+            re.compile(name_group + r'\s*[,\-\|]\s*' + title_group),
         ]
 
         for pattern in patterns:
-            match = pattern.search(html_text)
+            match = pattern.search(clean_text)
             if match:
                 name = match.group(1).strip()
                 # Filter out common false positives
-                if len(name) > 4 and len(name) < 50:
+                if len(name) > 4 and len(name) < 50 and not re.match(r'(?:The |This |That |All |Our |New |Web )', name):
                     return name
 
         return None
@@ -422,6 +430,9 @@ class EnrichmentService:
 
         current_year = datetime.utcnow().year
 
+        # Strip HTML tags for content-based matching (avoid matching CSS/JS tokens)
+        clean_text = re.sub(r'<[^>]+>', ' ', all_text)
+
         # 1. Year founded signal
         year_str = lead.year_founded
         if year_str:
@@ -437,10 +448,8 @@ class EnrichmentService:
 
         # 2. Tenure / experience language
         for pattern in TENURE_PATTERNS:
-            for match in pattern.finditer(all_text):
-                snippet = all_text[max(0, match.start() - 30):match.end() + 30].strip()
-                # Remove HTML tags from snippet
-                snippet = re.sub(r'<[^>]+>', ' ', snippet).strip()
+            for match in pattern.finditer(clean_text):
+                snippet = clean_text[max(0, match.start() - 30):match.end() + 30].strip()
                 signals['tenure_language'].append({
                     'text': match.group(0).strip(),
                     'context': snippet[:100],
@@ -471,9 +480,8 @@ class EnrichmentService:
 
         # 4. Biographical signals
         for pattern in BIO_AGE_PATTERNS:
-            for match in pattern.finditer(all_text):
-                snippet = all_text[max(0, match.start() - 40):match.end() + 40].strip()
-                snippet = re.sub(r'<[^>]+>', ' ', snippet).strip()
+            for match in pattern.finditer(clean_text):
+                snippet = clean_text[max(0, match.start() - 40):match.end() + 40].strip()
                 entry = {'text': match.group(0).strip(), 'context': snippet[:120]}
                 try:
                     grad_year = int(match.group(1))
@@ -490,24 +498,26 @@ class EnrichmentService:
 
         # 5. Family business / succession patterns
         for pattern in FAMILY_BIZ_PATTERNS:
-            if pattern.search(all_text):
+            if pattern.search(clean_text):
                 signals['business_pattern_signals']['is_family_business'] = True
                 break
 
         # Check if succession already completed (son/daughter took over = younger owner)
         for pattern in SUCCESSION_COMPLETED_PATTERNS:
-            if pattern.search(all_text):
+            if pattern.search(clean_text):
                 signals['business_pattern_signals']['succession_completed'] = True
                 signals['business_pattern_signals']['no_succession_visible'] = False
                 break
 
         if not signals['business_pattern_signals']['succession_completed']:
-            if re.search(r'(?:succession|transition|next\s+generation|passing\s+the\s+torch)', all_text, re.IGNORECASE):
+            # Require business-context for "transition" to avoid matching generic uses
+            if re.search(r'(?:succession|transition\s+(?:plan|of\s+(?:ownership|leadership|management))|ownership\s+transition|next\s+generation|passing\s+the\s+torch)', clean_text, re.IGNORECASE):
                 signals['business_pattern_signals']['no_succession_visible'] = False
 
         # Single owner: decision maker found but no partners or management team mentioned
-        if lead.decision_maker:
-            if not re.search(r'(?:partners?|co-(?:founder|owner)|management\s+team|leadership\s+team)', all_text, re.IGNORECASE):
+        # Validate decision_maker looks like a real name (two capitalized words)
+        if lead.decision_maker and re.match(r'^[A-Z][a-z]+ [A-Z][a-z]+', lead.decision_maker):
+            if not re.search(r'(?:partners?|co-(?:founder|owner)|management\s+team|leadership\s+team)', clean_text, re.IGNORECASE):
                 signals['business_pattern_signals']['single_owner'] = True
 
         # Business category match
