@@ -16,6 +16,8 @@ def get_leads():
     status = request.args.get('status')
     source = request.args.get('source')
     min_score = request.args.get('min_score', type=int)
+    min_retirement = request.args.get('min_retirement', type=int)
+    retirement_label = request.args.get('retirement_label')
     sort_by = request.args.get('sort', 'created_at')
     order = request.args.get('order', 'desc')
 
@@ -30,6 +32,10 @@ def get_leads():
         query = query.filter_by(source=source)
     if min_score is not None:
         query = query.filter(Lead.score >= min_score)
+    if min_retirement is not None:
+        query = query.filter(Lead.retirement_score >= min_retirement)
+    if retirement_label:
+        query = query.filter_by(retirement_label=retirement_label)
 
     # Sorting
     sort_col = getattr(Lead, sort_by, Lead.created_at)
@@ -67,12 +73,19 @@ def get_stats():
         Lead.employee_count.isnot(None),
     ).count()
 
+    with_high_retirement = Lead.query.filter(
+        Lead.workspace_id == ws_id,
+        Lead.retirement_score.isnot(None),
+        Lead.retirement_score >= 60,
+    ).count()
+
     return jsonify({
         'total': total,
         'by_status': by_status,
         'avg_score': round(avg_score, 1) if avg_score else 0,
         'with_email': with_email,
         'with_employee_count': with_employee_count,
+        'with_high_retirement': with_high_retirement,
     })
 
 

@@ -46,6 +46,53 @@ LINKEDIN_EMPLOYEE_PATTERNS = [
     re.compile(r'Company size\s*[:\s]*(\d+)', re.IGNORECASE),
 ]
 
+# --- Owner retirement likelihood detection patterns ---
+
+# Patterns for owner tenure / experience duration
+TENURE_PATTERNS = [
+    re.compile(r'(\d{1,2})\+?\s*years?\s*(?:of\s+)?(?:experience|in\s+(?:the\s+)?(?:business|industry|trade))', re.IGNORECASE),
+    re.compile(r'(?:serving|providing|operating|in\s+business)\s*(?:since|for\s+over|for)\s*(\d{4})', re.IGNORECASE),
+    re.compile(r'(?:over|more\s+than)\s*(\d{1,2})\s*(?:decades?|years?)\s*(?:of\s+)?(?:experience|service)', re.IGNORECASE),
+    re.compile(r'(?:family[\s-]owned|family\s+business)\s*(?:since|for\s+over|for)\s*(\d{4})', re.IGNORECASE),
+]
+
+# Patterns for biographical age indicators
+BIO_AGE_PATTERNS = [
+    re.compile(r'(?:class\s+of|graduated?\s+(?:in\s+)?|graduated\s+from\s+\w+\s+in\s+)(\d{4})', re.IGNORECASE),
+    re.compile(r'(\d{1,2})\s*(?:decades?)\s*(?:of\s+)?(?:experience|service|in)', re.IGNORECASE),
+    re.compile(r'(?:retired|semi[\s-]retired|winding\s+down|succession\s+plan|transition\s+plan)', re.IGNORECASE),
+]
+
+# Patterns for family business / succession language
+FAMILY_BIZ_PATTERNS = [
+    re.compile(r'(?:family[\s-]owned|family\s+business|family[\s-]run|family[\s-]operated)', re.IGNORECASE),
+    re.compile(r'(?:second|third|2nd|3rd|next)\s*generation', re.IGNORECASE),
+    re.compile(r'(?:father|mother|dad|son|daughter|husband|wife)\s+(?:and\s+)?(?:son|daughter)', re.IGNORECASE),
+    re.compile(r'(?:passed\s+down|handed\s+down|succession|legacy)', re.IGNORECASE),
+]
+
+# Copyright year pattern for website age detection
+COPYRIGHT_YEAR_RE = re.compile(r'(?:\u00a9|&copy;|\(c\)|copyright)\s*(\d{4})', re.IGNORECASE)
+
+# Outdated website indicators (from raw HTML)
+OUTDATED_SITE_PATTERNS = [
+    re.compile(r'<table[^>]*(?:width|cellpadding|cellspacing|border)=', re.IGNORECASE),
+    re.compile(r'<font\s', re.IGNORECASE),
+    re.compile(r'<marquee', re.IGNORECASE),
+    re.compile(r'<center>', re.IGNORECASE),
+]
+
+# Business categories with higher rates of retirement-age owners
+HIGH_RETIREMENT_CATEGORIES = {
+    'plumber', 'plumbing', 'electrician', 'electrical', 'hvac', 'heating',
+    'auto_repair', 'mechanic', 'roofing', 'roofer', 'painting', 'painter',
+    'locksmith', 'landscaping', 'landscaper', 'carpet_cleaning', 'dry_cleaner',
+    'laundromat', 'barber', 'hair_salon', 'florist', 'bakery', 'deli',
+    'hardware_store', 'print_shop', 'tailor', 'upholstery', 'welding',
+    'general_contractor', 'masonry', 'concrete', 'fencing', 'pest_control',
+    'janitorial', 'cleaning_service', 'moving_company', 'towing',
+}
+
 _HEADERS = {
     'User-Agent': (
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
@@ -76,11 +123,16 @@ class EnrichmentService:
             'linkedin_url': None,
             'year_founded': None,
             'decision_maker': None,
+            'retirement_score': None,
+            'retirement_label': None,
         }
+
+        all_text = ''
 
         # Step 1: Scrape company website for emails, team size, year founded
         if lead.website:
             website_data = cls.scrape_company_website(lead.website)
+            all_text = website_data.get('all_text', '')
             if website_data['emails']:
                 lead.set_emails_found(website_data['emails'])
                 results['emails_found'] = len(website_data['emails'])
@@ -107,6 +159,28 @@ class EnrichmentService:
             lead.employee_count_source = 'linkedin_google'
             results['employee_count'] = linkedin_data['employee_count']
 
+        # Step 2.5: Owner retirement likelihood detection
+        retirement_signals = cls._extract_retirement_signals(all_text, lead)
+
+        # Conditionally search web for owner retirement/succession signals
+        has_initial_signals = bool(
+            retirement_signals.get('tenure_language')
+            or (retirement_signals.get('year_founded_signal')
+                and retirement_signals['year_founded_signal']['years_ago'] >= 20)
+            or retirement_signals.get('biographical_signals')
+        )
+        if lead.decision_maker and has_initial_signals:
+            web_signals = cls._search_owner_web_signals(lead)
+            retirement_signals['web_search_signals'] = web_signals
+
+        retirement_result = cls._heuristic_retirement_score(retirement_signals, lead)
+        retirement_signals['analysis'] = retirement_result
+
+        lead.retirement_score = retirement_result['score']
+        lead.retirement_label = retirement_result['label']
+        results['retirement_score'] = retirement_result['score']
+        results['retirement_label'] = retirement_result['label']
+
         # Step 3: Calculate lead score
         score, breakdown = cls.calculate_score(lead)
         lead.score = score
@@ -126,6 +200,7 @@ class EnrichmentService:
             'enrichment_timestamp': datetime.utcnow().isoformat(),
             'website_scraped': bool(lead.website),
             'linkedin_searched': True,
+            'retirement_signals': retirement_signals,
         })
         lead.set_enrichment_data(extra)
 
@@ -138,10 +213,10 @@ class EnrichmentService:
         and decision-maker info from main page, /about, /contact, /team pages.
 
         Returns:
-            dict with keys: emails, phones, employee_count, year_founded, decision_maker
+            dict with keys: emails, phones, employee_count, year_founded, decision_maker, all_text
         """
         if not website_url:
-            return {'emails': [], 'phones': [], 'employee_count': None, 'year_founded': None, 'decision_maker': None}
+            return {'emails': [], 'phones': [], 'employee_count': None, 'year_founded': None, 'decision_maker': None, 'all_text': ''}
 
         if not website_url.startswith('http'):
             website_url = f'https://{website_url}'
@@ -222,6 +297,7 @@ class EnrichmentService:
             'employee_count': employee_count,
             'year_founded': year_founded,
             'decision_maker': decision_maker,
+            'all_text': all_text,
         }
 
     @classmethod
@@ -316,6 +392,235 @@ class EnrichmentService:
         return result
 
     @classmethod
+    def _extract_retirement_signals(cls, all_text, lead):
+        """Extract retirement likelihood signals from scraped website text and lead metadata."""
+        signals = {
+            'year_founded_signal': None,
+            'tenure_language': [],
+            'website_age_indicators': {
+                'copyright_year': None,
+                'has_social_media': False,
+                'outdated_design_signals': [],
+            },
+            'biographical_signals': [],
+            'business_pattern_signals': {
+                'is_family_business': False,
+                'single_owner': False,
+                'no_succession_visible': True,
+                'high_retirement_category': False,
+            },
+        }
+
+        current_year = datetime.utcnow().year
+
+        # 1. Year founded signal
+        year_str = lead.year_founded
+        if year_str:
+            try:
+                year_val = int(year_str)
+                years_ago = current_year - year_val
+                weight = 'high' if years_ago >= 35 else ('medium' if years_ago >= 25 else 'low')
+                signals['year_founded_signal'] = {
+                    'value': year_str, 'years_ago': years_ago, 'weight': weight,
+                }
+            except ValueError:
+                pass
+
+        # 2. Tenure / experience language
+        for pattern in TENURE_PATTERNS:
+            for match in pattern.finditer(all_text):
+                snippet = all_text[max(0, match.start() - 30):match.end() + 30].strip()
+                # Remove HTML tags from snippet
+                snippet = re.sub(r'<[^>]+>', ' ', snippet).strip()
+                signals['tenure_language'].append({
+                    'text': match.group(0).strip(),
+                    'context': snippet[:100],
+                    'source': 'website',
+                })
+                if len(signals['tenure_language']) >= 5:
+                    break
+            if len(signals['tenure_language']) >= 5:
+                break
+
+        # 3. Website age indicators
+        copyright_matches = COPYRIGHT_YEAR_RE.findall(all_text)
+        if copyright_matches:
+            try:
+                latest_copyright = max(int(y) for y in copyright_matches if y.isdigit())
+                signals['website_age_indicators']['copyright_year'] = str(latest_copyright)
+            except ValueError:
+                pass
+
+        social_patterns = ['facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'youtube.com']
+        signals['website_age_indicators']['has_social_media'] = any(s in all_text.lower() for s in social_patterns)
+
+        for pattern in OUTDATED_SITE_PATTERNS:
+            if pattern.search(all_text):
+                # Store a readable label instead of the raw regex
+                label = pattern.pattern.split('[')[0].replace('<', '').replace('\\s', ' ').strip()
+                signals['website_age_indicators']['outdated_design_signals'].append(label)
+
+        # 4. Biographical signals
+        for pattern in BIO_AGE_PATTERNS:
+            for match in pattern.finditer(all_text):
+                snippet = all_text[max(0, match.start() - 40):match.end() + 40].strip()
+                snippet = re.sub(r'<[^>]+>', ' ', snippet).strip()
+                entry = {'text': match.group(0).strip(), 'context': snippet[:120]}
+                try:
+                    grad_year = int(match.group(1))
+                    if 1950 <= grad_year <= 2010:
+                        approx_age = current_year - grad_year + 22
+                        entry['implied_age_range'] = f'{approx_age - 3}-{approx_age + 3}'
+                except (ValueError, IndexError):
+                    pass
+                signals['biographical_signals'].append(entry)
+                if len(signals['biographical_signals']) >= 5:
+                    break
+            if len(signals['biographical_signals']) >= 5:
+                break
+
+        # 5. Family business / succession patterns
+        for pattern in FAMILY_BIZ_PATTERNS:
+            if pattern.search(all_text):
+                signals['business_pattern_signals']['is_family_business'] = True
+                break
+
+        if re.search(r'(?:succession|transition|next\s+generation|passing\s+the\s+torch)', all_text, re.IGNORECASE):
+            signals['business_pattern_signals']['no_succession_visible'] = False
+
+        # Single owner: decision maker found but no partners or management team mentioned
+        if lead.decision_maker:
+            if not re.search(r'(?:partners?|co-(?:founder|owner)|management\s+team|leadership\s+team)', all_text, re.IGNORECASE):
+                signals['business_pattern_signals']['single_owner'] = True
+
+        # Business category match
+        if lead.business_category:
+            cat_lower = lead.business_category.lower().replace(' ', '_')
+            if any(term in cat_lower for term in HIGH_RETIREMENT_CATEGORIES):
+                signals['business_pattern_signals']['high_retirement_category'] = True
+
+        return signals
+
+    @classmethod
+    def _search_owner_web_signals(cls, lead):
+        """Conditionally search web for owner retirement/succession signals via Tavily."""
+        try:
+            from app.models.settings import Settings
+            from app.services.web_search import WebSearchService
+
+            tavily_key = Settings.get('tavily_api_key')
+            if not tavily_key or not lead.decision_maker:
+                return {'query': None, 'findings': []}
+
+            owner_name = lead.decision_maker
+            company = lead.name
+            query = f'"{owner_name}" "{company}" retirement OR succession OR "years of experience" OR retiring'
+
+            web_search = WebSearchService(tavily_key)
+            result = web_search.search(query, max_results=3, search_depth='basic', include_answer=True)
+
+            findings = []
+            if result.get('answer'):
+                findings.append({
+                    'text': result['answer'][:300],
+                    'url': None,
+                    'relevance': 'summary',
+                })
+            for r in result.get('results', []):
+                content = r.get('content', '')
+                if content:
+                    findings.append({
+                        'text': content[:300],
+                        'url': r.get('url', ''),
+                        'relevance': 'search_result',
+                    })
+
+            return {'query': query, 'findings': findings}
+
+        except Exception as e:
+            logger.warning(f'Retirement web search failed for "{lead.name}": {e}')
+            return {'query': None, 'findings': []}
+
+    @classmethod
+    def _heuristic_retirement_score(cls, signals, lead):
+        """Score retirement likelihood using heuristic rules. Returns dict with score, label, key_evidence."""
+        points = 0
+        evidence = []
+        current_year = datetime.utcnow().year
+
+        # Year founded
+        yf = signals.get('year_founded_signal')
+        if yf:
+            if yf['years_ago'] >= 35:
+                points += 30
+                evidence.append(f"Business founded {yf['years_ago']} years ago ({yf['value']})")
+            elif yf['years_ago'] >= 25:
+                points += 15
+                evidence.append(f"Business founded {yf['years_ago']} years ago ({yf['value']})")
+
+        # Tenure language
+        tenure = signals.get('tenure_language', [])
+        if tenure:
+            points += 20
+            evidence.append(f"Tenure language: \"{tenure[0]['text']}\"")
+
+        # Biographical signals
+        bio = signals.get('biographical_signals', [])
+        if bio:
+            points += 15
+            evidence.append(f"Bio signal: \"{bio[0]['text']}\"")
+
+        # Website age indicators
+        wa = signals.get('website_age_indicators', {})
+        if wa.get('copyright_year'):
+            try:
+                years_stale = current_year - int(wa['copyright_year'])
+                if years_stale >= 3:
+                    points += 10
+                    evidence.append(f"Website copyright {years_stale} years stale ({wa['copyright_year']})")
+            except ValueError:
+                pass
+        if not wa.get('has_social_media'):
+            points += 5
+        if wa.get('outdated_design_signals'):
+            points += 5
+            evidence.append('Outdated website design detected')
+
+        # Business patterns
+        bp = signals.get('business_pattern_signals', {})
+        if bp.get('is_family_business'):
+            points += 10
+            evidence.append('Family-owned business')
+        if bp.get('single_owner') and bp.get('no_succession_visible'):
+            points += 10
+            evidence.append('Single owner, no succession plan visible')
+        if bp.get('high_retirement_category'):
+            points += 5
+            evidence.append('Industry with high retirement-age owner rate')
+
+        # Web search signals (if Tavily ran)
+        ws = signals.get('web_search_signals', {})
+        if ws.get('findings'):
+            points += 15
+            evidence.append('Web search found retirement/succession mentions')
+
+        score = min(points, 100)
+        if score >= 75:
+            label = 'high'
+        elif score >= 40:
+            label = 'medium'
+        elif score >= 1:
+            label = 'low'
+        else:
+            label = 'unknown'
+
+        return {
+            'score': score,
+            'label': label,
+            'key_evidence': evidence[:5],
+        }
+
+    @classmethod
     def calculate_score(cls, lead):
         """
         Calculate a lead quality score (0-100) based on available data.
@@ -372,6 +677,13 @@ class EnrichmentService:
         if lead.decision_maker:
             score += 5
             breakdown['decision_maker'] = 5
+
+        if lead.retirement_score and lead.retirement_score >= 60:
+            score += 10
+            breakdown['retirement_likelihood'] = 10
+        elif lead.retirement_score and lead.retirement_score >= 40:
+            score += 5
+            breakdown['retirement_likelihood'] = 5
 
         return min(score, 100), breakdown
 
