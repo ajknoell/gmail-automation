@@ -246,6 +246,7 @@ export const searchNearbyPlaces = (data) =>
   api.post('/api/map-explorer/search', data);
 export const textSearchPlaces = (data) =>
   api.post('/api/map-explorer/text-search', data);
+export const getMapSources = () => api.get('/api/map-explorer/sources');
 export const addPlaceToOutreach = (data) =>
   api.post('/api/map-explorer/add-to-outreach', data);
 export const addPlaceToPipeline = (data) =>

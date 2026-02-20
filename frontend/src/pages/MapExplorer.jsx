@@ -7,6 +7,7 @@ import {
   addPlaceToOutreach,
   addPlaceToPipeline,
   bulkAddToPipeline,
+  getMapSources,
   getCampaigns,
 } from '../api/client';
 
@@ -196,6 +197,8 @@ function MapExplorer() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [sourceCounts, setSourceCounts] = useState(null); // {google: N, yelp: N, total: N}
+  const [dataSources, setDataSources] = useState({ google: true, yelp: false });
 
   // Filters
   const [selectedTypes, setSelectedTypes] = useState([]); // array of type values
@@ -241,6 +244,10 @@ function MapExplorer() {
 
     getCampaigns()
       .then((res) => setCampaigns(res.data.campaigns || res.data || []))
+      .catch(() => {});
+
+    getMapSources()
+      .then((res) => setDataSources(res.data))
       .catch(() => {});
 
     const handleWsChange = () => {
@@ -377,6 +384,7 @@ function MapExplorer() {
         });
       }
       setResults(searchRes.data.results || []);
+      setSourceCounts(searchRes.data.sources || null);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found in this area. Try expanding your radius or changing the business type.');
       }
@@ -384,6 +392,7 @@ function MapExplorer() {
       const msg = err.response?.data?.error || 'Search failed. Please try again.';
       setError(msg);
       setResults([]);
+      setSourceCounts(null);
     }
     setSearching(false);
   };
@@ -421,6 +430,7 @@ function MapExplorer() {
         });
       }
       setResults(searchRes.data.results || []);
+      setSourceCounts(searchRes.data.sources || null);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found with these filters. Try adjusting your criteria.');
       }
@@ -614,6 +624,17 @@ function MapExplorer() {
         >
           {searching ? 'Searching...' : 'Search'}
         </button>
+      </div>
+
+      {/* Data sources indicator */}
+      <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginBottom: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <span>Sources:</span>
+        <span style={{ color: dataSources.google ? '#10B981' : '#EF4444' }}>
+          Google Maps {dataSources.google ? '\u2713' : '\u2717'}
+        </span>
+        <span style={{ color: dataSources.yelp ? '#10B981' : '#6B7280' }}>
+          Yelp {dataSources.yelp ? '\u2713' : '(add key in Settings)'}
+        </span>
       </div>
 
       {/* Filters */}
@@ -945,7 +966,14 @@ function MapExplorer() {
                 justifyContent: 'space-between',
                 alignItems: 'center',
               }}>
-                <span>{results.length} business{results.length !== 1 ? 'es' : ''} found</span>
+                <span>
+                  {results.length} business{results.length !== 1 ? 'es' : ''} found
+                  {sourceCounts && sourceCounts.yelp > 0 && (
+                    <span style={{ marginLeft: 6, fontSize: '0.65rem', color: '#9CA3AF' }}>
+                      (Google: {sourceCounts.google}, Yelp: {sourceCounts.yelp})
+                    </span>
+                  )}
+                </span>
                 <button
                   onClick={handleBulkAddToPipeline}
                   style={{
@@ -1007,18 +1035,31 @@ function MapExplorer() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.2rem' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         {place.name}
+                        {place.sources && place.sources.length > 1 && (
+                          <span style={{ fontSize: '0.55rem', background: '#DBEAFE', color: '#1E40AF', padding: '1px 4px', borderRadius: 3, fontWeight: 500 }}>
+                            2 sources
+                          </span>
+                        )}
+                        {place.source === 'yelp' && (!place.sources || place.sources.length === 1) && (
+                          <span style={{ fontSize: '0.55rem', background: '#FEE2E2', color: '#DC2626', padding: '1px 4px', borderRadius: 3, fontWeight: 500 }}>
+                            Yelp
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#6B7280', marginBottom: '0.2rem' }}>
                         {place.address}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {place.rating > 0 && (
                           <span style={{ color: '#F59E0B' }}>{renderStars(place.rating)}</span>
                         )}
                         {place.primary_type && (
                           <span>{formatType(place.primary_type)}</span>
+                        )}
+                        {place.yelp_price && (
+                          <span style={{ color: '#059669' }}>{place.yelp_price}</span>
                         )}
                       </div>
                     </div>
