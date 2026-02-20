@@ -542,19 +542,21 @@ def regenerate_recipient_preview(id, recipient_id):
 
         # Competitor discovery
         competitors = []
+        competitor_location = ''
         if campaign.competitor_search_query:
             google_places_key = Settings.get('google_places_api_key')
             if google_places_key:
                 from app.services.competitor_discovery import CompetitorService
                 comp_svc = CompetitorService(google_places_api_key=google_places_key)
                 custom_fields = recipient_dict.get('custom_fields', {})
-                competitors = comp_svc.discover_competitors(
+                comp_result = comp_svc.discover_competitors(
                     company=recipient_dict.get('company', ''),
-                    domain=(wa_result.get('url') if wa_result else '') or recipient.email or '',
                     industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
                     search_query=campaign.competitor_search_query,
                     custom_fields=custom_fields,
                 )
+                competitors = comp_result.get('competitors', [])
+                competitor_location = comp_result.get('location', '')
 
         result = claude.personalize_email(
             template_subject=campaign.template.subject,
@@ -567,6 +569,7 @@ def regenerate_recipient_preview(id, recipient_id):
             learned_insights=learned_insights,
             team_contacts=team_contacts,
             competitors=competitors,
+            competitor_location=competitor_location,
         )
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
@@ -734,21 +737,41 @@ def _substitute_template_variables(text, recipient, extra_variables=None):
         recipient.name, clean_company_name(recipient.company or ''),
         recipient.email, custom,
     )
+    # Lowercase all keys for case-insensitive matching (CSV headers
+    # may be "City" while templates use {{city}})
     variables = {
         'name': name or 'there',
         'email': recipient.email or '',
         'company': company or '',
     }
     if custom:
-        variables.update(custom)
+        variables.update({k.lower(): v for k, v in custom.items()})
     if extra_variables:
-        variables.update(extra_variables)
+        variables.update({k.lower(): v for k, v in extra_variables.items()})
+
+    # Derive city/state from Location or address fields when not directly available
+    if not variables.get('city'):
+        location_val = variables.get('location', '')
+        if not location_val:
+            for loc_key in ('street', 'address', 'business_address', 'mailing_address'):
+                if variables.get(loc_key):
+                    location_val = variables[loc_key]
+                    break
+        if location_val:
+            parts = [p.strip() for p in location_val.split(',')]
+            if parts:
+                variables['city'] = parts[0]
+            if len(parts) >= 2:
+                state_part = parts[1].strip()
+                if state_part.lower() not in ('united states', 'usa', 'us', 'canada'):
+                    if not variables.get('state'):
+                        variables['state'] = state_part
 
     def replace_var(match):
         key = match.group(1)
         # Support fallback syntax: {{city|state}} tries city first, then state
         for part in key.split('|'):
-            part = part.strip()
+            part = part.strip().lower()
             val = variables.get(part, '')
             if val:
                 return val
@@ -759,228 +782,113 @@ def _substitute_template_variables(text, recipient, extra_variables=None):
 
 @campaigns_bp.route('/<int:id>/generate-preview', methods=['POST'])
 def generate_preview(id):
-    """Generate personalized emails for preview (AI or simple substitution).
+    """Start background generation of personalized emails.
+
+    Returns immediately with generation status. Use the
+    /generation-progress SSE endpoint to track progress.
 
     Accepts optional JSON body:
-        batch_size: Number of emails to generate (default 50, 0 for all)
+        batch_size: Number of emails to generate (default 0 = all)
     """
+    from app.services.generation_runner import GenerationRunner
+
     campaign = Campaign.query.get_or_404(id)
 
     if not campaign.template:
         return jsonify({'error': 'No template selected'}), 400
-
-    data = request.get_json(silent=True) or {}
-    batch_size = data.get('batch_size', 50)
-
-    # Load all pending recipients, then filter out already-personalized ones in Python
-    # (avoids SQL NULL comparison issues across different DB engines)
-    all_pending = Recipient.query.filter_by(campaign_id=id, status='pending').all()
-    unpersonalized = [r for r in all_pending if not r.personalized_body]
-
-    if not unpersonalized:
-        return jsonify({'success': True, 'generated': 0, 'failed': 0, 'remaining': 0, 'message': 'All emails already generated'})
-
-    if batch_size > 0:
-        recipients = unpersonalized[:batch_size]
-    else:
-        recipients = unpersonalized
-
-    remaining = len(unpersonalized) - len(recipients) if batch_size > 0 else 0
-
-    from app.services.website_analyzer import WebsiteAnalyzer
-
-    generated = 0
-    failed = 0
 
     if campaign.use_ai_personalization:
         api_key = Settings.get('anthropic_api_key')
         if not api_key:
             return jsonify({'error': 'Anthropic API key not configured'}), 400
 
-        claude = ClaudeService(api_key)
-        writing_style = _get_writing_style()
-        learned_insights = _get_learned_insights()
-        learned_website_insights = _get_learned_website_insights()
+    data = request.get_json(silent=True) or {}
+    batch_size = data.get('batch_size', 0)
+    regenerate = data.get('regenerate', False)
 
-        # Cache website analysis by resolved URL so recipients at the same
-        # domain don't trigger duplicate fetches / screenshots / API calls.
-        website_analysis_cache = {}
+    all_pending = Recipient.query.filter_by(campaign_id=id, status='pending').all()
 
-        # Competitor discovery service (opt-in per campaign)
-        competitor_service = None
-        if campaign.competitor_search_query:
-            google_places_key = Settings.get('google_places_api_key')
-            if google_places_key:
-                from app.services.competitor_discovery import CompetitorService
-                competitor_service = CompetitorService(google_places_api_key=google_places_key)
-
-        for recipient in recipients:
-            try:
-                recipient_dict = {
-                    'name': recipient.name,
-                    'email': recipient.email,
-                    'company': recipient.company,
-                    'custom_fields': recipient.get_all_context()
-                }
-
-                # Domain-level caching for website analysis
-                resolved_url = WebsiteAnalyzer.resolve_url(recipient_dict)
-                cache_key = (resolved_url or '').lower().rstrip('/')
-                if cache_key and cache_key in website_analysis_cache:
-                    wa_result = website_analysis_cache[cache_key]
-                else:
-                    wa_result = WebsiteAnalyzer.fetch_and_analyze(claude, recipient_dict, learned_website_insights)
-                    if cache_key and wa_result:
-                        website_analysis_cache[cache_key] = wa_result
-                website_insights = wa_result.get('analysis_text') if wa_result else None
-                website_analysis_data = wa_result.get('analysis') if wa_result else None
-                team_contacts = wa_result.get('team_contacts', []) if wa_result else []
-
-                # Log the analysis for the learning feedback loop
-                if wa_result:
-                    _log_website_analysis(g.workspace_id, recipient.id, wa_result)
-
-                # Competitor discovery (cached per resolved query)
-                competitors = []
-                if competitor_service:
-                    custom_fields = recipient_dict.get('custom_fields', {})
-                    competitors = competitor_service.discover_competitors(
-                        company=recipient_dict.get('company', ''),
-                        domain=cache_key or recipient.email or '',
-                        industry=custom_fields.get('industry') or custom_fields.get('sector', ''),
-                        search_query=campaign.competitor_search_query,
-                        custom_fields=custom_fields,
-                    )
-
-                result = claude.personalize_email(
-                    template_subject=campaign.template.subject,
-                    template_body=campaign.template.body,
-                    recipient=recipient_dict,
-                    custom_prompt=campaign.ai_prompt,
-                    writing_style=writing_style,
-                    campaign_context=campaign.campaign_context,
-                    website_insights=website_insights,
-                    learned_insights=learned_insights,
-                    team_contacts=team_contacts,
-                    competitors=competitors,
-                )
-                recipient.personalized_subject = result.get('subject', campaign.template.subject)
-                recipient.personalized_body = result.get('body', campaign.template.body)
-                # Build content warnings including severity-based flags
-                content_warnings = result.get('content_warnings', [])
-                if website_analysis_data:
-                    severity = ClaudeService.get_max_severity(website_analysis_data)
-                    if not severity:
-                        content_warnings.append('No significant website issues found for outreach')
-                if content_warnings:
-                    recipient.error_message = ' | '.join(content_warnings)
-                else:
-                    recipient.error_message = None
-                generated += 1
-            except Exception as e:
-                # Do NOT set personalized_body on failure — leave the recipient
-                # in the unpersonalized pool so they can be retried next batch.
-                current_app.logger.warning(
-                    f"Failed to personalize recipient {recipient.id} ({recipient.email}): {e}"
-                )
-                failed += 1
-            # Commit after each to preserve progress
-            db.session.commit()
-    else:
-        # Simple {{variable}} substitution without AI
-        # Set up competitor discovery for non-AI path too
-        non_ai_comp_service = None
-        non_ai_comp_cache = {}
-        if campaign.competitor_search_query:
-            google_places_key = Settings.get('google_places_api_key')
-            if google_places_key:
-                from app.services.competitor_discovery import CompetitorService
-                non_ai_comp_service = CompetitorService(google_places_api_key=google_places_key)
-
-        for recipient in recipients:
-            extra_vars = None
-            if non_ai_comp_service:
-                from app.services.website_analyzer import WebsiteAnalyzer as _WA
-                comp_key = (_WA.resolve_url({
-                    'email': recipient.email,
-                    'custom_fields': recipient.get_custom_fields(),
-                }) or recipient.email or '').lower()
-                if comp_key not in non_ai_comp_cache:
-                    cf = recipient.get_custom_fields()
-                    non_ai_comp_cache[comp_key] = non_ai_comp_service.discover_competitors(
-                        company=recipient.company or '',
-                        domain=comp_key,
-                        industry=cf.get('industry') or cf.get('sector', ''),
-                        search_query=campaign.competitor_search_query,
-                        custom_fields=cf,
-                    )
-                comps = non_ai_comp_cache.get(comp_key, [])
-                if comps:
-                    extra_vars = CompetitorService.build_variable_map(comps)
-
-            recipient.personalized_subject = _substitute_template_variables(
-                campaign.template.subject, recipient, extra_vars)
-            recipient.personalized_body = _substitute_template_variables(
-                campaign.template.body, recipient, extra_vars)
-            generated += 1
+    # If regenerate=true, clear personalized content for all non-sent recipients
+    if regenerate:
+        for r in all_pending:
+            if r.personalized_body:
+                r.personalized_body = None
+                r.personalized_subject = None
+                r.error_message = None
+                r.approved = False
         db.session.commit()
 
-    # Run spam check and confidence scoring on all generated recipients
-    spam_warnings = 0
-    auto_approved = 0
-    needs_review = 0
-    should_regenerate = 0
+    unpersonalized = [r for r in all_pending if not r.personalized_body]
 
-    from app.services.confidence_scorer import ConfidenceScorer
-    import json as _json_mod
+    if not unpersonalized:
+        return jsonify({'success': True, 'generated': 0, 'failed': 0,
+                        'total': 0, 'message': 'All emails already generated'})
 
-    for recipient in recipients:
-        if recipient.personalized_body:
-            sc = check_spam_score(
-                recipient.personalized_subject or '', recipient.personalized_body
-            )
-            if sc['level'] in ('medium', 'high'):
-                spam_warnings += 1
+    if batch_size > 0:
+        recipients = unpersonalized[:batch_size]
+    else:
+        recipients = unpersonalized
 
-            # Confidence scoring
-            try:
-                result = ConfidenceScorer.score(
-                    subject=recipient.personalized_subject or '',
-                    body=recipient.personalized_body,
-                    recipient_data={
-                        'name': recipient.name,
-                        'company': recipient.company,
-                        'custom_fields': recipient.get_custom_fields(),
-                    },
-                    spam_score=sc['score'],
-                    workspace_id=campaign.workspace_id,
-                )
-                recipient.confidence_score = result['confidence']
-                recipient.confidence_breakdown = _json_mod.dumps(result['breakdown'])
+    recipient_ids = [r.id for r in recipients]
 
-                # Auto-approve if confidence threshold met
-                if campaign.auto_send_enabled and result['confidence'] >= (campaign.auto_send_threshold or 0.8):
-                    recipient.approved = True
-                    auto_approved += 1
-                elif result['recommendation'] == 'regenerate':
-                    should_regenerate += 1
-                else:
-                    needs_review += 1
-            except Exception:
-                needs_review += 1
+    result = GenerationRunner.start(campaign.id, recipient_ids, workspace_id=g.workspace_id)
 
-    db.session.commit()
+    if result.get('already_running'):
+        return jsonify({
+            'success': True,
+            'generating': True,
+            'generated': result['generated'],
+            'failed': result['failed'],
+            'total': result['total'],
+        })
 
     return jsonify({
         'success': True,
-        'generated': generated,
-        'failed': failed,
-        'remaining': remaining,
-        'spam_warnings': spam_warnings,
-        'auto_approved': auto_approved,
-        'needs_review': needs_review,
-        'should_regenerate': should_regenerate,
+        'generating': True,
+        'total': result['total'],
     })
+
+
+@campaigns_bp.route('/<int:id>/generation-progress')
+def generation_progress(id):
+    """Stream generation progress using SSE."""
+    import time
+    from flask import stream_with_context
+    from app.services.generation_runner import GenerationRunner
+
+    def generate():
+        while True:
+            state = GenerationRunner.get_state(id)
+            if not state:
+                # No active generation
+                yield f"data: {json.dumps({'generated': 0, 'failed': 0, 'total': 0, 'done': True})}\n\n"
+                break
+
+            data = {
+                'generated': state.generated,
+                'failed': state.failed,
+                'total': state.total,
+                'done': state.done,
+                'error': state.error,
+            }
+            yield f"data: {json.dumps(data)}\n\n"
+
+            if state.done:
+                GenerationRunner.cleanup(id)
+                break
+
+            time.sleep(1)
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
+
+@campaigns_bp.route('/<int:id>/cancel-generation', methods=['POST'])
+def cancel_generation(id):
+    """Cancel an in-progress generation."""
+    from app.services.generation_runner import GenerationRunner
+
+    cancelled = GenerationRunner.cancel(id)
+    return jsonify({'success': True, 'cancelled': cancelled})
 
 @campaigns_bp.route('/<int:id>/send-individual', methods=['POST'])
 def send_individual(id):
@@ -1028,7 +936,7 @@ def send_individual(id):
         campaign_attachments = _resolve_attachments(att_list) or None
 
     tracking_id = TrackingService.generate_tracking_id()
-    base_url = current_app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+    base_url = TrackingService.get_base_url()
 
     result = gmail.send_email(
         to=recipient.email,
@@ -1118,7 +1026,11 @@ def start_campaign(id):
     campaign = Campaign.query.get_or_404(id)
 
     if campaign.status == 'running':
-        return jsonify({'error': 'Campaign already running'}), 400
+        # Check if the runner thread is actually alive (may have died on server restart)
+        existing_state = CampaignRunner.get_state(id)
+        if existing_state is not None:
+            return jsonify({'error': 'Campaign already running'}), 400
+        # Runner thread is gone (server restarted) — allow re-start
 
     recipients = Recipient.query.filter_by(
         campaign_id=id,
@@ -1213,8 +1125,10 @@ def cancel_campaign(id):
 @campaigns_bp.route('/<int:id>/progress')
 def campaign_progress(id):
     """Stream campaign progress using SSE."""
+    from flask import stream_with_context
+    import time as _time
+
     def generate():
-        import time
         while True:
             campaign = Campaign.query.get(id)
             if not campaign:
@@ -1227,16 +1141,22 @@ def campaign_progress(id):
                 'failed': campaign.failed_count,
                 'total': campaign.total_recipients,
                 'status': campaign.status,
-                'is_running': state is not None
+                'is_running': state is not None,
             }
+            if state:
+                if state.last_sent_email:
+                    data['last_sent_name'] = state.last_sent_name or ''
+                    data['last_sent_email'] = state.last_sent_email
+                    data['seconds_since_last'] = round(_time.time() - state.last_sent_at) if state.last_sent_at else 0
+                data['delay'] = campaign.delay_seconds
             yield f"data: {json.dumps(data)}\n\n"
 
             if campaign.status in ['completed', 'cancelled']:
                 break
 
-            time.sleep(1)
+            _time.sleep(1)
 
-    return Response(generate(), mimetype='text/event-stream')
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 @campaigns_bp.route('/<int:id>/export')
 def export_campaign(id):

@@ -75,8 +75,12 @@ export const moveRecipients = (campaignId, recipientIds, targetCampaignId, newCa
     target_campaign_id: targetCampaignId || undefined,
     new_campaign_name: newCampaignName || undefined,
   });
-export const generatePreview = (id, batchSize) =>
-  api.post(`/api/campaigns/${id}/generate-preview`, batchSize != null ? { batch_size: batchSize } : {});
+export const generatePreview = (id, batchSize, { regenerate } = {}) => {
+  const body = {};
+  if (batchSize != null) body.batch_size = batchSize;
+  if (regenerate) body.regenerate = true;
+  return api.post(`/api/campaigns/${id}/generate-preview`, body);
+};
 export const approveRecipients = (id, recipientIds) =>
   api.post(`/api/campaigns/${id}/approve`, { recipient_ids: recipientIds });
 export const sendIndividual = (campaignId, recipientId) =>
@@ -127,6 +131,8 @@ export const exportCampaign = (id) => `/api/campaigns/${id}/export`;
 
 // SSE Progress
 export const getCampaignProgressUrl = (id) => `/api/campaigns/${id}/progress`;
+export const getGenerationProgressUrl = (id) => `/api/campaigns/${id}/generation-progress`;
+export const cancelGeneration = (id) => api.post(`/api/campaigns/${id}/cancel-generation`);
 
 // Sample CSV
 export const getSampleCsvUrl = () => '/api/campaigns/sample-csv';

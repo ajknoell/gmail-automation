@@ -12,7 +12,7 @@ import {
   saveClaySettings,
   getClayWebhookUrl,
   getAutopilotConfig,
-  saveAutopilotConfig,
+  updateAutopilotConfig,
   getAllFeatures,
   getEnabledFeatures,
   updateFeatureVisibility
@@ -33,11 +33,12 @@ const DEFAULT_WRITING_STYLE = {
 function Settings({ onStatusChange }) {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
-  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', google_places_api_key: '', writing_style: null });
+  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', google_places_api_key: '', tracking_base_url: '', writing_style: null });
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [apiKey, setApiKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
   const [googlePlacesKey, setGooglePlacesKey] = useState('');
+  const [trackingUrl, setTrackingUrl] = useState('');
   const [writingStyle, setWritingStyle] = useState(DEFAULT_WRITING_STYLE);
   const [saving, setSaving] = useState(false);
   const [savingStyle, setSavingStyle] = useState(false);
@@ -91,6 +92,9 @@ function Settings({ onStatusChange }) {
       setSettings(res.data);
       if (res.data.writing_style) {
         setWritingStyle({ ...DEFAULT_WRITING_STYLE, ...res.data.writing_style });
+      }
+      if (res.data.tracking_base_url) {
+        setTrackingUrl(res.data.tracking_base_url);
       }
     });
     loadGmailAccounts();
@@ -205,6 +209,19 @@ function Settings({ onStatusChange }) {
     setSaving(false);
   };
 
+  const handleSaveTrackingUrl = async () => {
+    setSaving(true);
+    try {
+      await saveSettings({ tracking_base_url: trackingUrl.trim() });
+      setMessage(trackingUrl.trim() ? 'Tracking URL saved! Open & click tracking is now active.' : 'Tracking URL cleared. Open & click tracking is disabled.');
+      const settingsRes = await getSettings();
+      setSettings(settingsRes.data);
+    } catch (error) {
+      setMessage('Failed to save tracking URL');
+    }
+    setSaving(false);
+  };
+
   const handleSaveClaySettings = async () => {
     setSavingClay(true);
     try {
@@ -219,7 +236,7 @@ function Settings({ onStatusChange }) {
   const handleSaveAutopilot = async () => {
     setSavingAutopilot(true);
     try {
-      await saveAutopilotConfig(autopilotConfig);
+      await updateAutopilotConfig(autopilotConfig);
       setMessage('Reply Autopilot settings saved successfully!');
     } catch (error) {
       setMessage('Failed to save autopilot settings');
@@ -427,6 +444,43 @@ function Settings({ onStatusChange }) {
             className="btn btn-primary"
             onClick={handleSaveGooglePlacesKey}
             disabled={saving || !googlePlacesKey.trim()}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Tracking URL */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Email Tracking URL <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
+        <p className="text-sm text-light mb-2">
+          Public URL for open &amp; click tracking. Without this, only reply and bounce detection works.
+          Run <code>cloudflared tunnel --url http://localhost:5001</code> and paste the URL here.
+        </p>
+
+        {settings.tracking_base_url ? (
+          <p className="mb-2" style={{ color: '#10B981', fontSize: '0.85rem' }}>
+            Active: <code>{settings.tracking_base_url}</code>
+          </p>
+        ) : (
+          <p className="mb-2" style={{ color: '#9CA3AF', fontSize: '0.85rem' }}>
+            Not configured — open &amp; click tracking is disabled
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="form-input"
+            placeholder="https://your-tunnel-url.trycloudflare.com"
+            value={trackingUrl}
+            onChange={(e) => setTrackingUrl(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveTrackingUrl}
+            disabled={saving}
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
@@ -692,8 +746,6 @@ function Settings({ onStatusChange }) {
               <span style={{ fontWeight: 500 }}>{metadata.display_name}</span>
             </label>
           ))}
-        </div>
-      </div>
         </div>
       </div>
 

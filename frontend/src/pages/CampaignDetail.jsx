@@ -19,6 +19,8 @@ import {
   cancelCampaign,
   exportCampaign,
   getCampaignProgressUrl,
+  getGenerationProgressUrl,
+  cancelGeneration,
   getSampleCsvUrl,
   getGmailAccounts,
   getCampaignTracking,
@@ -162,6 +164,7 @@ function CampaignDetail() {
   const [sendingIds, setSendingIds] = useState(new Set());
   const [editingRecipient, setEditingRecipient] = useState(null);
   const [regeneratingId, setRegeneratingId] = useState(null);
+  const [regeneratingSelected, setRegeneratingSelected] = useState(false);
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [tracking, setTracking] = useState(null);
   const [checkingReplies, setCheckingReplies] = useState(false);
@@ -176,11 +179,27 @@ function CampaignDetail() {
   const [templates, setTemplates] = useState([]);
   const [coldCallRecipientId, setColdCallRecipientId] = useState(null);
   const [showAddContactModal, setShowAddContactModal] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(null); // {generated, failed, total}
+  const [sendingProgress, setSendingProgress] = useState(null); // {last_sent_name, last_sent_email, seconds_since_last, delay, sent, total}
   const fileInputRef = useRef();
   const eventSourceRef = useRef();
+  const genEventSourceRef = useRef();
 
   useEffect(() => {
     loadData();
+    // Check if generation is already running (e.g. user navigated away and back)
+    const checkEs = new EventSource(getGenerationProgressUrl(id));
+    checkEs.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (!data.done) {
+        // Generation is in progress — attach the stream
+        checkEs.close();
+        startGenerationStream();
+      } else {
+        checkEs.close();
+      }
+    };
+    checkEs.onerror = () => { checkEs.close(); };
     getGmailAccounts().then((res) => {
       setGmailAccounts(res.data.accounts || []);
     });
@@ -193,6 +212,9 @@ function CampaignDetail() {
       window.removeEventListener('workspace-changed', handleWsChange);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
+      }
+      if (genEventSourceRef.current) {
+        genEventSourceRef.current.close();
       }
     };
   }, [id]);
@@ -212,9 +234,13 @@ function CampaignDetail() {
   useEffect(() => {
     if (!previewRecipientId) return;
     const handleKey = (e) => {
+      // Don't intercept keys when the user is typing in an input, textarea, or editor
+      const tag = e.target.tagName;
+      const isEditing = tag === 'INPUT' || tag === 'TEXTAREA' ||
+        e.target.isContentEditable || e.target.closest('.ql-editor');
       if (e.key === 'Escape') {
         setPreviewRecipientId(null);
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      } else if (!isEditing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         const previewRecipients = recipients.filter((r) => r.personalized_body);
         const idx = previewRecipients.findIndex((r) => r.id === previewRecipientId);
         if (e.key === 'ArrowLeft' && idx > 0) {
@@ -253,6 +279,7 @@ function CampaignDetail() {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
+    let lastReload = Date.now();
     const es = new EventSource(getCampaignProgressUrl(id));
     es.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -262,8 +289,26 @@ function CampaignDetail() {
         failed_count: data.failed,
         status: data.status,
       }));
+      if (data.last_sent_email) {
+        setSendingProgress({
+          last_sent_name: data.last_sent_name,
+          last_sent_email: data.last_sent_email,
+          seconds_since_last: data.seconds_since_last,
+          delay: data.delay,
+          sent: data.sent,
+          total: data.total,
+        });
+      } else if (data.is_running) {
+        setSendingProgress({ sent: data.sent, total: data.total, delay: data.delay });
+      }
+      // Reload recipient list every 5 seconds so statuses update live
+      if (Date.now() - lastReload > 5000) {
+        lastReload = Date.now();
+        getRecipients(id).then((res) => setRecipients(res.data)).catch(() => {});
+      }
       if (data.status === 'completed' || data.status === 'cancelled') {
         es.close();
+        setSendingProgress(null);
         loadData();
       }
     };
@@ -271,6 +316,39 @@ function CampaignDetail() {
       es.close();
     };
     eventSourceRef.current = es;
+  };
+
+  const startGenerationStream = () => {
+    if (genEventSourceRef.current) {
+      genEventSourceRef.current.close();
+    }
+    setGenerating(true);
+    let lastReload = Date.now();
+    const es = new EventSource(getGenerationProgressUrl(id));
+    es.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setGenerationProgress({ generated: data.generated, failed: data.failed, total: data.total });
+      // Reload recipient list every 3 seconds so new emails appear in the table
+      if (Date.now() - lastReload > 3000) {
+        lastReload = Date.now();
+        getRecipients(id).then((res) => setRecipients(res.data)).catch(() => {});
+      }
+      if (data.done) {
+        es.close();
+        genEventSourceRef.current = null;
+        setGenerating(false);
+        setGenerationProgress(null);
+        loadData();
+      }
+    };
+    es.onerror = () => {
+      es.close();
+      genEventSourceRef.current = null;
+      setGenerating(false);
+      setGenerationProgress(null);
+      loadData();
+    };
+    genEventSourceRef.current = es;
   };
 
   const handleFileUpload = async (e) => {
@@ -303,27 +381,36 @@ function CampaignDetail() {
     setGenerating(true);
     try {
       const res = await generatePreview(id, batchSize);
-      const { generated, failed, remaining, message, spam_warnings } = res.data;
-      if (message) {
-        alert(message);
-      } else if (remaining > 0) {
-        const mode = batchSize > 0 ? 'batch preview' : 'generation';
-        let statusMsg = `Generated ${generated} emails (${mode})`;
-        if (failed > 0) statusMsg += ` (${failed} fell back to template)`;
-        if (spam_warnings > 0) statusMsg += `\n\nSpam warning: ${spam_warnings} email(s) may trigger spam filters. Check the status dots for details.`;
-        statusMsg += `\n\n${remaining} recipients remaining.\n\nGenerate the next batch?`;
-        const continueGenerating = confirm(statusMsg);
-        if (continueGenerating) {
-          await loadData();
-          handleGeneratePreview(batchSize);
-          return;
-        }
+      if (res.data.message) {
+        alert(res.data.message);
+        setGenerating(false);
+        return;
       }
-      loadData();
+      // Generation started in background — connect to SSE for progress
+      startGenerationStream();
     } catch (error) {
       alert('Failed to generate previews: ' + (error.response?.data?.error || error.message));
+      setGenerating(false);
     }
-    setGenerating(false);
+  };
+
+  const handleRegenerateAll = async () => {
+    const unsent = recipients.filter((r) => r.status !== 'sent');
+    if (unsent.length === 0) return;
+    if (!confirm(`Regenerate all ${unsent.length} unsent email(s)? This will overwrite existing previews.`)) return;
+    setGenerating(true);
+    try {
+      const res = await generatePreview(id, 0, { regenerate: true });
+      if (res.data.message) {
+        alert(res.data.message);
+        setGenerating(false);
+        return;
+      }
+      startGenerationStream();
+    } catch (error) {
+      alert('Failed to regenerate: ' + (error.response?.data?.error || error.message));
+      setGenerating(false);
+    }
   };
 
   const handleSendIndividual = async (recipientId) => {
@@ -387,6 +474,32 @@ function CampaignDetail() {
       alert('Failed to regenerate preview: ' + (error.response?.data?.error || error.message));
     }
     setRegeneratingId(null);
+  };
+
+  const handleRegenerateSelected = async () => {
+    const ids = [...selectedRecipientIds].filter((rid) =>
+      recipients.find((r) => r.id === rid && r.personalized_body)
+    );
+    if (ids.length === 0) return;
+    if (!confirm(`Regenerate ${ids.length} selected email(s)?`)) return;
+    setRegeneratingSelected(true);
+    let completed = 0;
+    for (const rid of ids) {
+      setRegeneratingId(rid);
+      try {
+        const res = await regenerateRecipientPreview(id, rid);
+        setRecipients((prev) =>
+          prev.map((r) => (r.id === rid ? res.data : r))
+        );
+        completed++;
+      } catch (error) {
+        console.error(`Failed to regenerate ${rid}:`, error);
+      }
+    }
+    setRegeneratingId(null);
+    setRegeneratingSelected(false);
+    setSelectedRecipientIds(new Set());
+    alert(`Regenerated ${completed} of ${ids.length} emails.`);
   };
 
   const handleDeleteRecipient = async (recipientId, email) => {
@@ -831,13 +944,23 @@ function CampaignDetail() {
                     Clear Recipients
                   </button>
                   {selectedRecipientIds.size > 0 && (
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleOpenMoveModal}
-                      style={{ padding: '0.4rem 0.75rem' }}
-                    >
-                      Move Selected ({selectedRecipientIds.size})
-                    </button>
+                    <>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={handleRegenerateSelected}
+                        disabled={regeneratingSelected || generating}
+                        style={{ padding: '0.4rem 0.75rem' }}
+                      >
+                        {regeneratingSelected ? 'Regenerating...' : `Regenerate Selected (${selectedRecipientIds.size})`}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={handleOpenMoveModal}
+                        style={{ padding: '0.4rem 0.75rem' }}
+                      >
+                        Move Selected ({selectedRecipientIds.size})
+                      </button>
+                    </>
                   )}
                   <button
                     className="btn btn-secondary"
@@ -855,7 +978,36 @@ function CampaignDetail() {
                   >
                     {generating ? 'Generating...' : ungeneratedCount > 0 ? `Generate All (${ungeneratedCount})` : 'All Generated'}
                   </button>
-                  {generatedCount > 0 && (
+                  {generatedCount > 0 && !generating && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleRegenerateAll}
+                      disabled={generating}
+                      title="Clear and regenerate all unsent emails"
+                      style={{ padding: '0.4rem 0.75rem' }}
+                    >
+                      Regenerate All
+                    </button>
+                  )}
+                  {generating && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => cancelGeneration(id).then(() => {
+                        setGenerating(false);
+                        setGenerationProgress(null);
+                        if (genEventSourceRef.current) { genEventSourceRef.current.close(); genEventSourceRef.current = null; }
+                        loadData();
+                      })}
+                      style={{ padding: '0.4rem 0.75rem' }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {generationProgress ? (
+                    <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
+                      Generating: {generationProgress.generated}{generationProgress.failed > 0 ? ` (${generationProgress.failed} failed)` : ''}/{generationProgress.total}
+                    </span>
+                  ) : generatedCount > 0 && (
                     <span style={{ fontSize: '0.85rem', color: '#6B7280', alignSelf: 'center' }}>
                       {generatedCount}/{recipients.length} generated
                     </span>
@@ -930,7 +1082,7 @@ function CampaignDetail() {
                     style={{ width: '100%', marginBottom: '0.25rem' }}
                   />
                   <span style={{ fontSize: '0.7rem', color: '#9CA3AF' }}>
-                    Searches the web and pulls the top businesses that show up, excluding the target company. Use {'{{competitor1}}'}, {'{{competitor2}}'}, or {'{{competitors}}'} in your template. Supports any CSV variable like {'{{city}}'}, {'{{state}}'}, {'{{industry}}'}.
+                    Finds local competitors via Google Maps, excluding the target company. Use {'{{competitor1}}'}, {'{{competitor2}}'}, or {'{{competitors}}'} in your template. Supports any CSV variable like {'{{city}}'}, {'{{state}}'}, {'{{industry}}'}.
                   </span>
                 </div>
               )}
@@ -988,6 +1140,47 @@ function CampaignDetail() {
           )}
         </div>
       </div>
+
+      {/* Sending Progress Banner */}
+      {(campaign.status === 'running' || campaign.status === 'paused') && sendingProgress && (
+        <div className="card mb-4" style={{
+          background: campaign.status === 'paused'
+            ? 'linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%)'
+            : 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)',
+          border: campaign.status === 'paused' ? '1px solid #F59E0B' : '1px solid #10B981',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {campaign.status === 'running' && (
+              <span style={{
+                display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%',
+                backgroundColor: '#10B981', animation: 'pulse 1.5s ease-in-out infinite',
+                flexShrink: 0,
+              }} />
+            )}
+            {campaign.status === 'paused' && (
+              <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>| |</span>
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111827' }}>
+                {campaign.status === 'paused' ? 'Sending Paused' : 'Sending in Progress'}
+                <span style={{ fontWeight: 400, color: '#6B7280', marginLeft: '0.5rem' }}>
+                  {sendingProgress.sent} / {sendingProgress.total} sent
+                </span>
+              </div>
+              {sendingProgress.last_sent_email && campaign.status === 'running' && (
+                <div style={{ fontSize: '0.8rem', color: '#374151', marginTop: '0.25rem' }}>
+                  Last sent to {sendingProgress.last_sent_name ? `${sendingProgress.last_sent_name} (${sendingProgress.last_sent_email})` : sendingProgress.last_sent_email}
+                  {sendingProgress.delay > 0 && sendingProgress.seconds_since_last < sendingProgress.delay && (
+                    <span style={{ color: '#6B7280' }}>
+                      {' '}&middot; next email in ~{sendingProgress.delay - sendingProgress.seconds_since_last}s
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Follow-up Sequence Builder */}
       {recipients.length > 0 && (
@@ -1529,40 +1722,52 @@ function CampaignDetail() {
               </div>
 
               {/* Footer actions */}
-              {campaign.status === 'draft' && (
-                <div style={{
-                  padding: '1rem 1.5rem', borderTop: '1px solid #E5E7EB',
-                  display: 'flex', gap: '0.5rem', flexShrink: 0,
-                }}>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => handleRegeneratePreview(recipient.id)}
-                    disabled={regeneratingId === recipient.id}
-                  >
-                    {regeneratingId === recipient.id ? 'Regenerating...' : 'Regenerate'}
-                  </button>
-                  {!recipient.approved ? (
+              <div style={{
+                padding: '1rem 1.5rem', borderTop: '1px solid #E5E7EB',
+                display: 'flex', gap: '0.5rem', flexShrink: 0,
+              }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    const text = (recipient.personalized_body || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+                    navigator.clipboard.writeText(`Subject: ${recipient.personalized_subject || ''}\n\n${text}`);
+                  }}
+                  title="Copy email text to clipboard"
+                >
+                  Copy
+                </button>
+                {campaign.status === 'draft' && (
+                  <>
                     <button
-                      className="btn btn-success btn-sm"
-                      onClick={() => handleApproveRecipient(recipient.id, true)}
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => handleRegeneratePreview(recipient.id)}
+                      disabled={regeneratingId === recipient.id}
                     >
-                      Approve
+                      {regeneratingId === recipient.id ? 'Regenerating...' : 'Regenerate'}
                     </button>
-                  ) : (
-                    <span style={{ color: '#10B981', alignSelf: 'center', fontSize: '0.875rem' }}>Approved</span>
-                  )}
-                  {recipient.personalized_body && recipient.status !== 'sent' && (
-                    <button
-                      className="btn btn-success btn-sm"
-                      onClick={() => handleSendIndividual(recipient.id)}
-                      disabled={sendingIds.has(recipient.id)}
-                      style={{ marginLeft: 'auto' }}
-                    >
-                      {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
-                    </button>
-                  )}
-                </div>
-              )}
+                    {!recipient.approved ? (
+                      <button
+                        className="btn btn-success btn-sm"
+                        onClick={() => handleApproveRecipient(recipient.id, true)}
+                      >
+                        Approve
+                      </button>
+                    ) : (
+                      <span style={{ color: '#10B981', alignSelf: 'center', fontSize: '0.875rem' }}>Approved</span>
+                    )}
+                    {recipient.personalized_body && recipient.status !== 'sent' && (
+                      <button
+                        className="btn btn-success btn-sm"
+                        onClick={() => handleSendIndividual(recipient.id)}
+                        disabled={sendingIds.has(recipient.id)}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        {sendingIds.has(recipient.id) ? 'Sending...' : 'Send'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         );
