@@ -343,3 +343,49 @@ def calendar_status():
         'account_id': token.id,
         'email': token.email_address,
     })
+
+
+# --- Reply Autopilot ---
+
+@replies_bp.route('/autopilot-config', methods=['GET'])
+def get_autopilot_config():
+    """Get autopilot config for the current workspace."""
+    from app.services.reply_autopilot import ReplyAutopilot
+    config = ReplyAutopilot.get_config(g.workspace_id)
+    return jsonify(config)
+
+
+@replies_bp.route('/autopilot-config', methods=['PUT'])
+def update_autopilot_config():
+    """Update autopilot config for the current workspace."""
+    from app.services.reply_autopilot import ReplyAutopilot
+    data = request.get_json() or {}
+    ReplyAutopilot.save_config(g.workspace_id, data)
+    db.session.commit()
+    return jsonify(data)
+
+
+@replies_bp.route('/autopilot-stats', methods=['GET'])
+def autopilot_stats():
+    """Get autopilot statistics."""
+    ws_replies = ReplyMessage.query.join(EmailLog, ReplyMessage.email_log_id == EmailLog.id).filter(
+        EmailLog.workspace_id == g.workspace_id
+    )
+
+    auto_responded = ws_replies.filter(ReplyMessage.auto_responded == True).count()
+    flagged = ws_replies.filter(ReplyMessage.flagged_for_review == True).count()
+
+    # Breakdown by auto_response_type
+    from sqlalchemy import func
+    type_counts = db.session.query(
+        ReplyMessage.auto_response_type, func.count(ReplyMessage.id)
+    ).join(EmailLog, ReplyMessage.email_log_id == EmailLog.id).filter(
+        EmailLog.workspace_id == g.workspace_id,
+        ReplyMessage.auto_responded == True,
+    ).group_by(ReplyMessage.auto_response_type).all()
+
+    return jsonify({
+        'auto_responded': auto_responded,
+        'flagged_for_review': flagged,
+        'by_type': {t: c for t, c in type_counts if t},
+    })

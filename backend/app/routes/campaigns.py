@@ -925,8 +925,15 @@ def generate_preview(id):
             generated += 1
         db.session.commit()
 
-    # Run spam check on all generated recipients and flag any issues
+    # Run spam check and confidence scoring on all generated recipients
     spam_warnings = 0
+    auto_approved = 0
+    needs_review = 0
+    should_regenerate = 0
+
+    from app.services.confidence_scorer import ConfidenceScorer
+    import json as _json_mod
+
     for recipient in recipients:
         if recipient.personalized_body:
             sc = check_spam_score(
@@ -935,12 +942,44 @@ def generate_preview(id):
             if sc['level'] in ('medium', 'high'):
                 spam_warnings += 1
 
+            # Confidence scoring
+            try:
+                result = ConfidenceScorer.score(
+                    subject=recipient.personalized_subject or '',
+                    body=recipient.personalized_body,
+                    recipient_data={
+                        'name': recipient.name,
+                        'company': recipient.company,
+                        'custom_fields': recipient.get_custom_fields(),
+                    },
+                    spam_score=sc['score'],
+                    workspace_id=campaign.workspace_id,
+                )
+                recipient.confidence_score = result['confidence']
+                recipient.confidence_breakdown = _json_mod.dumps(result['breakdown'])
+
+                # Auto-approve if confidence threshold met
+                if campaign.auto_send_enabled and result['confidence'] >= (campaign.auto_send_threshold or 0.8):
+                    recipient.approved = True
+                    auto_approved += 1
+                elif result['recommendation'] == 'regenerate':
+                    should_regenerate += 1
+                else:
+                    needs_review += 1
+            except Exception:
+                needs_review += 1
+
+    db.session.commit()
+
     return jsonify({
         'success': True,
         'generated': generated,
         'failed': failed,
         'remaining': remaining,
         'spam_warnings': spam_warnings,
+        'auto_approved': auto_approved,
+        'needs_review': needs_review,
+        'should_regenerate': should_regenerate,
     })
 
 @campaigns_bp.route('/<int:id>/send-individual', methods=['POST'])

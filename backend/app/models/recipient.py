@@ -16,6 +16,8 @@ class Recipient(db.Model):
     personalized_subject = db.Column(db.String(200))
     personalized_body = db.Column(db.Text)
     approved = db.Column(db.Boolean, default=False)
+    confidence_score = db.Column(db.Float)
+    confidence_breakdown = db.Column(db.Text)  # JSON
     sent_at = db.Column(db.DateTime)
     error_message = db.Column(db.Text)
     enrolled_at = db.Column(db.DateTime, default=datetime.utcnow)  # Track when recipient was added to campaign
@@ -42,6 +44,8 @@ class Recipient(db.Model):
             'personalized_subject': self.personalized_subject,
             'personalized_body': self.personalized_body,
             'approved': self.approved,
+            'confidence_score': self.confidence_score,
+            'confidence_breakdown': json.loads(self.confidence_breakdown) if self.confidence_breakdown else None,
             'sent_at': self.sent_at.isoformat() if self.sent_at else None,
             'error_message': self.error_message,
             'enrolled_at': self.enrolled_at.isoformat() if self.enrolled_at else None,

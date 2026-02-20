@@ -169,6 +169,15 @@ class ReplyChecker:
                                     )
                                 except Exception:
                                     pass
+
+                                # Reply autopilot processing
+                                try:
+                                    from app.services.reply_autopilot import ReplyAutopilot
+                                    ReplyAutopilot.process_reply(
+                                        reply_msg, log, log.workspace_id
+                                    )
+                                except Exception:
+                                    pass  # Autopilot failure should not block reply detection
                                 break
 
                     checked += 1

@@ -39,6 +39,9 @@ def create_app(config_class=None):
     from app.routes.listings import listings_bp
     from app.routes.cold_calls import cold_calls_bp
     from app.routes.map_explorer import map_explorer_bp
+    from app.routes.discovery import discovery_bp
+    from app.routes.brief import brief_bp
+    from app.routes.triggers import triggers_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(map_explorer_bp, url_prefix='/api/map-explorer')
@@ -54,6 +57,9 @@ def create_app(config_class=None):
     app.register_blueprint(attachments_bp, url_prefix='/api/attachments')
     app.register_blueprint(listings_bp, url_prefix='/api/listings')
     app.register_blueprint(cold_calls_bp, url_prefix='/api/cold-calls')
+    app.register_blueprint(discovery_bp, url_prefix='/api/discovery')
+    app.register_blueprint(brief_bp, url_prefix='/api/brief')
+    app.register_blueprint(triggers_bp, url_prefix='/api/triggers')
 
     # Create database tables and run migrations
     with app.app_context():
@@ -120,6 +126,16 @@ def create_app(config_class=None):
     seq_interval = app.config.get('SEQUENCE_CHECK_INTERVAL', 300)
     SequenceScheduler.start_background_polling(app, interval=seq_interval)
 
+    # Start prospect discovery scanner (hourly check, weekly actual scans)
+    from app.services.prospect_discovery import ProspectScanner
+    discovery_interval = app.config.get('DISCOVERY_CHECK_INTERVAL', 3600)
+    ProspectScanner.start_background_polling(app, interval=discovery_interval)
+
+    # Start website trigger monitor (daily check)
+    from app.services.trigger_monitor import TriggerMonitor
+    trigger_interval = app.config.get('TRIGGER_CHECK_INTERVAL', 86400)
+    TriggerMonitor.start_background_polling(app, interval=trigger_interval)
+
     return app
 
 
@@ -179,6 +195,35 @@ def _run_migrations(app):
     # Website analysis structured data migrations
     _add_column('website_analysis_logs', 'analysis_json', 'TEXT')
     _add_column('website_analysis_logs', 'max_severity', 'VARCHAR(20)')
+
+    # Contact discovery fields (Phase 1)
+    _add_column('contacts', 'discovery_source', 'VARCHAR(50)')
+    _add_column('contacts', 'discovered_at', 'DATETIME')
+    _add_column('contacts', 'google_rating', 'FLOAT')
+    _add_column('contacts', 'review_count', 'INTEGER')
+    _add_column('contacts', 'phone', 'VARCHAR(50)')
+    _add_column('contacts', 'address', 'VARCHAR(500)')
+    _add_column('contacts', 'business_category', 'VARCHAR(200)')
+    _add_column('contacts', 'qualified', 'BOOLEAN')
+    _add_column('contacts', 'qualification_reason', 'TEXT')
+    _add_column('contacts', 'discovery_criteria_id', 'INTEGER')
+
+    # Campaign auto-send fields (Phase 2)
+    _add_column('campaigns', 'auto_send_enabled', 'BOOLEAN', default=0)
+    _add_column('campaigns', 'auto_send_threshold', 'FLOAT', default=0.8)
+
+    # Recipient confidence scoring (Phase 2)
+    _add_column('recipients', 'confidence_score', 'FLOAT')
+    _add_column('recipients', 'confidence_breakdown', 'TEXT')
+    _add_column('step_recipients', 'confidence_score', 'FLOAT')
+    _add_column('step_recipients', 'confidence_breakdown', 'TEXT')
+
+    # Reply autopilot fields (Phase 3)
+    _add_column('reply_messages', 'sentiment_subcategory', 'VARCHAR(50)')
+    _add_column('reply_messages', 'auto_responded', 'BOOLEAN', default=0)
+    _add_column('reply_messages', 'auto_response_type', 'VARCHAR(50)')
+    _add_column('reply_messages', 'flagged_for_review', 'BOOLEAN', default=0)
+    _add_column('reply_messages', 'flag_reason', 'VARCHAR(200)')
 
     # Create index on tracking_id
     try:

@@ -13,7 +13,11 @@ import Settings from './pages/Settings';
 import Listings from './pages/Listings';
 import Insights from './pages/Insights';
 import MapExplorer from './pages/MapExplorer';
+import Discovery from './pages/Discovery';
+import DailyBrief from './pages/DailyBrief';
+import Triggers from './pages/Triggers';
 import WorkspaceSelector from './components/WorkspaceSelector';
+import MobileLayout from './components/MobileLayout';
 import './App.css';
 
 function NavLink({ to, children, exact }) {
@@ -28,9 +32,20 @@ function NavLink({ to, children, exact }) {
   );
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 function App() {
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const isMobile = useIsMobile();
 
   const refreshStatus = () => {
     getAuthStatus()
@@ -44,6 +59,38 @@ function App() {
     window.addEventListener('workspace-changed', handleWsChange);
     return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
+
+  const routeElements = (
+    <Routes>
+      <Route path="/" element={<Home status={status} />} />
+      <Route path="/brief" element={<DailyBrief />} />
+      <Route path="/insights" element={<Insights />} />
+      <Route path="/discovery" element={<Discovery />} />
+      <Route path="/quick-send" element={<QuickSend />} />
+      <Route path="/campaigns" element={<Campaigns />} />
+      <Route path="/campaigns/:id" element={<CampaignDetail />} />
+      <Route path="/templates" element={<Templates />} />
+      <Route path="/contacts" element={<Contacts />} />
+      <Route path="/contacts/:id" element={<ContactDetail />} />
+      <Route path="/replies" element={<ReplyHub />} />
+      <Route path="/map-explorer" element={<MapExplorer />} />
+      <Route path="/listings" element={<Listings />} />
+      <Route path="/triggers" element={<Triggers />} />
+      <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
+    </Routes>
+  );
+
+  if (isMobile) {
+    return (
+      <Router>
+        <MobileLayout>
+          <main className="main main-mobile">
+            {routeElements}
+          </main>
+        </MobileLayout>
+      </Router>
+    );
+  }
 
   return (
     <Router>
@@ -81,6 +128,10 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Dashboard</span>
                 </NavLink>
+                <NavLink to="/brief">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2H13V14H3V2ZM5 5H11M5 8H11M5 11H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span>Daily Brief</span>
+                </NavLink>
                 <NavLink to="/insights">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 14V8M6 14V4M10 14V6M14 14V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   <span>Insights</span>
@@ -113,6 +164,10 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 7C9.66 7 11 5.66 11 4S9.66 1 8 1 5 2.34 5 4 6.34 7 8 7ZM2 15V13C2 11.34 5 10 8 10S14 11.34 14 13V15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   <span>Contacts</span>
                 </NavLink>
+                <NavLink to="/discovery">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.5 11C9 11 11 9 11 6.5S9 2 6.5 2 2 4 2 6.5 4 11 6.5 11ZM11 11L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  <span>Discovery</span>
+                </NavLink>
                 <NavLink to="/map-explorer">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1C5.24 1 3 3.24 3 6C3 9.5 8 15 8 15S13 9.5 13 6C13 3.24 10.76 1 8 1ZM8 7.5C7.17 7.5 6.5 6.83 6.5 6S7.17 4.5 8 4.5 9.5 5.17 9.5 6 8.83 7.5 8 7.5Z" stroke="currentColor" strokeWidth="1.5"/></svg>
                   <span>Map Explorer</span>
@@ -120,6 +175,10 @@ function App() {
                 <NavLink to="/listings">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Listings</span>
+                </NavLink>
+                <NavLink to="/triggers">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1L3 9H8L7 15L13 7H8L9 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                  <span>Triggers</span>
                 </NavLink>
               </div>
             </nav>
@@ -133,20 +192,7 @@ function App() {
           </aside>
 
           <main className="main">
-            <Routes>
-              <Route path="/" element={<Home status={status} />} />
-              <Route path="/insights" element={<Insights />} />
-              <Route path="/quick-send" element={<QuickSend />} />
-              <Route path="/campaigns" element={<Campaigns />} />
-              <Route path="/campaigns/:id" element={<CampaignDetail />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/contacts" element={<Contacts />} />
-              <Route path="/contacts/:id" element={<ContactDetail />} />
-              <Route path="/replies" element={<ReplyHub />} />
-              <Route path="/map-explorer" element={<MapExplorer />} />
-              <Route path="/listings" element={<Listings />} />
-              <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
-            </Routes>
+            {routeElements}
           </main>
         </div>
       </div>

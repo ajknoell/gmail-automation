@@ -1458,8 +1458,13 @@ CLASSIFICATION RULES:
 - NEGATIVE: They say not interested, ask to be removed, decline, express annoyance, say they already have someone
 - NEUTRAL: Out of office, auto-reply, vague acknowledgment, asks a clarifying question without clear interest direction
 
+SUBCATEGORY (pick the most specific):
+Positive subcategories: interested, meeting_request, referral, question
+Negative subcategories: not_interested, unsubscribe, wrong_person, competitor
+Neutral subcategories: ooo, auto_reply, clarification, forwarded
+
 Return ONLY valid JSON:
-{{"sentiment": "positive" or "negative" or "neutral", "reason": "one sentence explaining why"}}"""
+{{"sentiment": "positive" or "negative" or "neutral", "subcategory": "most_specific_subcategory", "reason": "one sentence explaining why"}}"""
 
         try:
             message = self.client.messages.create(
@@ -1994,4 +1999,90 @@ Return ONLY valid JSON:
 
         except Exception as e:
             print(f"Follow-up generation error: {e}")
+            raise
+
+    def generate_trigger_email(
+        self,
+        trigger_type: str,
+        trigger_context: dict,
+        contact_info: dict,
+        writing_style: dict = None,
+        campaign_context: str = None,
+    ) -> Dict[str, str]:
+        """Generate a personalized outreach email based on a detected website trigger.
+
+        Args:
+            trigger_type: ssl_expiry, content_change, review_change, downtime, copyright_outdated
+            trigger_context: Dict with type, details, severity
+            contact_info: Dict with name, email, company, website
+            writing_style: Optional writing style preferences
+            campaign_context: Optional extra context to include
+
+        Returns:
+            {subject: str, body: str}
+        """
+        trigger_descriptions = {
+            'ssl_expiry': 'Their SSL certificate is expiring soon, creating a web security concern',
+            'content_change': 'Their website content has recently been updated',
+            'review_change': 'Their Google review rating or count has changed',
+            'downtime': 'Their website is currently experiencing downtime',
+            'copyright_outdated': 'Their website has an outdated copyright year, suggesting it needs attention',
+        }
+
+        trigger_desc = trigger_descriptions.get(trigger_type, f'A {trigger_type} event was detected')
+        details = trigger_context.get('details', {})
+
+        style_instructions = ''
+        if writing_style:
+            tone = writing_style.get('tone', '')
+            if tone:
+                style_instructions += f'\nTone: {tone}'
+            length = writing_style.get('length', '')
+            if length:
+                style_instructions += f'\nLength: {length}'
+
+        prompt = f"""Write a personalized cold outreach email that uses a detected trigger as the opening hook.
+
+TRIGGER: {trigger_desc}
+TRIGGER DETAILS: {json.dumps(details) if isinstance(details, dict) else details}
+
+RECIPIENT:
+- Name: {contact_info.get('name', 'there')}
+- Company: {contact_info.get('company', '')}
+- Website: {contact_info.get('website', '')}
+
+{f'CONTEXT: {campaign_context}' if campaign_context else ''}
+
+RULES:
+1. Open by referencing what you noticed about their website (the trigger) — be helpful, not alarming
+2. Briefly mention how you can help with this specific issue
+3. Keep it conversational and warm, 3-5 sentences max
+4. End with a soft CTA (would you be open to a quick chat?)
+5. Do NOT use em-dashes (—)
+6. Do NOT sound salesy or use spam trigger words
+{style_instructions}
+
+Return ONLY valid JSON:
+{{"subject": "email subject line", "body": "email body text"}}"""
+
+        try:
+            message = self.client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text.strip()
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    'subject': _strip_ai_dashes(result.get('subject', '')),
+                    'body': _strip_ai_dashes(result.get('body', '')),
+                }
+
+            return {'subject': '', 'body': _strip_ai_dashes(response_text)}
+
+        except Exception as e:
+            print(f"Trigger email generation error: {e}")
             raise

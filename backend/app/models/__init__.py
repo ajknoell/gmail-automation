@@ -16,6 +16,8 @@ from app.models.website_analysis_log import WebsiteAnalysisLog
 from app.models.campaign_step import CampaignStep
 from app.models.step_recipient import StepRecipient
 from app.models.cold_call import ColdCall
+from app.models.discovery_criteria import DiscoveryCriteria
+from app.models.website_trigger import WebsiteTrigger
 
 __all__ = [
     'Workspace', 'Template', 'Campaign', 'Recipient', 'EmailLog',
@@ -23,4 +25,5 @@ __all__ = [
     'LinkClick', 'OpenEvent', 'Contact', 'Tag', 'contact_tags', 'ReplyMessage',
     'MonitoredSite', 'Listing', 'DealCriteria', 'WebsiteAnalysisLog',
     'CampaignStep', 'StepRecipient', 'ColdCall',
+    'DiscoveryCriteria', 'WebsiteTrigger',
 ]
