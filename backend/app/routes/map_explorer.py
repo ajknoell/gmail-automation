@@ -69,7 +69,41 @@ def search_nearby():
             lng=lng,
             radius=data.get('radius', 5000),
             included_type=data.get('type', ''),
+            included_types=data.get('types') or None,
             keyword=data.get('keyword', ''),
+            min_rating=data.get('min_rating', 0),
+            max_results=data.get('max_results', 20),
+        )
+        return jsonify({'results': results})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@map_explorer_bp.route('/text-search', methods=['POST'])
+def text_search():
+    """Search for businesses using a free-form text query (Places Text Search API).
+
+    Supports niche queries like "mobile dog groomer", "vegan bakery near me", etc.
+    """
+    data = request.get_json() or {}
+    query = (data.get('query') or '').strip()
+    lat = data.get('lat')
+    lng = data.get('lng')
+    if not query:
+        return jsonify({'error': 'query is required'}), 400
+    if lat is None or lng is None:
+        return jsonify({'error': 'lat and lng are required'}), 400
+
+    svc = _get_places_service()
+    if not svc:
+        return jsonify({'error': 'Google Places API key not configured. Go to Settings.'}), 400
+
+    try:
+        results = svc.search_text(
+            query=query,
+            lat=lat,
+            lng=lng,
+            radius=data.get('radius', 5000),
             min_rating=data.get('min_rating', 0),
             max_results=data.get('max_results', 20),
         )
