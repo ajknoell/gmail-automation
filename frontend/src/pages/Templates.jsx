@@ -288,37 +288,56 @@ function Templates() {
         </div>
       ) : (
         <div className="grid grid-2">
-          {templates.map((template) => (
-            <div key={template.id} className="card">
-              <div className="card-header">
-                <h3 className="card-title">{template.name}</h3>
-                <div className="flex gap-1">
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(template)}>
-                    Edit
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(template.id)}>
-                    Delete
-                  </button>
+          {templates.map((template) => {
+            const plainBody = template.body ? template.body.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim() : '';
+            const maxVars = 3;
+            const vars = template.variables || [];
+            const extraVars = vars.length > maxVars ? vars.length - maxVars : 0;
+            return (
+              <div key={template.id} className="card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div className="card-header" style={{ marginBottom: '0.5rem' }}>
+                  <h3 className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flex: 1, marginRight: '0.5rem' }}>
+                    {template.name}
+                  </h3>
+                  <div className="flex gap-1" style={{ flexShrink: 0 }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(template)}>
+                      Edit
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(template.id)}>
+                      Delete
+                    </button>
+                  </div>
                 </div>
+                <p className="text-sm" style={{ marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <strong>Subject:</strong> {template.subject}
+                </p>
+                {plainBody && (
+                  <p className="text-sm text-light" style={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    lineHeight: '1.5',
+                    margin: '0.25rem 0 0',
+                  }}>
+                    {plainBody}
+                  </p>
+                )}
+                {vars.length > 0 && (
+                  <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                    {vars.slice(0, maxVars).map((v) => (
+                      <span key={v} className="badge badge-draft" style={{ fontSize: '0.7rem' }}>
+                        {`{{${v}}}`}
+                      </span>
+                    ))}
+                    {extraVars > 0 && (
+                      <span className="text-sm text-light" style={{ fontSize: '0.7rem' }}>+{extraVars} more</span>
+                    )}
+                  </div>
+                )}
               </div>
-              <p className="text-sm mb-2"><strong>Subject:</strong> {template.subject}</p>
-              <div
-                className="text-sm text-light"
-                style={{ maxHeight: '100px', overflow: 'hidden', lineHeight: '1.5' }}
-                dangerouslySetInnerHTML={{ __html: template.body }}
-              />
-              {template.variables && template.variables.length > 0 && (
-                <div className="mt-2">
-                  <span className="text-sm text-light">Variables: </span>
-                  {template.variables.map((v) => (
-                    <span key={v} className="badge badge-draft" style={{ marginRight: '0.25rem' }}>
-                      {`{{${v}}}`}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
