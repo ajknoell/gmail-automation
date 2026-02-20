@@ -216,7 +216,7 @@ def send_quick_email():
         return jsonify({'error': 'Gmail not connected'}), 400
 
     tracking_id = TrackingService.generate_tracking_id()
-    base_url = current_app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+    base_url = TrackingService.get_base_url()
 
     result = gmail.send_email(
         to=to,

@@ -1,18 +1,111 @@
 from anthropic import Anthropic
 from typing import Dict
+import ipaddress
 import json
+import logging
 import re
+import socket
+import threading
+import time
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+# In-memory cache for industry detection: domain -> {'industry': str, 'ts': float}
+_industry_cache: Dict[str, dict] = {}
+_industry_cache_lock = threading.Lock()
+_INDUSTRY_CACHE_TTL = 3600  # 1 hour
+_INDUSTRY_CACHE_MAX_SIZE = 500
+
+
+_BUSINESS_ABBREVIATIONS = {
+    'elec': 'Electric',
+    'electr': 'Electric',
+    'mech': 'Mechanical',
+    'constr': 'Construction',
+    'contr': 'Contracting',
+    'contrs': 'Contractors',
+    'assoc': 'Associates',
+    'mgmt': 'Management',
+    'svcs': 'Services',
+    'svc': 'Service',
+    'mfg': 'Manufacturing',
+    'eng': 'Engineering',
+    'intl': 'International',
+    'natl': 'National',
+    'plbg': 'Plumbing',
+    'plmb': 'Plumbing',
+    'htg': 'Heating',
+    'gen': 'General',
+    'resid': 'Residential',
+    'indus': 'Industrial',
+    'sys': 'Systems',
+    'prop': 'Properties',
+    'props': 'Properties',
+    'dist': 'Distribution',
+    'equip': 'Equipment',
+    'acct': 'Accounting',
+    'fin': 'Financial',
+    'ins': 'Insurance',
+    'rehab': 'Rehabilitation',
+    'reno': 'Renovations',
+    'resto': 'Restoration',
+}
 
 
 def _strip_business_suffixes(name: str) -> str:
-    """Remove legal/business suffixes like LLC, Inc., Corp, etc."""
+    """Remove legal/business suffixes like LLC, Inc., Corp, etc.
+
+    Also expands common abbreviations anywhere in the name
+    (e.g. 'Professional Elec Contr' → 'Professional Electric Contracting')
+    and removes redundant leading initials (e.g. 'J JC Electric' → 'JC Electric').
+    """
     # Remove trailing suffixes (with optional commas, dots, spaces)
     name = re.sub(
-        r'[,\s]+(LLC|L\.L\.C\.|INC\.?|INCORPORATED|CORP\.?|CORPORATION|LTD\.?|LIMITED|LP|L\.P\.|PLLC|P\.?C\.?|DBA)\s*$',
+        r'[,\s]+(LLC|L\.L\.C\.|INC\.?|INCORPORATED|CORP\.?|CORPORATION|CO\.?|COMPANY|LTD\.?|LIMITED|LP|L\.P\.|PLLC|P\.?C\.?|DBA)\s*$',
         '', name, flags=re.IGNORECASE
     ).strip()
     # Clean up any trailing comma or period left behind
     name = name.rstrip(',. ')
+    # Expand common abbreviations anywhere in the name
+    # e.g. "Professional Elec Contr of CT" → "Professional Electric Contracting of CT"
+    parts = name.split()
+    for i, word in enumerate(parts):
+        # Strip trailing period for matching (e.g. "Elec." → "Elec")
+        clean_word = word.rstrip('.')
+        expansion = _BUSINESS_ABBREVIATIONS.get(clean_word.lower())
+        if expansion:
+            # Preserve original casing style (all-caps vs title)
+            if clean_word.isupper():
+                expansion = expansion.upper()
+            parts[i] = expansion
+    name = ' '.join(parts)
+    # Remove redundant leading initial: "J JC Electric" → "JC Electric"
+    # Matches when a single letter is followed by a word starting with the same letter
+    m = re.match(r'^([A-Za-z])\s+([A-Za-z])', name)
+    if m and m.group(1).upper() == m.group(2).upper():
+        name = name[2:].lstrip()
+    # Title-case ALL CAPS names.
+    # If every word is uppercase, it's likely a data quality issue (bulk CSV export)
+    # so convert the whole name to title case, preserving known abbreviations.
+    _KEEP_UPPER = {
+        'hvac', 'cnc', 'led', 'usa', 'atm', 'gps', 'cad', 'cam',
+    }
+    _LOWERCASE_WORDS = {'of', 'in', 'at', 'to', 'by', 'on', 'or', 'an', 'the', 'and', 'for', 'it', 'is'}
+    words = name.split()
+    alpha_words = [w for w in words if w.isalpha()]
+    all_caps_name = alpha_words and all(w.isupper() for w in alpha_words)
+    for i, w in enumerate(words):
+        if not w.isalpha():
+            continue
+        if w.lower() in _KEEP_UPPER:
+            words[i] = w.upper()
+        elif w.isupper() and w.lower() in _LOWERCASE_WORDS:
+            words[i] = w.lower()
+        elif w.isupper() and (len(w) >= 3 or all_caps_name):
+            words[i] = w.title()
+    name = ' '.join(words)
     return name
 
 
@@ -195,17 +288,21 @@ def resolve_recipient_fields(recipient_name: str, cleaned_company: str,
             and not _looks_like_company_name(name)  # "Gappsi, Inc." is still a company
         )
         if not company and name and not same_person:
-            company = name  # The main 'name' field is the company
+            company = clean_company_name(name)  # The main 'name' field is the company
         name = contact_from_fields
     elif _looks_like_company_name(name):
         # No contact name in custom fields, but main name looks like a company
         if not company:
-            company = name
+            company = clean_company_name(name)
         name = ''
 
     # Last resort: derive from email prefix
     if not name:
         name = _name_from_email(email or '')
+
+    # Normalize ALL CAPS names to title case (e.g. "JEFF JOHNSON" → "Jeff Johnson")
+    if name and name == name.upper() and any(c.isalpha() for c in name):
+        name = name.title()
 
     return name, company
 
@@ -246,6 +343,104 @@ def _strip_ai_dashes_from_analysis(analysis: dict):
 class ClaudeService:
     def __init__(self, api_key: str):
         self.client = Anthropic(api_key=api_key)
+
+    @staticmethod
+    def _is_safe_domain(domain: str) -> bool:
+        """Reject private/internal IPs and localhost to prevent SSRF."""
+        if not domain or '.' not in domain:
+            return False
+        # Block obvious localhost/internal names
+        if domain in ('localhost', '127.0.0.1', '0.0.0.0') or domain.endswith('.local'):
+            return False
+        try:
+            ip = ipaddress.ip_address(domain)
+            return ip.is_global
+        except ValueError:
+            pass  # Not an IP literal — resolve it
+        try:
+            resolved = socket.getaddrinfo(domain, 443, socket.AF_INET)[0][4][0]
+            return ipaddress.ip_address(resolved).is_global
+        except Exception:
+            return False
+
+    def detect_industry(self, domain: str) -> str:
+        """Detect business type from a company's website. Returns 2-3 word description."""
+        if not domain:
+            return ''
+        domain = domain.lower().strip().replace('https://', '').replace('http://', '').split('/')[0]
+
+        with _industry_cache_lock:
+            cached = _industry_cache.get(domain)
+            if cached and (time.time() - cached['ts']) < _INDUSTRY_CACHE_TTL:
+                return cached['industry']
+
+        if not self._is_safe_domain(domain):
+            with _industry_cache_lock:
+                _industry_cache[domain] = {'industry': '', 'ts': time.time()}
+            return ''
+
+        try:
+            resp = requests.get(
+                f'https://{domain}', timeout=5,
+                headers={'User-Agent': 'Mozilla/5.0'},
+            )
+            html = resp.text[:5000]
+        except Exception:
+            with _industry_cache_lock:
+                _industry_cache[domain] = {'industry': '', 'ts': time.time()}
+            return ''
+
+        title_m = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
+        title = title_m.group(1).strip() if title_m else ''
+        meta_m = re.search(
+            r'<meta[^>]*name=["\']description["\'][^>]*content=["\'](.*?)["\']',
+            html, re.IGNORECASE,
+        )
+        if not meta_m:
+            meta_m = re.search(
+                r'<meta[^>]*content=["\'](.*?)["\'][^>]*name=["\']description["\']',
+                html, re.IGNORECASE,
+            )
+        description = meta_m.group(1).strip() if meta_m else ''
+        visible = re.sub(r'<[^>]+>', ' ', html[:3000])
+        visible = re.sub(r'\s+', ' ', visible)[:400]
+
+        if not title and not description and not visible.strip():
+            with _industry_cache_lock:
+                _industry_cache[domain] = {'industry': '', 'ts': time.time()}
+            return ''
+
+        try:
+            result = self.client.messages.create(
+                model='claude-haiku-4-5-20251001',
+                max_tokens=20,
+                messages=[{
+                    'role': 'user',
+                    'content': (
+                        'What type of business is this? Reply with ONLY the business type '
+                        'as a plural noun phrase in 2-3 lowercase words. Examples: '
+                        '"roofing contractors", "steel fabricators", "dental practices", '
+                        '"landscaping companies", "auto repair shops".\n\n'
+                        f'Website: {domain}\nTitle: {title}\n'
+                        f'Description: {description}\nContent: {visible[:300]}'
+                    ),
+                }],
+            )
+            industry = result.content[0].text.strip().strip('"\'').lower().rstrip('.')
+            logger.info(f'Detected industry for {domain}: {industry}')
+        except Exception as e:
+            logger.warning(f'Industry detection failed for {domain}: {e}')
+            industry = ''
+
+        with _industry_cache_lock:
+            # Evict expired entries when cache gets large
+            if len(_industry_cache) > _INDUSTRY_CACHE_MAX_SIZE:
+                now = time.time()
+                expired = [k for k, v in _industry_cache.items() if (now - v['ts']) >= _INDUSTRY_CACHE_TTL]
+                for k in expired:
+                    del _industry_cache[k]
+            _industry_cache[domain] = {'industry': industry, 'ts': time.time()}
+        return industry
 
     def analyze_website(
         self,
@@ -746,6 +941,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         learned_insights: Dict = None,
         team_contacts: list = None,
         competitors: list = None,
+        competitor_location: str = '',
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
 
@@ -819,15 +1015,29 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         # Any remaining custom fields
         known_fields = {
             'context', 'notes', 'research_notes', 'title', 'role', 'job_title',
-            'industry', 'sector', 'company', 'company_size', 'employees',
+            'industry', 'sector', 'company', 'company_name', 'business',
+            'business_name', 'dba', 'doing_business_as', 'organization', 'org',
+            'employer', 'company_size', 'employees',
             'funding_stage', 'funding', 'revenue', 'arr', 'recent_news', 'news',
             'recent_launch', 'product_launch', 'pain_points', 'challenges',
             'linkedin', 'linkedin_url', 'twitter', 'twitter_handle', 'referral',
             'mutual_connection', 'referred_by', 'previous_interaction', 'met_at',
             'name', 'email', 'website', 'url', 'site', 'website_url',
             'company_url', 'domain', 'company_domain', 'web',
+            'city', 'state', 'zip', 'zipcode', 'zip_code', 'address',
+            'street', 'street_address', 'business_address', 'mailing_address',
+            'location', 'county',
         }
-        other_fields = {k: v for k, v in custom_fields.items() if k.lower() not in known_fields and v}
+        raw_co = (recipient.get('company') or '').strip()
+        other_fields = {}
+        for k, v in custom_fields.items():
+            if k.lower() in known_fields or not v:
+                continue
+            # Replace raw company name with cleaned version in context
+            if raw_co and str(v).strip() == raw_co and cleaned_company:
+                other_fields[k] = cleaned_company
+            else:
+                other_fields[k] = v
         if other_fields:
             context_parts.append(f"Additional Details: {json.dumps(other_fields)}")
 
@@ -885,14 +1095,67 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
             'name': recipient_name or 'there',
         }
 
-        # Add all custom fields as available variables
+        # Add all custom fields as available variables (lowercase keys for
+        # case-insensitive matching — CSV headers may be "City" while
+        # templates use {{city}})
+        raw_company = (recipient.get('company') or '').strip()
+        from app.services.competitor_discovery import CompetitorService
         for k, v in custom_fields.items():
             if v:
-                variable_map[k] = str(v)
+                key = k.lower()
+                # If this field holds the raw company name, use the cleaned version
+                if raw_company and str(v).strip() == raw_company:
+                    variable_map[key] = cleaned_company
+                # Clean city fields that may contain street addresses
+                elif key == 'city':
+                    variable_map[key] = CompetitorService._clean_city(str(v))
+                else:
+                    variable_map[key] = str(v)
+
+        # Derive city/state from Location or address fields when not directly
+        # available (e.g. CSV has "Location: Littleton, Colorado, United States"
+        # but no dedicated "city" column).
+        if 'city' not in variable_map or not variable_map['city']:
+            location_val = variable_map.get('location', '')
+            if not location_val:
+                # Also check street/address fields
+                for loc_key in ('street', 'address', 'business_address', 'mailing_address'):
+                    if variable_map.get(loc_key):
+                        location_val = variable_map[loc_key]
+                        break
+            if location_val:
+                parts = [p.strip() for p in location_val.split(',')]
+                if parts:
+                    variable_map['city'] = parts[0]
+                if len(parts) >= 2:
+                    # Second part is state (strip "United States" etc.)
+                    state_part = parts[1].strip()
+                    if state_part.lower() not in ('united states', 'usa', 'us', 'canada'):
+                        if 'state' not in variable_map or not variable_map['state']:
+                            variable_map['state'] = state_part
+
+        # Auto-detect industry from company domain when not in CSV
+        # Only run detection if the template actually uses {{industry}}
+        _template_uses_industry = (
+            '{{industry}}' in template_body or '{{industry}}' in template_subject
+        )
+        if _template_uses_industry and not variable_map.get('industry'):
+            domain = (
+                variable_map.get('company domain', '')
+                or variable_map.get('domain', '')
+                or variable_map.get('website', '')
+            )
+            if not domain:
+                email = recipient.get('email', '')
+                if email and '@' in email:
+                    domain = email.split('@')[1]
+            if domain:
+                detected = self.detect_industry(domain)
+                if detected:
+                    variable_map['industry'] = detected
 
         # Add competitor variables (competitor1, competitor2, competitors)
         if competitors:
-            from app.services.competitor_discovery import CompetitorService
             variable_map.update(CompetitorService.build_variable_map(competitors))
 
         # Handle website_insights separately from the variable_map.
@@ -907,7 +1170,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
             raw = match.group(1).strip()
             # Support fallback syntax: {{city|state}} tries city first, then state
             for part in raw.split('|'):
-                var_name = part.strip()
+                var_name = part.strip().lower()
                 # website_insights: pre-substitute directly when available
                 if var_name == 'website_insights':
                     if has_website_insights:
@@ -965,8 +1228,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         # Build competitor context note
         _competitor_note = ""
         if competitors:
-            from app.services.competitor_discovery import CompetitorService
-            _competitor_note = CompetitorService.build_ai_context(competitors, cleaned_company)
+            _competitor_note = CompetitorService.build_ai_context(competitors, cleaned_company, competitor_location)
 
         # Build team contact note outside f-string (Python 3.9 backslash restriction)
         _team_note = ""
@@ -1002,14 +1264,22 @@ Subject: {resolved_subject}
 Body:
 {resolved_body}
 
-TEMPLATE STRUCTURE RULE (THIS IS THE MOST IMPORTANT RULE):
-- PRESERVE the template's exact paragraph structure, flow, and sequence
-- Each paragraph/section of the template must appear in the same order in the output
-- Pre-filled content (where variables were replaced with real data) should stay IN PLACE — do not move it to a different paragraph or rewrite around it
-- You may lightly adjust wording for natural flow, but the skeleton of the template MUST remain intact
-- If there is a section with website insights or bullet points, keep it exactly where it appears in the template — do not relocate that content to the opening or anywhere else
-- Think of yourself as filling in a form, not rewriting a letter
+TEMPLATE STRUCTURE RULE (THIS IS THE MOST IMPORTANT RULE — VIOLATION MEANS FAILURE):
+- The template above is the user's email. Output it nearly verbatim — same sentences, same structure, same paragraph order.
+- Do NOT remove sentences or clauses. If the template lists multiple offerings ("improving your Google rankings, building a new website, or introducing automation"), keep ALL of them.
+- Do NOT add sentences, clauses, bullet points, or ideas that aren't in the template.
+- Pre-filled data (city names, company names, numbers) are REAL DATA from a database. Keep them EXACTLY as they appear.
+- NEVER replace real data with generic phrases like "your area", "your city", "[your location]", "your market", etc.
+- NEVER use bracket placeholders like [name], [city], [area], [competitor names].
+- The ONLY changes you may make:
+  (1) Fix obvious typos
+  (2) Adjust the greeting to use the correct first name
+  (3) Swap industry/business-type words to match the recipient's actual business. For example, if the template says "electrical contractors" but the company is a steel fabricator, change "electrical contractors" to "steel fabricators" and "electricians" to "steel fabricators". Match the language to what the company actually does.
+- Everything else must be preserved from the template.
 
+SUBJECT LINE RULE (CRITICAL):
+- Output the subject line EXACTLY as provided above (after variable substitution). Do NOT rewrite, rephrase, or "improve" it.
+- The only change allowed is the industry swap (rule 3 above) if applicable.
 
 STYLE REQUIREMENTS:
 1. Match the writer's personal style EXACTLY

@@ -619,6 +619,11 @@ body {
   font-weight: 500;
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.2); }
+}
+
 /* Responsive: Tablet */
 @media (max-width: 768px) {
   .header-content {

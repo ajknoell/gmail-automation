@@ -42,7 +42,8 @@ class StepRunner:
 
         app = create_app()
         with app.app_context():
-            base_url = app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+            from app.services.tracking_service import TrackingService
+            base_url = TrackingService.get_base_url()
             gmail = GmailService(account_id=account_id)
             if not gmail.connect():
                 app.logger.error(f'StepRunner: Gmail connect failed for step {step_id}')

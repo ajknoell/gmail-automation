@@ -14,6 +14,9 @@ class CampaignState:
     cancel_event: threading.Event = field(default_factory=threading.Event)
     progress: dict = field(default_factory=lambda: {'sent': 0, 'failed': 0, 'total': 0})
     new_recipients_queue: queue.Queue = field(default_factory=queue.Queue)  # For dynamically added recipients
+    last_sent_name: Optional[str] = None
+    last_sent_email: Optional[str] = None
+    last_sent_at: Optional[float] = None  # time.time() timestamp
 
 class CampaignRunner:
     _instances: Dict[int, CampaignState] = {}
@@ -81,7 +84,8 @@ class CampaignRunner:
 
         app = create_app()
         with app.app_context():
-            base_url = app.config.get('TRACKING_BASE_URL', 'http://localhost:5001')
+            from app.services.tracking_service import TrackingService
+            base_url = TrackingService.get_base_url()
             gmail = GmailService(account_id=state.account_id)
             if not gmail.connect():
                 cls._finish_campaign(state.campaign_id, 'failed')
@@ -187,6 +191,9 @@ class CampaignRunner:
                         recipient.status = 'sent'
                         recipient.sent_at = datetime.utcnow()
                         state.progress['sent'] += 1
+                        state.last_sent_name = recipient.name or ''
+                        state.last_sent_email = recipient.email
+                        state.last_sent_at = time.time()
 
                         # Update campaign counts
                         campaign = Campaign.query.get(state.campaign_id)
