@@ -104,141 +104,172 @@ function BusinessProfile() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1>Business Profile</h1>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+        <div>
+          <h1>Business Profile</h1>
+          <p style={{ color: 'var(--text-light)', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            Define what your business does so Veloro can score signal relevance and match opportunities.
+          </p>
+        </div>
+        <button
+          className={`btn ${saved ? 'btn-success' : 'btn-primary'}`}
+          onClick={handleSave}
+          disabled={saving}
+        >
           {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
         </button>
       </div>
 
-      <p style={{ color: '#6B7280', marginBottom: '24px' }}>
-        Define what your business does so Veloro can score signal relevance and match opportunities.
-      </p>
-
-      {/* Core Identity */}
-      <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <h3 style={{ marginBottom: '16px' }}>Identity</h3>
-        <div style={{ display: 'grid', gap: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label className="label">Company Name</label>
-              <input className="input" value={companyName} onChange={e => setCompanyName(e.target.value)}
-                placeholder="Acme Consulting" />
-            </div>
-            <div>
-              <label className="label">Domain</label>
-              <input className="input" value={domain} onChange={e => setDomain(e.target.value)}
-                placeholder="acmeconsulting.com" />
-            </div>
-          </div>
-          <div>
-            <label className="label">Tagline</label>
-            <input className="input" value={tagline} onChange={e => setTagline(e.target.value)}
-              placeholder="We help companies scale their Salesforce operations" />
-          </div>
-          <div>
-            <label className="label">Description</label>
-            <textarea className="input" rows={3} value={description} onChange={e => setDescription(e.target.value)}
-              placeholder="Brief description of what your business does and who you serve..." />
-          </div>
-        </div>
-      </div>
-
-      {/* Capabilities */}
-      <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3>Capabilities</h3>
-          <button className="btn btn-sm btn-secondary" onClick={addCapability}>+ Add Capability</button>
-        </div>
-        {capabilities.length === 0 ? (
-          <p style={{ color: '#6B7280' }}>No capabilities defined yet. Add what services you offer.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: '12px' }}>
-            {capabilities.map((cap, i) => (
-              <div key={i} style={{ border: '1px solid #E5E7EB', borderRadius: '8px', padding: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <input className="input" value={cap.name} onChange={e => updateCapability(i, 'name', e.target.value)}
-                    placeholder="Capability name (e.g., Salesforce Implementation)"
-                    style={{ flex: 1, marginRight: '8px' }} />
-                  <button className="btn btn-sm" onClick={() => removeCapability(i)} style={{ color: '#EF4444' }}>Remove</button>
-                </div>
-                <textarea className="input" rows={2} value={cap.description || ''}
-                  onChange={e => updateCapability(i, 'description', e.target.value)}
-                  placeholder="Brief description of this capability..." style={{ marginBottom: '8px' }} />
-                <input className="input" value={(cap.keywords || []).join(', ')}
-                  onChange={e => updateCapability(i, 'keywords', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                  placeholder="Keywords (comma-separated): salesforce, CRM, implementation, migration" />
+      <div style={{ display: 'grid', gap: '1.25rem' }}>
+        {/* Core Identity */}
+        <div className="card">
+          <div className="card-section-title">Identity</div>
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <div>
+                <label className="label">Company Name</label>
+                <input className="input" value={companyName} onChange={e => setCompanyName(e.target.value)}
+                  placeholder="Acme Consulting" />
               </div>
-            ))}
+              <div>
+                <label className="label">Domain</label>
+                <input className="input" value={domain} onChange={e => setDomain(e.target.value)}
+                  placeholder="acmeconsulting.com" />
+              </div>
+            </div>
+            <div>
+              <label className="label">Tagline</label>
+              <input className="input" value={tagline} onChange={e => setTagline(e.target.value)}
+                placeholder="We help companies scale their Salesforce operations" />
+            </div>
+            <div>
+              <label className="label">Description</label>
+              <textarea className="input" rows={3} value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="Brief description of what your business does and who you serve..." />
+            </div>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Target Market */}
-      <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <h3 style={{ marginBottom: '16px' }}>Target Market</h3>
-        <div style={{ display: 'grid', gap: '12px' }}>
-          <div>
-            <label className="label">Industries (comma-separated)</label>
-            <input className="input" value={(targetMarket.industries || []).join(', ')}
-              onChange={e => updateIndustries(e.target.value)}
-              placeholder="Healthcare, Manufacturing, SaaS, Real Estate" />
+        {/* Capabilities */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div className="card-section-title" style={{ marginBottom: 0 }}>Capabilities</div>
+            <button className="btn btn-sm btn-secondary" onClick={addCapability}>+ Add</button>
           </div>
-          <div>
-            <label className="label">Geographies (comma-separated)</label>
-            <input className="input" value={(targetMarket.geographies || []).join(', ')}
-              onChange={e => updateGeographies(e.target.value)}
-              placeholder="Chicago, Austin, Remote, United States" />
-          </div>
-          <div>
-            <label className="label">Company Sizes</label>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {['1-10', '11-50', '51-200', '201-1000', '1000+'].map(size => (
-                <label key={size} style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                  <input type="checkbox"
-                    checked={(targetMarket.company_sizes || []).includes(size)}
-                    onChange={e => {
-                      const sizes = targetMarket.company_sizes || [];
-                      setTargetMarket({
-                        ...targetMarket,
-                        company_sizes: e.target.checked
-                          ? [...sizes, size]
-                          : sizes.filter(s => s !== size),
-                      });
-                    }} />
-                  {size}
-                </label>
+          {capabilities.length === 0 ? (
+            <p style={{ color: 'var(--text-light)', fontSize: '0.875rem' }}>
+              No capabilities defined yet. Add what services you offer.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: '0.75rem' }}>
+              {capabilities.map((cap, i) => (
+                <div key={i} style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: '0.5rem',
+                  padding: '0.875rem',
+                  background: 'var(--bg)',
+                }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <input className="input" value={cap.name} onChange={e => updateCapability(i, 'name', e.target.value)}
+                      placeholder="Capability name (e.g., Salesforce Implementation)"
+                      style={{ flex: 1 }} />
+                    <button className="btn btn-sm" onClick={() => removeCapability(i)}
+                      style={{ color: 'var(--error)', flexShrink: 0 }}>Remove</button>
+                  </div>
+                  <textarea className="input" rows={2} value={cap.description || ''}
+                    onChange={e => updateCapability(i, 'description', e.target.value)}
+                    placeholder="Brief description of this capability..."
+                    style={{ marginBottom: '0.5rem' }} />
+                  <input className="input" value={(cap.keywords || []).join(', ')}
+                    onChange={e => updateCapability(i, 'keywords', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                    placeholder="Keywords (comma-separated): salesforce, CRM, implementation" />
+                </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Target Market */}
+        <div className="card">
+          <div className="card-section-title">Target Market</div>
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+              <div>
+                <label className="label">Industries (comma-separated)</label>
+                <input className="input" value={(targetMarket.industries || []).join(', ')}
+                  onChange={e => updateIndustries(e.target.value)}
+                  placeholder="Healthcare, Manufacturing, SaaS" />
+              </div>
+              <div>
+                <label className="label">Geographies (comma-separated)</label>
+                <input className="input" value={(targetMarket.geographies || []).join(', ')}
+                  onChange={e => updateGeographies(e.target.value)}
+                  placeholder="Chicago, Austin, Remote" />
+              </div>
+            </div>
+            <div>
+              <label className="label">Company Sizes</label>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                {['1-10', '11-50', '51-200', '201-1000', '1000+'].map(size => (
+                  <label key={size} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.375rem',
+                    cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text)',
+                    padding: '0.375rem 0.625rem',
+                    borderRadius: '0.375rem',
+                    border: '1px solid var(--border)',
+                    background: (targetMarket.company_sizes || []).includes(size) ? 'rgba(79, 70, 229, 0.06)' : 'transparent',
+                  }}>
+                    <input type="checkbox"
+                      checked={(targetMarket.company_sizes || []).includes(size)}
+                      onChange={e => {
+                        const sizes = targetMarket.company_sizes || [];
+                        setTargetMarket({
+                          ...targetMarket,
+                          company_sizes: e.target.checked
+                            ? [...sizes, size]
+                            : sizes.filter(s => s !== size),
+                        });
+                      }}
+                      style={{ accentColor: 'var(--primary)' }}
+                    />
+                    {size}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Keywords */}
-      <div className="card" style={{ padding: '20px' }}>
-        <h3 style={{ marginBottom: '16px' }}>Relevance Keywords</h3>
-        <p style={{ color: '#6B7280', fontSize: '0.85em', marginBottom: '12px' }}>
-          Keywords used to match signals against your business. Signals containing these keywords score higher for relevance.
-        </p>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-          <input className="input" value={newKeyword} onChange={e => setNewKeyword(e.target.value)}
-            placeholder="Add keyword..." style={{ maxWidth: '300px' }}
-            onKeyDown={e => e.key === 'Enter' && addKeyword()} />
-          <button className="btn btn-sm btn-secondary" onClick={addKeyword}>Add</button>
-        </div>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-          {keywords.map(kw => (
-            <span key={kw} style={{
-              display: 'flex', alignItems: 'center', gap: '4px',
-              padding: '4px 10px', borderRadius: '16px',
-              background: '#EEF2FF', color: '#4338CA', fontSize: '0.85em',
-            }}>
-              {kw}
-              <button onClick={() => removeKeyword(kw)} style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: '#6366F1', fontWeight: 'bold', padding: 0,
-              }}>&times;</button>
-            </span>
-          ))}
+        {/* Keywords */}
+        <div className="card">
+          <div className="card-section-title">Relevance Keywords</div>
+          <p style={{ color: 'var(--text-light)', fontSize: '0.8125rem', marginBottom: '0.75rem', marginTop: '-0.5rem' }}>
+            Signals containing these keywords score higher for relevance.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <input className="input" value={newKeyword} onChange={e => setNewKeyword(e.target.value)}
+              placeholder="Add keyword..." style={{ maxWidth: '280px' }}
+              onKeyDown={e => e.key === 'Enter' && addKeyword()} />
+            <button className="btn btn-sm btn-secondary" onClick={addKeyword}>Add</button>
+          </div>
+          {keywords.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+              {keywords.map(kw => (
+                <span key={kw} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                  padding: '0.25rem 0.625rem', borderRadius: '9999px',
+                  background: 'rgba(79, 70, 229, 0.08)', color: 'var(--primary)',
+                  fontSize: '0.8125rem', fontWeight: 500,
+                }}>
+                  {kw}
+                  <button onClick={() => removeKeyword(kw)} style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--primary)', fontWeight: 'bold', padding: 0,
+                    fontSize: '0.9em', lineHeight: 1, marginLeft: '0.125rem',
+                  }}>&times;</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

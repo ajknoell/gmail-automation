@@ -25,7 +25,7 @@ function ScoreBadge({ score, label }) {
   else if (score >= 0.4) { bg = '#FEF3C7'; color = '#92400E'; }
   return (
     <span style={{
-      fontSize: '0.75em', padding: '3px 8px', borderRadius: '8px',
+      fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px',
       background: bg, color, fontWeight: 600,
     }}>
       {pct}% {label}
@@ -72,7 +72,7 @@ function OpportunityFeed() {
     <div className="page">
       <div className="page-header">
         <h1>Opportunities</h1>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <select value={filterSource} onChange={e => { setFilterSource(e.target.value); setPage(1); }}
             className="input" style={{ maxWidth: '180px' }}>
             <option value="">All Sources</option>
@@ -80,83 +80,87 @@ function OpportunityFeed() {
             <option value="job_posting">Job Posting</option>
             <option value="news">News</option>
           </select>
-          <span style={{ color: '#6B7280', fontSize: '0.85em' }}>{total} opportunities</span>
+          <span style={{ color: 'var(--text-light)', fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>
+            {total} opportunit{total === 1 ? 'y' : 'ies'}
+          </span>
         </div>
       </div>
 
-      <p style={{ color: '#6B7280', marginBottom: '20px' }}>
+      <p style={{ color: 'var(--text-light)', fontSize: '0.875rem', marginBottom: '1.25rem' }}>
         Contacts ranked by signal strength and relevance to your business profile.
       </p>
 
       {loading ? (
-        <p>Loading...</p>
+        <p style={{ color: 'var(--text-light)' }}>Loading...</p>
       ) : opportunities.length === 0 ? (
-        <div className="card" style={{ padding: '40px', textAlign: 'center', color: '#6B7280' }}>
-          <div style={{ fontSize: '2em', marginBottom: '12px' }}>{'\u{1F4E1}'}</div>
-          <p style={{ fontSize: '1.1em', marginBottom: '8px' }}>No opportunities yet</p>
-          <p style={{ fontSize: '0.9em' }}>
-            Set up your <Link to="/business-profile" style={{ color: '#6366F1' }}>Business Profile</Link> and
-            enable <Link to="/signals" style={{ color: '#6366F1' }}>Signal Sources</Link> to start seeing ranked opportunities.
+        <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: 'var(--text-light)' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.75rem', opacity: 0.5 }}>{'\u{1F4E1}'}</div>
+          <p style={{ fontWeight: 500, marginBottom: '0.375rem' }}>No opportunities yet</p>
+          <p style={{ fontSize: '0.875rem' }}>
+            Set up your <Link to="/business-profile" style={{ color: 'var(--primary)' }}>Business Profile</Link> and
+            enable <Link to="/signals" style={{ color: 'var(--primary)' }}>Signal Sources</Link> to start seeing ranked opportunities.
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '16px' }}>
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
           {opportunities.map(opp => (
-            <div key={opp.contact.id} className="card" style={{ padding: '20px' }}>
+            <div key={opp.contact.id} className="card">
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem', gap: '0.75rem' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem', flexWrap: 'wrap' }}>
                     <Link to={`/contacts/${opp.contact.id}`} style={{
-                      fontSize: '1.1em', fontWeight: 600, color: '#111827', textDecoration: 'none',
+                      fontSize: '1rem', fontWeight: 600, color: 'var(--text)', textDecoration: 'none',
                     }}>
                       {opp.contact.name || opp.contact.email}
                     </Link>
                     {opp.contact.company && (
-                      <span style={{ color: '#6B7280' }}>{opp.contact.company}</span>
+                      <span style={{ color: 'var(--text-light)', fontSize: '0.875rem' }}>{opp.contact.company}</span>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
                     <ScoreBadge score={opp.max_intent_score} label="intent" />
                     <ScoreBadge score={opp.max_relevance_score} label="relevant" />
                     <span style={{
-                      fontSize: '0.75em', padding: '3px 8px', borderRadius: '8px',
-                      background: '#F3F4F6', color: '#374151',
+                      fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px',
+                      background: 'var(--bg)', color: 'var(--text-light)', border: '1px solid var(--border)',
                     }}>
                       {opp.signal_count} signal{opp.signal_count !== 1 ? 's' : ''}
                     </span>
                   </div>
                 </div>
                 <div style={{
-                  fontSize: '1.5em', fontWeight: 700,
-                  color: opp.combined_score >= 0.5 ? '#059669' : opp.combined_score >= 0.25 ? '#D97706' : '#6B7280',
+                  fontSize: '1.25rem', fontWeight: 700, flexShrink: 0,
+                  color: opp.combined_score >= 0.5 ? '#059669' : opp.combined_score >= 0.25 ? '#D97706' : 'var(--text-light)',
+                  minWidth: '2.5rem', textAlign: 'right',
                 }}>
                   {Math.round(opp.combined_score * 100)}
                 </div>
               </div>
 
               {/* Signals */}
-              <div style={{ display: 'grid', gap: '8px' }}>
+              <div style={{ display: 'grid', gap: '0.375rem' }}>
                 {opp.top_signals.map(sig => (
                   <div key={sig.id} style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '8px 12px', borderRadius: '8px', background: '#F9FAFB',
+                    padding: '0.5rem 0.75rem', borderRadius: '0.375rem', background: 'var(--bg)',
                     borderLeft: `3px solid ${SEVERITY_COLORS[sig.severity] || '#6B7280'}`,
+                    gap: '0.5rem',
                   }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>{SOURCE_ICONS[sig.source_type] || '\u{1F514}'}</span>
-                        <span style={{ fontWeight: 500, fontSize: '0.9em' }}>{sig.title || sig.signal_type}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                        <span style={{ fontSize: '0.9em' }}>{SOURCE_ICONS[sig.source_type] || '\u{1F514}'}</span>
+                        <span style={{ fontWeight: 500, fontSize: '0.8125rem' }}>{sig.title || sig.signal_type}</span>
                       </div>
                       {sig.summary && (
-                        <div style={{ fontSize: '0.8em', color: '#6B7280', marginTop: '2px' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-light)', marginTop: '0.125rem' }}>
                           {sig.summary.length > 120 ? sig.summary.slice(0, 120) + '...' : sig.summary}
                         </div>
                       )}
                     </div>
                     {!sig.actioned && (
                       <button className="btn btn-sm btn-primary" onClick={() => handleCreateOutreach(sig.id)}
-                        disabled={generatingId === sig.id} style={{ marginLeft: '8px', flexShrink: 0 }}>
+                        disabled={generatingId === sig.id} style={{ flexShrink: 0 }}>
                         {generatingId === sig.id ? '...' : 'Outreach'}
                       </button>
                     )}
@@ -166,12 +170,12 @@ function OpportunityFeed() {
 
               {/* Footer */}
               {opp.latest_signal_at && (
-                <div style={{ fontSize: '0.8em', color: '#9CA3AF', marginTop: '8px' }}>
+                <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.625rem' }}>
                   Latest signal: {new Date(opp.latest_signal_at).toLocaleDateString()}
                   {opp.contact.business_category && <> &middot; {opp.contact.business_category}</>}
                   {opp.contact.website && (
                     <> &middot; <a href={opp.contact.website.startsWith('http') ? opp.contact.website : `https://${opp.contact.website}`}
-                      target="_blank" rel="noopener noreferrer" style={{ color: '#6366F1' }}>Website</a></>
+                      target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>Website</a></>
                   )}
                 </div>
               )}
@@ -182,14 +186,14 @@ function OpportunityFeed() {
 
       {/* Pagination */}
       {total > 20 && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '20px' }}>
-          <button className="btn btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem', alignItems: 'center' }}>
+          <button className="btn btn-sm btn-secondary" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>
             Previous
           </button>
-          <span style={{ padding: '4px 12px', color: '#6B7280' }}>
+          <span style={{ padding: '0.25rem 0.75rem', color: 'var(--text-light)', fontSize: '0.8125rem' }}>
             Page {page} of {Math.ceil(total / 20)}
           </span>
-          <button className="btn btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 20)}>
+          <button className="btn btn-sm btn-secondary" onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 20)}>
             Next
           </button>
         </div>

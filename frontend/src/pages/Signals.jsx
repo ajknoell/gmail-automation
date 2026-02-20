@@ -30,13 +30,14 @@ const SEVERITY_COLORS = {
 function IntentBadge({ score }) {
   if (score == null) return null;
   const pct = Math.round(score * 100);
-  let color = '#6B7280';
-  if (score >= 0.7) color = '#10B981';
-  else if (score >= 0.4) color = '#F59E0B';
+  let bg = '#F3F4F6';
+  let color = '#374151';
+  if (score >= 0.7) { bg = '#D1FAE5'; color = '#065F46'; }
+  else if (score >= 0.4) { bg = '#FEF3C7'; color = '#92400E'; }
   return (
     <span style={{
-      fontSize: '0.75em', padding: '2px 8px', borderRadius: '12px',
-      background: color, color: 'white', fontWeight: 600,
+      fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px',
+      background: bg, color, fontWeight: 600,
     }}>
       {pct}% intent
     </span>
@@ -120,7 +121,7 @@ function Signals() {
     <div className="page">
       <div className="page-header">
         <h1>Signals</h1>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button className="btn btn-secondary" onClick={() => setShowSourceSetup(!showSourceSetup)}>
             Sources ({sources.length})
           </button>
@@ -131,7 +132,7 @@ function Signals() {
       </div>
 
       {/* Stats */}
-      <div className="stats-row" style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <div className="stats-row">
         <div className="stat-card">
           <div className="stat-value">{stats.total || 0}</div>
           <div className="stat-label">Total Active</div>
@@ -158,18 +159,20 @@ function Signals() {
 
       {/* Source Setup */}
       {showSourceSetup && (
-        <div className="card" style={{ padding: '16px', marginBottom: '16px' }}>
-          <h3 style={{ marginBottom: '12px' }}>Signal Sources</h3>
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <div className="card-section-title">Signal Sources</div>
           {sources.length === 0 ? (
-            <p style={{ color: '#6B7280', marginBottom: '12px' }}>No signal sources configured yet. Add sources to start collecting signals.</p>
+            <p style={{ color: 'var(--text-light)', fontSize: '0.875rem', marginBottom: '0.75rem' }}>
+              No signal sources configured yet. Add sources to start collecting signals.
+            </p>
           ) : (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               {sources.map(s => (
                 <span key={s.id} style={{
-                  padding: '4px 12px', borderRadius: '16px',
-                  background: s.is_active ? '#DBEAFE' : '#F3F4F6',
-                  color: s.is_active ? '#1D4ED8' : '#6B7280',
-                  fontSize: '0.85em',
+                  padding: '0.25rem 0.75rem', borderRadius: '9999px',
+                  background: s.is_active ? 'rgba(79, 70, 229, 0.08)' : 'var(--bg)',
+                  color: s.is_active ? 'var(--primary)' : 'var(--text-light)',
+                  fontSize: '0.8125rem', border: '1px solid var(--border)',
                 }}>
                   {SOURCE_ICONS[s.source_type] || ''} {s.name}
                   {s.last_checked_at && <span style={{ opacity: 0.6 }}> (checked {new Date(s.last_checked_at).toLocaleDateString()})</span>}
@@ -178,7 +181,7 @@ function Signals() {
             </div>
           )}
           {availableSourceTypes.length > 0 && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {availableSourceTypes.map(t => (
                 <button key={t} className="btn btn-sm btn-secondary" onClick={() => handleAddSource(t)}>
                   + {SOURCE_LABELS[t]}
@@ -190,7 +193,7 @@ function Signals() {
       )}
 
       {/* Filter */}
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ marginBottom: '1rem' }}>
         <select value={filterSource} onChange={e => setFilterSource(e.target.value)}
           className="input" style={{ maxWidth: '200px' }}>
           <option value="">All Sources</option>
@@ -202,63 +205,60 @@ function Signals() {
 
       {/* Signals List */}
       {loading ? (
-        <p>Loading...</p>
+        <p style={{ color: 'var(--text-light)' }}>Loading...</p>
       ) : signals.length === 0 ? (
-        <div className="card" style={{ padding: '32px', textAlign: 'center', color: '#6B7280' }}>
-          <p>No active signals detected.</p>
-          <p style={{ fontSize: '0.9em' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: 'var(--text-light)' }}>
+          <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>No active signals detected.</p>
+          <p style={{ fontSize: '0.875rem' }}>
             {sources.length === 0
               ? 'Add signal sources above to start collecting intent signals from job postings, news, and websites.'
               : 'Signals are detected when contacts show intent through hiring, funding, website changes, and more.'}
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '12px' }}>
+        <div style={{ display: 'grid', gap: '0.625rem' }}>
           {signals.map(s => (
             <div key={s.id} className="card" style={{
-              padding: '16px',
-              borderLeft: `4px solid ${SEVERITY_COLORS[s.severity] || '#6B7280'}`,
+              padding: '1rem 1.25rem',
+              borderLeft: `3px solid ${SEVERITY_COLORS[s.severity] || '#6B7280'}`,
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '1.2em' }}>{SOURCE_ICONS[s.source_type] || '\u{1F514}'}</span>
-                    <strong>{s.title || (SOURCE_LABELS[s.source_type] || s.source_type) + ': ' + s.signal_type}</strong>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '1.1em' }}>{SOURCE_ICONS[s.source_type] || '\u{1F514}'}</span>
+                    <strong style={{ fontSize: '0.9rem' }}>{s.title || (SOURCE_LABELS[s.source_type] || s.source_type) + ': ' + s.signal_type}</strong>
                     <IntentBadge score={s.intent_score} />
                     {s.relevance_score != null && (
                       <span style={{
-                        fontSize: '0.75em', padding: '2px 8px', borderRadius: '12px',
-                        background: '#E0E7FF', color: '#4338CA',
+                        fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px',
+                        background: 'rgba(79, 70, 229, 0.08)', color: 'var(--primary)',
                       }}>
                         {Math.round(s.relevance_score * 100)}% relevant
                       </span>
                     )}
-                    <span style={{
-                      fontSize: '0.75em', padding: '2px 8px', borderRadius: '12px',
-                      background: SEVERITY_COLORS[s.severity] || '#6B7280', color: 'white',
-                    }}>{s.severity}</span>
                   </div>
-                  <div style={{ marginBottom: '4px' }}>
+                  <div style={{ fontSize: '0.875rem', marginBottom: '0.25rem' }}>
                     <strong>{s.contact_name || s.contact_email}</strong>
-                    {s.contact_company && <span style={{ color: '#6B7280' }}> - {s.contact_company}</span>}
+                    {s.contact_company && <span style={{ color: 'var(--text-light)' }}> - {s.contact_company}</span>}
                   </div>
                   {s.summary && (
-                    <div style={{ fontSize: '0.85em', color: '#374151', marginBottom: '4px' }}>
+                    <div style={{ fontSize: '0.8125rem', color: '#374151', marginBottom: '0.25rem', lineHeight: 1.4 }}>
                       {s.summary}
                     </div>
                   )}
-                  <div style={{ fontSize: '0.8em', color: '#9CA3AF' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>
                     {SOURCE_LABELS[s.source_type] || s.source_type} &middot;{' '}
                     {s.detected_at ? new Date(s.detected_at).toLocaleDateString() : '-'}
                     {s.source_url && (
                       <>
                         {' '}&middot;{' '}
-                        <a href={s.source_url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366F1' }}>Source</a>
+                        <a href={s.source_url} target="_blank" rel="noopener noreferrer"
+                          style={{ color: 'var(--primary)' }}>Source</a>
                       </>
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginLeft: '12px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                   {!s.actioned && (
                     <button className="btn btn-primary btn-sm" onClick={() => handleCreateOutreach(s.id)}
                       disabled={generatingId === s.id}>
@@ -266,12 +266,12 @@ function Signals() {
                     </button>
                   )}
                   {s.actioned && s.outreach_subject && (
-                    <button className="btn btn-sm" onClick={() => setOutreachPreview(s)}>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setOutreachPreview(s)}>
                       View Email
                     </button>
                   )}
                   <button className="btn btn-sm" onClick={() => handleDismiss(s.id)}
-                    style={{ color: '#6B7280' }}>
+                    style={{ color: 'var(--text-light)' }}>
                     Dismiss
                   </button>
                 </div>
@@ -285,18 +285,29 @@ function Signals() {
       {outreachPreview && (
         <div className="modal-overlay" onClick={() => setOutreachPreview(null)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <h3>Generated Outreach</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontWeight: 'bold' }}>Subject:</label>
-              <p>{outreachPreview.outreach_subject || outreachPreview.subject}</p>
+            <div className="modal-header">
+              <div className="modal-title">Generated Outreach</div>
+              <button className="modal-close" onClick={() => setOutreachPreview(null)}>&times;</button>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontWeight: 'bold' }}>Body:</label>
-              <div style={{ whiteSpace: 'pre-wrap', background: '#F9FAFB', padding: '12px', borderRadius: '8px' }}>
-                {outreachPreview.outreach_body || outreachPreview.body}
+            <div className="modal-body">
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="label">Subject</label>
+                <p style={{ fontSize: '0.9rem' }}>{outreachPreview.outreach_subject || outreachPreview.subject}</p>
+              </div>
+              <div>
+                <label className="label">Body</label>
+                <div style={{
+                  whiteSpace: 'pre-wrap', background: 'var(--bg)', padding: '0.75rem',
+                  borderRadius: '0.5rem', fontSize: '0.875rem', lineHeight: 1.6,
+                  border: '1px solid var(--border)',
+                }}>
+                  {outreachPreview.outreach_body || outreachPreview.body}
+                </div>
               </div>
             </div>
-            <button className="btn btn-secondary" onClick={() => setOutreachPreview(null)}>Close</button>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setOutreachPreview(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}

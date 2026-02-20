@@ -93,7 +93,7 @@ function Triggers() {
       </div>
 
       {/* Stats */}
-      <div className="stats-row" style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+      <div className="stats-row">
         <div className="stat-card">
           <div className="stat-value">{stats.total || 0}</div>
           <div className="stat-label">Total Active</div>
@@ -109,7 +109,7 @@ function Triggers() {
       </div>
 
       {/* Filter */}
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ marginBottom: '1rem' }}>
         <select value={filterType} onChange={e => setFilterType(e.target.value)}
           className="input" style={{ maxWidth: '200px' }}>
           <option value="">All Types</option>
@@ -121,40 +121,45 @@ function Triggers() {
 
       {/* Triggers List */}
       {loading ? (
-        <p>Loading...</p>
+        <p style={{ color: 'var(--text-light)' }}>Loading...</p>
       ) : triggers.length === 0 ? (
-        <div className="card" style={{ padding: '32px', textAlign: 'center', color: '#6B7280' }}>
-          <p>No active triggers detected.</p>
-          <p style={{ fontSize: '0.9em' }}>Triggers are detected when contact websites have changes like SSL expiry, downtime, or outdated content.</p>
+        <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: 'var(--text-light)' }}>
+          <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>No active triggers detected.</p>
+          <p style={{ fontSize: '0.875rem' }}>
+            Triggers are detected when contact websites have changes like SSL expiry, downtime, or outdated content.
+          </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '12px' }}>
+        <div style={{ display: 'grid', gap: '0.625rem' }}>
           {triggers.map(t => (
-            <div key={t.id} className="card" style={{ padding: '16px', borderLeft: `4px solid ${SEVERITY_COLORS[t.severity] || '#6B7280'}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '1.2em' }}>{TRIGGER_ICONS[t.trigger_type] || '🔔'}</span>
-                    <strong>{TRIGGER_LABELS[t.trigger_type] || t.trigger_type}</strong>
+            <div key={t.id} className="card" style={{
+              padding: '1rem 1.25rem',
+              borderLeft: `3px solid ${SEVERITY_COLORS[t.severity] || '#6B7280'}`,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '1.1em' }}>{TRIGGER_ICONS[t.trigger_type] || '🔔'}</span>
+                    <strong style={{ fontSize: '0.9rem' }}>{TRIGGER_LABELS[t.trigger_type] || t.trigger_type}</strong>
                     <span style={{
-                      fontSize: '0.8em', padding: '2px 8px', borderRadius: '12px',
+                      fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px',
                       background: SEVERITY_COLORS[t.severity] || '#6B7280', color: 'white',
                     }}>{t.severity}</span>
                   </div>
-                  <div style={{ marginBottom: '4px' }}>
+                  <div style={{ fontSize: '0.875rem', marginBottom: '0.25rem' }}>
                     <strong>{t.contact_name || t.contact_email}</strong>
-                    {t.contact_company && <span style={{ color: '#6B7280' }}> - {t.contact_company}</span>}
+                    {t.contact_company && <span style={{ color: 'var(--text-light)' }}> - {t.contact_company}</span>}
                   </div>
-                  <div style={{ fontSize: '0.85em', color: '#6B7280' }}>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-light)' }}>
                     Detected: {t.detected_at ? new Date(t.detected_at).toLocaleDateString() : '-'}
                   </div>
                   {t.current_value && (
-                    <div style={{ fontSize: '0.85em', color: '#374151', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.8125rem', color: '#374151', marginTop: '0.25rem' }}>
                       {typeof t.current_value === 'object' ? JSON.stringify(t.current_value) : t.current_value}
                     </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                   {!t.actioned && (
                     <button className="btn btn-primary btn-sm" onClick={() => handleCreateOutreach(t.id)}
                       disabled={generatingId === t.id}>
@@ -162,12 +167,12 @@ function Triggers() {
                     </button>
                   )}
                   {t.actioned && t.outreach_subject && (
-                    <button className="btn btn-sm" onClick={() => setOutreachPreview(t)}>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setOutreachPreview(t)}>
                       View Email
                     </button>
                   )}
                   <button className="btn btn-sm" onClick={() => handleDismiss(t.id)}
-                    style={{ color: '#6B7280' }}>
+                    style={{ color: 'var(--text-light)' }}>
                     Dismiss
                   </button>
                 </div>
@@ -181,18 +186,29 @@ function Triggers() {
       {outreachPreview && (
         <div className="modal-overlay" onClick={() => setOutreachPreview(null)}>
           <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <h3>Generated Outreach</h3>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontWeight: 'bold' }}>Subject:</label>
-              <p>{outreachPreview.outreach_subject || outreachPreview.subject}</p>
+            <div className="modal-header">
+              <div className="modal-title">Generated Outreach</div>
+              <button className="modal-close" onClick={() => setOutreachPreview(null)}>&times;</button>
             </div>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ fontWeight: 'bold' }}>Body:</label>
-              <div style={{ whiteSpace: 'pre-wrap', background: '#F9FAFB', padding: '12px', borderRadius: '8px' }}>
-                {outreachPreview.outreach_body || outreachPreview.body}
+            <div className="modal-body">
+              <div style={{ marginBottom: '1rem' }}>
+                <label className="label">Subject</label>
+                <p style={{ fontSize: '0.9rem' }}>{outreachPreview.outreach_subject || outreachPreview.subject}</p>
+              </div>
+              <div>
+                <label className="label">Body</label>
+                <div style={{
+                  whiteSpace: 'pre-wrap', background: 'var(--bg)', padding: '0.75rem',
+                  borderRadius: '0.5rem', fontSize: '0.875rem', lineHeight: 1.6,
+                  border: '1px solid var(--border)',
+                }}>
+                  {outreachPreview.outreach_body || outreachPreview.body}
+                </div>
               </div>
             </div>
-            <button className="btn btn-secondary" onClick={() => setOutreachPreview(null)}>Close</button>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setOutreachPreview(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}
