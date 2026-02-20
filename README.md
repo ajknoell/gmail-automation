@@ -1,6 +1,6 @@
-# Gmail Automation
+# Veloro
 
-A web application for automating Gmail outreach campaigns with AI-powered personalization using Claude.
+A web application for automating email outreach campaigns with AI-powered personalization using Claude.
 
 ## Features
 
@@ -60,7 +60,7 @@ Frontend runs at http://localhost:5173
 ## Project Structure
 
 ```
-gmail-automation/
+veloro/
 ├── backend/
 │   ├── app.py              # Flask entry point
 │   ├── config.py           # Configuration

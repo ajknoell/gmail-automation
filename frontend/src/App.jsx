@@ -109,8 +109,8 @@ function App() {
               </svg>
             </button>
             <Link to="/" className="logo">
-              <span className="logo-icon">✉️</span>
-              Gmail Automation
+              <span className="logo-icon">⚡</span>
+              Veloro
             </Link>
             <div className="header-right">
               <WorkspaceSelector />
