@@ -63,12 +63,20 @@ BIO_AGE_PATTERNS = [
     re.compile(r'(?:retired|semi[\s-]retired|winding\s+down|succession\s+plan|transition\s+plan)', re.IGNORECASE),
 ]
 
-# Patterns for family business / succession language
+# Patterns for family business language (general — business is family-related)
 FAMILY_BIZ_PATTERNS = [
     re.compile(r'(?:family[\s-]owned|family\s+business|family[\s-]run|family[\s-]operated)', re.IGNORECASE),
-    re.compile(r'(?:second|third|2nd|3rd|next)\s*generation', re.IGNORECASE),
-    re.compile(r'(?:father|mother|dad|son|daughter|husband|wife)\s+(?:and\s+)?(?:son|daughter)', re.IGNORECASE),
-    re.compile(r'(?:passed\s+down|handed\s+down|succession|legacy)', re.IGNORECASE),
+    re.compile(r'(?:father|mother|dad)\s+(?:and\s+)?(?:son|daughter)', re.IGNORECASE),
+    re.compile(r'(?:passed\s+down|handed\s+down|legacy)', re.IGNORECASE),
+]
+
+# Patterns that indicate succession already completed — younger owner now runs it
+SUCCESSION_COMPLETED_PATTERNS = [
+    re.compile(r'(?:second|third|2nd|3rd|next)[\s-]*generation\s*(?:owner|leadership|management)', re.IGNORECASE),
+    re.compile(r'(?:son|daughter)\s*(?:now\s+)?(?:runs?|leads?|manages?|owns?|took\s+over|taking\s+over)', re.IGNORECASE),
+    re.compile(r'(?:took\s+over|taken\s+over|inherited)\s*(?:the\s+)?(?:business|company|shop|firm)', re.IGNORECASE),
+    re.compile(r'(?:new\s+owner|new\s+management|under\s+new\s+(?:ownership|leadership|management))', re.IGNORECASE),
+    re.compile(r'(?:recently\s+)?(?:acquired|purchased)\s+(?:by|from)', re.IGNORECASE),
 ]
 
 # Copyright year pattern for website age detection
@@ -405,6 +413,7 @@ class EnrichmentService:
             'biographical_signals': [],
             'business_pattern_signals': {
                 'is_family_business': False,
+                'succession_completed': False,
                 'single_owner': False,
                 'no_succession_visible': True,
                 'high_retirement_category': False,
@@ -485,8 +494,16 @@ class EnrichmentService:
                 signals['business_pattern_signals']['is_family_business'] = True
                 break
 
-        if re.search(r'(?:succession|transition|next\s+generation|passing\s+the\s+torch)', all_text, re.IGNORECASE):
-            signals['business_pattern_signals']['no_succession_visible'] = False
+        # Check if succession already completed (son/daughter took over = younger owner)
+        for pattern in SUCCESSION_COMPLETED_PATTERNS:
+            if pattern.search(all_text):
+                signals['business_pattern_signals']['succession_completed'] = True
+                signals['business_pattern_signals']['no_succession_visible'] = False
+                break
+
+        if not signals['business_pattern_signals']['succession_completed']:
+            if re.search(r'(?:succession|transition|next\s+generation|passing\s+the\s+torch)', all_text, re.IGNORECASE):
+                signals['business_pattern_signals']['no_succession_visible'] = False
 
         # Single owner: decision maker found but no partners or management team mentioned
         if lead.decision_maker:
@@ -588,9 +605,13 @@ class EnrichmentService:
 
         # Business patterns
         bp = signals.get('business_pattern_signals', {})
-        if bp.get('is_family_business'):
+        if bp.get('succession_completed'):
+            # Son/daughter already took over — current owner is likely younger
+            points -= 25
+            evidence.append('Succession already completed (younger owner likely)')
+        elif bp.get('is_family_business'):
             points += 10
-            evidence.append('Family-owned business')
+            evidence.append('Family-owned business (original generation)')
         if bp.get('single_owner') and bp.get('no_succession_visible'):
             points += 10
             evidence.append('Single owner, no succession plan visible')
@@ -604,7 +625,7 @@ class EnrichmentService:
             points += 15
             evidence.append('Web search found retirement/succession mentions')
 
-        score = min(points, 100)
+        score = max(0, min(points, 100))
         if score >= 75:
             label = 'high'
         elif score >= 40:
