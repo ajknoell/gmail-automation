@@ -66,8 +66,14 @@ class WebsiteInsightsService:
         winner_sample = _sample(winners, MAX_SAMPLES_PER_TIER)
         loser_sample = _sample(losers, MAX_SAMPLES_PER_TIER)
 
+        # Load previous insights for evolutionary learning
+        previous_insights = self.get_insights(workspace_id)
+        previous_metadata = self.get_metadata(workspace_id)
+
         prompt = self._build_analysis_prompt(
-            winner_sample, loser_sample, len(scored), campaign_contexts
+            winner_sample, loser_sample, len(scored), campaign_contexts,
+            previous_insights=previous_insights,
+            previous_metadata=previous_metadata,
         )
         insights = self._run_analysis(prompt)
 
@@ -86,12 +92,14 @@ class WebsiteInsightsService:
         else:
             insights['confidence'] = 'low'
 
+        prev_version = previous_metadata.get('version', 0) if previous_metadata else 0
         metadata = {
             'analyzed_at': datetime.utcnow().isoformat(),
             'analysis_count': n,
             'winner_count': len(winners),
             'loser_count': len(losers),
             'confidence': insights['confidence'],
+            'version': prev_version + 1,
         }
 
         # Persist to workspace settings
@@ -239,7 +247,10 @@ class WebsiteInsightsService:
 
         return winners, losers
 
-    def _build_analysis_prompt(self, winners, losers, total_count, campaign_contexts=None):
+    def _build_analysis_prompt(
+        self, winners, losers, total_count, campaign_contexts=None,
+        previous_insights=None, previous_metadata=None,
+    ):
         """Build the Claude comparison prompt for website analysis patterns."""
 
         def _fmt(entry, idx):
@@ -275,6 +286,26 @@ the sender offers.
 
 """
 
+        # Build evolutionary learning section
+        evolution_block = ''
+        if previous_insights:
+            prev_date = previous_metadata.get('analyzed_at', 'unknown') if previous_metadata else 'unknown'
+            prev_count = previous_metadata.get('analysis_count', 'unknown') if previous_metadata else 'unknown'
+            prev_version = previous_metadata.get('version', 1) if previous_metadata else 1
+            evolution_block = f"""
+===================================================
+PREVIOUS INSIGHTS (v{prev_version}, from {prev_date}, based on {prev_count} analyses)
+===================================================
+{json.dumps(previous_insights, indent=2)}
+
+EVOLUTIONARY INSTRUCTION: Compare your new observations against these previous insights.
+- If a pattern still holds with the new data, STRENGTHEN the wording (e.g. "consistently" or "reliably")
+- If a pattern has weakened or reversed, UPDATE it and note the shift
+- If you see a NEW pattern not in the previous insights, ADD it
+- Do NOT simply copy previous insights — re-evaluate everything against the current data
+
+"""
+
         return f"""You are an expert at analyzing cold email outreach effectiveness. I'm going to show you two groups of WEBSITE ANALYSES that were used to personalize outreach emails:
 
 - **WINNERS**: Website observations that were included in emails that got replies/clicks/engagement
@@ -293,7 +324,7 @@ TOP PERFORMING WEBSITE OBSERVATIONS (WINNERS)
 WORST PERFORMING WEBSITE OBSERVATIONS (LOSERS)
 ===================================================
 {loser_block}
-
+{evolution_block}
 ===================================================
 
 IMPORTANT ANALYSIS GUIDELINES:

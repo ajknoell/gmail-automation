@@ -297,4 +297,21 @@ export const getTriggerConfig = () => api.get('/api/triggers/config');
 export const updateTriggerConfig = (data) => api.put('/api/triggers/config', data);
 export const triggerCheckNow = () => api.post('/api/triggers/check-now');
 
+// --- Signals ---
+export const getSignals = (params) => api.get('/api/signals', { params });
+export const getSignalStats = () => api.get('/api/signals/stats');
+export const dismissSignal = (id) => api.post(`/api/signals/${id}/dismiss`);
+export const createSignalOutreach = (id) => api.post(`/api/signals/${id}/create-outreach`);
+export const getSignalSources = () => api.get('/api/signals/sources');
+export const createSignalSource = (data) => api.post('/api/signals/sources', data);
+export const updateSignalSource = (id, data) => api.put(`/api/signals/sources/${id}`, data);
+export const signalCollectNow = () => api.post('/api/signals/collect-now');
+
+// --- Business Profile ---
+export const getBusinessProfile = () => api.get('/api/profile');
+export const updateBusinessProfile = (data) => api.put('/api/profile', data);
+
+// --- Opportunities ---
+export const getOpportunityFeed = (params) => api.get('/api/opportunities/feed', { params });
+
 export default api;
