@@ -5,6 +5,7 @@ from app.models.settings import Settings
 from app.models.contact import Contact
 from app.models.recipient import Recipient
 from app.models.campaign import Campaign
+from app.models.lead import Lead
 
 map_explorer_bp = Blueprint('map_explorer', __name__)
 
@@ -205,3 +206,100 @@ def add_to_outreach():
 
     db.session.commit()
     return jsonify(result), 201
+
+
+@map_explorer_bp.route('/add-to-pipeline', methods=['POST'])
+def add_to_pipeline():
+    """Add a business from map results directly into the lead pipeline for enrichment."""
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Business name is required'}), 400
+
+    place_id = data.get('place_id', '')
+
+    # Check for duplicate by place_id
+    if place_id:
+        existing = Lead.query.filter_by(
+            workspace_id=g.workspace_id, place_id=place_id
+        ).first()
+        if existing:
+            return jsonify({'lead': existing.to_dict(), 'existed': True}), 200
+
+    # Check for duplicate by name + address
+    address = data.get('address', '')
+    if address:
+        existing = Lead.query.filter_by(
+            workspace_id=g.workspace_id, name=name, address=address
+        ).first()
+        if existing:
+            return jsonify({'lead': existing.to_dict(), 'existed': True}), 200
+
+    lead = Lead(
+        workspace_id=g.workspace_id,
+        name=name,
+        address=address,
+        phone=data.get('phone', ''),
+        website=data.get('website', ''),
+        place_id=place_id,
+        google_rating=data.get('rating'),
+        review_count=data.get('user_ratings_total'),
+        business_category=data.get('primary_type', ''),
+        lat=data.get('lat'),
+        lng=data.get('lng'),
+        source='map_explorer',
+        status='new',
+    )
+    db.session.add(lead)
+    db.session.commit()
+    return jsonify({'lead': lead.to_dict(), 'existed': False}), 201
+
+
+@map_explorer_bp.route('/bulk-add-to-pipeline', methods=['POST'])
+def bulk_add_to_pipeline():
+    """Add multiple businesses from map results to the pipeline at once."""
+    data = request.get_json() or {}
+    businesses = data.get('businesses', [])
+
+    if not businesses:
+        return jsonify({'error': 'businesses array is required'}), 400
+
+    added = 0
+    skipped = 0
+
+    for biz in businesses:
+        name = (biz.get('name') or '').strip()
+        if not name:
+            continue
+
+        place_id = biz.get('place_id', '')
+
+        # Duplicate check
+        if place_id:
+            existing = Lead.query.filter_by(
+                workspace_id=g.workspace_id, place_id=place_id
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+
+        lead = Lead(
+            workspace_id=g.workspace_id,
+            name=name,
+            address=biz.get('address', ''),
+            phone=biz.get('phone', ''),
+            website=biz.get('website', ''),
+            place_id=place_id,
+            google_rating=biz.get('rating'),
+            review_count=biz.get('user_ratings_total'),
+            business_category=biz.get('primary_type', ''),
+            lat=biz.get('lat'),
+            lng=biz.get('lng'),
+            source='map_explorer',
+            status='new',
+        )
+        db.session.add(lead)
+        added += 1
+
+    db.session.commit()
+    return jsonify({'added': added, 'skipped': skipped}), 201

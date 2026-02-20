@@ -43,8 +43,10 @@ def create_app(config_class=None):
     from app.routes.brief import brief_bp
     from app.routes.triggers import triggers_bp
     from app.routes.features import features_bp
+    from app.routes.pipeline import pipeline_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
     app.register_blueprint(map_explorer_bp, url_prefix='/api/map-explorer')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
     app.register_blueprint(campaigns_bp, url_prefix='/api/campaigns')
@@ -137,6 +139,11 @@ def create_app(config_class=None):
     from app.services.trigger_monitor import TriggerMonitor
     trigger_interval = app.config.get('TRIGGER_CHECK_INTERVAL', 86400)
     TriggerMonitor.start_background_polling(app, interval=trigger_interval)
+
+    # Start lead enrichment worker (every 10 minutes)
+    from app.services.enrichment_service import EnrichmentWorker
+    enrichment_interval = app.config.get('ENRICHMENT_CHECK_INTERVAL', 600)
+    EnrichmentWorker.start_background_polling(app, interval=enrichment_interval)
 
     return app
 

@@ -5,6 +5,8 @@ import {
   searchNearbyPlaces,
   textSearchPlaces,
   addPlaceToOutreach,
+  addPlaceToPipeline,
+  bulkAddToPipeline,
   getCampaigns,
 } from '../api/client';
 
@@ -216,6 +218,7 @@ function MapExplorer() {
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
+  const [pipelineMsg, setPipelineMsg] = useState(null); // {type, message}
 
   // Map refs
   const mapRef = useRef(null);
@@ -475,6 +478,45 @@ function MapExplorer() {
       });
     }
     setAdding(false);
+  };
+
+  const handleAddToPipeline = async (place) => {
+    try {
+      const res = await addPlaceToPipeline({
+        place_id: place.place_id,
+        name: place.name,
+        address: place.address,
+        phone: place.phone,
+        website: place.website,
+        rating: place.rating,
+        user_ratings_total: place.user_ratings_total,
+        primary_type: place.primary_type,
+        lat: place.lat,
+        lng: place.lng,
+      });
+      if (res.data.existed) {
+        setPipelineMsg({ type: 'info', message: `"${place.name}" already in pipeline` });
+      } else {
+        setPipelineMsg({ type: 'success', message: `"${place.name}" added to pipeline` });
+      }
+    } catch (err) {
+      setPipelineMsg({ type: 'error', message: err.response?.data?.error || 'Failed to add' });
+    }
+    setTimeout(() => setPipelineMsg(null), 3000);
+  };
+
+  const handleBulkAddToPipeline = async () => {
+    if (!results.length) return;
+    try {
+      const res = await bulkAddToPipeline(results);
+      setPipelineMsg({
+        type: 'success',
+        message: `Added ${res.data.added} to pipeline (${res.data.skipped} duplicates skipped)`,
+      });
+    } catch (err) {
+      setPipelineMsg({ type: 'error', message: err.response?.data?.error || 'Bulk add failed' });
+    }
+    setTimeout(() => setPipelineMsg(null), 4000);
   };
 
   const formatType = (type) => {
@@ -899,9 +941,38 @@ function MapExplorer() {
                 fontSize: '0.8rem',
                 color: '#6B7280',
                 fontWeight: 500,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}>
-                {results.length} business{results.length !== 1 ? 'es' : ''} found
+                <span>{results.length} business{results.length !== 1 ? 'es' : ''} found</span>
+                <button
+                  onClick={handleBulkAddToPipeline}
+                  style={{
+                    padding: '0.2rem 0.5rem',
+                    background: '#7C3AED',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '0.25rem',
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  All to Pipeline
+                </button>
               </div>
+              {pipelineMsg && (
+                <div style={{
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  background: pipelineMsg.type === 'success' ? '#D1FAE5' : pipelineMsg.type === 'error' ? '#FEE2E2' : '#DBEAFE',
+                  color: pipelineMsg.type === 'success' ? '#065F46' : pipelineMsg.type === 'error' ? '#991B1B' : '#1E40AF',
+                }}>
+                  {pipelineMsg.message}
+                </div>
+              )}
               {results.map((place) => (
                 <div
                   key={place.place_id}
@@ -951,27 +1022,48 @@ function MapExplorer() {
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAddModal(place);
-                      }}
-                      title="Add to outreach"
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        background: '#10B981',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      + Add
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flexShrink: 0 }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddToPipeline(place);
+                        }}
+                        title="Add to pipeline for enrichment"
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: '#7C3AED',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Pipeline
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAddModal(place);
+                        }}
+                        title="Add to outreach"
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: '#10B981',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        + Add
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -17,6 +17,7 @@ import MapExplorer from './pages/MapExplorer';
 import Discovery from './pages/Discovery';
 import DailyBrief from './pages/DailyBrief';
 import Triggers from './pages/Triggers';
+import Pipeline from './pages/Pipeline';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
 import './App.css';
@@ -76,6 +77,7 @@ function App() {
       <Route path="/contacts/:id" element={<ContactDetail />} />
       <Route path="/replies" element={<ReplyHub />} />
       <Route path="/map-explorer" element={<MapExplorer />} />
+      <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/listings" element={<Listings />} />
       <Route path="/triggers" element={<Triggers />} />
       <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
@@ -185,6 +187,10 @@ function App() {
                 <NavLink to="/map-explorer">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1C5.24 1 3 3.24 3 6C3 9.5 8 15 8 15S13 9.5 13 6C13 3.24 10.76 1 8 1ZM8 7.5C7.17 7.5 6.5 6.83 6.5 6S7.17 4.5 8 4.5 9.5 5.17 9.5 6 8.83 7.5 8 7.5Z" stroke="currentColor" strokeWidth="1.5"/></svg>
                   <span>Map Explorer</span>
+                </NavLink>
+                <NavLink to="/pipeline">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3H14M2 3V5L6 8V13L10 11V8L14 5V3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                  <span>Pipeline</span>
                 </NavLink>
                 {isFeatureEnabled('listings') && (
                   <NavLink to="/listings">
