@@ -235,4 +235,34 @@ export const searchNearbyPlaces = (data) =>
 export const addPlaceToOutreach = (data) =>
   api.post('/api/map-explorer/add-to-outreach', data);
 
+// --- Discovery (Phase 1) ---
+export const getDiscoveryCriteria = () => api.get('/api/discovery/criteria');
+export const createDiscoveryCriteria = (data) => api.post('/api/discovery/criteria', data);
+export const updateDiscoveryCriteria = (id, data) => api.put(`/api/discovery/criteria/${id}`, data);
+export const deleteDiscoveryCriteria = (id) => api.delete(`/api/discovery/criteria/${id}`);
+export const triggerDiscoveryScan = (data) => api.post('/api/discovery/scan-now', data || {});
+export const getProspects = (params) => api.get('/api/discovery/prospects', { params });
+export const qualifyProspect = (id, data) => api.post(`/api/discovery/prospects/${id}/qualify`, data);
+export const addProspectToCampaign = (id, data) => api.post(`/api/discovery/prospects/${id}/add-to-campaign`, data);
+export const bulkAddProspects = (data) => api.post('/api/discovery/prospects/bulk-add', data);
+export const dismissProspect = (id) => api.delete(`/api/discovery/prospects/${id}`);
+export const getDiscoveryStats = () => api.get('/api/discovery/stats');
+
+// --- Daily Brief (Phase 4) ---
+export const getDailyBrief = (date) => api.get('/api/brief', date ? { params: { date } } : {});
+
+// --- Reply Autopilot (Phase 3) ---
+export const getAutopilotConfig = () => api.get('/api/replies/autopilot-config');
+export const updateAutopilotConfig = (data) => api.put('/api/replies/autopilot-config', data);
+export const getAutopilotStats = () => api.get('/api/replies/autopilot-stats');
+
+// --- Triggers (Phase 5) ---
+export const getTriggers = (params) => api.get('/api/triggers', { params });
+export const createTriggerOutreach = (id, data) => api.post(`/api/triggers/${id}/create-outreach`, data || {});
+export const dismissTrigger = (id) => api.put(`/api/triggers/${id}/dismiss`);
+export const getTriggerStats = () => api.get('/api/triggers/stats');
+export const getTriggerConfig = () => api.get('/api/triggers/config');
+export const updateTriggerConfig = (data) => api.put('/api/triggers/config', data);
+export const triggerCheckNow = () => api.post('/api/triggers/check-now');
+
 export default api;

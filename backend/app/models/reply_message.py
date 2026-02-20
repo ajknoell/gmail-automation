@@ -22,6 +22,15 @@ class ReplyMessage(db.Model):
     ai_response_subject = db.Column(db.String(200))
     ai_response_body = db.Column(db.Text)
 
+    # Sentiment subcategory
+    sentiment_subcategory = db.Column(db.String(50))  # interested, meeting_request, not_interested, ooo, etc.
+
+    # Autopilot fields
+    auto_responded = db.Column(db.Boolean, default=False)
+    auto_response_type = db.Column(db.String(50))  # meeting_followup, graceful_close, acknowledge
+    flagged_for_review = db.Column(db.Boolean, default=False)
+    flag_reason = db.Column(db.String(200))
+
     # Response tracking
     response_sent_at = db.Column(db.DateTime)
 
@@ -44,6 +53,11 @@ class ReplyMessage(db.Model):
             'sentiment_reason': self.sentiment_reason,
             'ai_response_subject': self.ai_response_subject,
             'ai_response_body': self.ai_response_body,
+            'sentiment_subcategory': self.sentiment_subcategory,
+            'auto_responded': self.auto_responded or False,
+            'auto_response_type': self.auto_response_type,
+            'flagged_for_review': self.flagged_for_review or False,
+            'flag_reason': self.flag_reason,
             'response_sent_at': self.response_sent_at.isoformat() if self.response_sent_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }

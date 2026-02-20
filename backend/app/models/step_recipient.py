@@ -1,5 +1,6 @@
 from app import db
 from datetime import datetime
+import json
 
 
 class StepRecipient(db.Model):
@@ -16,6 +17,10 @@ class StepRecipient(db.Model):
 
     # Web research results cached for this step+recipient
     web_research_results = db.Column(db.Text)  # JSON string
+
+    # Confidence scoring
+    confidence_score = db.Column(db.Float)
+    confidence_breakdown = db.Column(db.Text)  # JSON
 
     # Status: pending, generating, ready, approved, sent, failed, skipped
     status = db.Column(db.String(20), default='pending')
@@ -45,6 +50,8 @@ class StepRecipient(db.Model):
             'personalized_subject': self.personalized_subject,
             'personalized_body': self.personalized_body,
             'approved': self.approved,
+            'confidence_score': self.confidence_score,
+            'confidence_breakdown': json.loads(self.confidence_breakdown) if self.confidence_breakdown else None,
             'web_research_results': self.web_research_results,
             'status': self.status,
             'skip_reason': self.skip_reason,

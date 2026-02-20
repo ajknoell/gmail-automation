@@ -20,6 +20,8 @@ class Campaign(db.Model):
     campaign_context = db.Column(db.Text)  # Things to include in every email for this campaign
     competitor_search_query = db.Column(db.Text)  # Tavily query for competitor discovery; None = disabled
     attachments = db.Column(db.Text)  # JSON array of attachment metadata
+    auto_send_enabled = db.Column(db.Boolean, default=False)
+    auto_send_threshold = db.Column(db.Float, default=0.8)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     started_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
@@ -48,6 +50,8 @@ class Campaign(db.Model):
             'campaign_context': self.campaign_context,
             'competitor_search_query': self.competitor_search_query,
             'attachments': self.get_attachments(),
+            'auto_send_enabled': self.auto_send_enabled or False,
+            'auto_send_threshold': self.auto_send_threshold if self.auto_send_threshold is not None else 0.8,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None

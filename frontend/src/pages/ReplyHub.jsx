@@ -16,6 +16,7 @@ import {
   updateContact,
   triggerReplyCheck,
   dismissReply,
+  getAutopilotStats,
 } from '../api/client';
 
 const SENTIMENT_COLORS = {
@@ -48,6 +49,10 @@ function ReplyHub() {
   const [followUpDrafts, setFollowUpDrafts] = useState({});
   const [sendingFollowUp, setSendingFollowUp] = useState(null);
 
+  // Autopilot
+  const [flaggedReplies, setFlaggedReplies] = useState([]);
+  const [autopilotStats, setAutopilotStats] = useState({});
+
   // Check now
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState(null);
@@ -71,20 +76,25 @@ function ReplyHub() {
     setLoading(true);
     try {
       const params = {};
-      if (filter !== 'all' && filter !== 'needs_response') {
+      if (filter === 'auto_responded') {
+        params.auto_responded = 'true';
+      } else if (filter === 'flagged') {
+        params.flagged = 'true';
+      } else if (filter === 'needs_response') {
+        params.responded = 'false';
+      } else if (filter !== 'all') {
         params.sentiment = filter;
       }
-      if (filter === 'needs_response') {
-        params.responded = 'false';
-      }
 
-      const [repliesRes, statsRes, calRes, acctRes, fuRes, outstandingRes] = await Promise.all([
+      const [repliesRes, statsRes, calRes, acctRes, fuRes, outstandingRes, flaggedRes, apStatsRes] = await Promise.all([
         getReplies(params),
         getReplyStats(),
         getCalendarStatus(),
         getGmailAccounts(),
         getFollowUps(),
         getReplies({ responded: 'false' }),
+        getReplies({ flagged: 'true' }),
+        getAutopilotStats().catch(() => ({ data: {} })),
       ]);
 
       setReplies(repliesRes.data.replies || []);
@@ -93,6 +103,8 @@ function ReplyHub() {
       setAccounts(acctRes.data || []);
       setFollowUps(fuRes.data || []);
       setOutstandingReplies(outstandingRes.data.replies || []);
+      setFlaggedReplies(flaggedRes.data.replies || []);
+      setAutopilotStats(apStatsRes.data || {});
     } catch (err) {
       console.error('Failed to load replies:', err);
     }
@@ -329,7 +341,49 @@ function ReplyHub() {
                     {sentiment.label}
                   </span>
                 )}
-                {reply.response_sent_at && (
+                {reply.auto_responded && (
+                  <span
+                    style={{
+                      padding: '2px 10px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      backgroundColor: '#E0E7FF',
+                      color: '#4338CA',
+                    }}
+                  >
+                    Auto-Responded ({reply.auto_response_type || 'auto'})
+                  </span>
+                )}
+                {reply.flagged_for_review && (
+                  <span
+                    style={{
+                      padding: '2px 10px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      backgroundColor: '#FEF3C7',
+                      color: '#92400E',
+                    }}
+                  >
+                    Flagged: {reply.flag_reason || 'Review needed'}
+                  </span>
+                )}
+                {reply.sentiment_subcategory && (
+                  <span
+                    style={{
+                      padding: '2px 10px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                      backgroundColor: '#F3F4F6',
+                      color: '#6B7280',
+                    }}
+                  >
+                    {reply.sentiment_subcategory}
+                  </span>
+                )}
+                {reply.response_sent_at && !reply.auto_responded && (
                   <span
                     style={{
                       padding: '2px 10px',
@@ -712,6 +766,8 @@ function ReplyHub() {
     { key: 'positive', label: 'Positive', count: stats.positive },
     { key: 'negative', label: 'Negative', count: stats.negative },
     { key: 'neutral', label: 'Neutral', count: stats.neutral },
+    { key: 'auto_responded', label: 'Auto-Responded', count: autopilotStats.total_auto_responded || 0 },
+    { key: 'flagged', label: 'Flagged', count: autopilotStats.total_flagged || 0 },
   ];
 
   if (loading) {
@@ -933,6 +989,52 @@ function ReplyHub() {
           )
         )}
       </div>
+
+      {/* ===== SECTION: Flagged for Review ===== */}
+      {flaggedReplies.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Flagged for Review</h2>
+            <span
+              style={{
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: 600,
+                backgroundColor: '#FEF3C7',
+                color: '#92400E',
+              }}
+            >
+              {flaggedReplies.length}
+            </span>
+            <span className="text-sm text-light" style={{ marginLeft: '4px' }}>
+              Autopilot flagged these for human review (contains sensitive keywords)
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {flaggedReplies.map((item) => (
+              <div key={item.reply.id}>
+                {renderReplyCard(item)}
+                {renderResponsePanel(item)}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Autopilot Stats */}
+      {(autopilotStats.total_auto_responded > 0) && (
+        <div className="card mb-4" style={{ background: '#F5F3FF', border: '1px solid #E0E7FF' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, color: '#4338CA', fontSize: '0.875rem' }}>Autopilot Summary:</span>
+            <span style={{ fontSize: '0.875rem' }}>{autopilotStats.total_auto_responded || 0} auto-responded</span>
+            <span style={{ fontSize: '0.875rem' }}>{autopilotStats.total_flagged || 0} flagged for review</span>
+            {autopilotStats.by_type && Object.entries(autopilotStats.by_type).map(([type, count]) => (
+              <span key={type} style={{ fontSize: '0.8rem', color: '#6B7280' }}>{type}: {count}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ===== SECTION 2: Outstanding Replies ===== */}
       <div style={{ marginBottom: '24px' }}>

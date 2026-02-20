@@ -127,7 +127,7 @@ class CalendarService:
                     slot_start = slot_end
 
             # Return top 6 slots spread across different days
-            return cls._spread_slots(available, max_slots=6)
+            return CalendarService._spread_slots(available, max_slots=6)
 
         except Exception as e:
             print(f"Calendar availability error: {e}")

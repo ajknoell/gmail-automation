@@ -10,7 +10,9 @@ import {
   setDefaultGmailAccount,
   getClaySettings,
   saveClaySettings,
-  getClayWebhookUrl
+  getClayWebhookUrl,
+  getAutopilotConfig,
+  saveAutopilotConfig,
 } from '../api/client';
 
 const DEFAULT_WRITING_STYLE = {
@@ -43,6 +45,15 @@ function Settings({ onStatusChange }) {
   });
   const [clayWebhookUrl, setClayWebhookUrl] = useState('');
   const [savingClay, setSavingClay] = useState(false);
+  const [autopilotConfig, setAutopilotConfig] = useState({
+    enabled: false,
+    auto_respond_positive: false,
+    auto_respond_negative: false,
+    auto_respond_neutral: false,
+    auto_schedule_enabled: false,
+    human_review_keywords: 'price, cost, contract, legal, urgent, budget, invoice, payment, proposal, quote',
+  });
+  const [savingAutopilot, setSavingAutopilot] = useState(false);
 
   const loadGmailAccounts = async () => {
     try {
@@ -80,6 +91,13 @@ function Settings({ onStatusChange }) {
     // Load Clay settings
     getClaySettings().then((res) => setClaySettings(res.data)).catch(() => {});
     getClayWebhookUrl().then((res) => setClayWebhookUrl(res.data.webhook_url)).catch(() => {});
+
+    // Load autopilot config
+    getAutopilotConfig().then((res) => {
+      if (res.data && typeof res.data === 'object') {
+        setAutopilotConfig(prev => ({ ...prev, ...res.data }));
+      }
+    }).catch(() => {});
 
     // Reload writing style when workspace changes
     const handleWsChange = () => {
@@ -170,6 +188,17 @@ function Settings({ onStatusChange }) {
       setMessage('Failed to save Clay settings');
     }
     setSavingClay(false);
+  };
+
+  const handleSaveAutopilot = async () => {
+    setSavingAutopilot(true);
+    try {
+      await saveAutopilotConfig(autopilotConfig);
+      setMessage('Reply Autopilot settings saved successfully!');
+    } catch (error) {
+      setMessage('Failed to save autopilot settings');
+    }
+    setSavingAutopilot(false);
   };
 
   const handleDisconnectGmailAccount = async (accountId, email) => {
@@ -500,6 +529,105 @@ function Settings({ onStatusChange }) {
                 ✓ Style profile saved
               </span>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Reply Autopilot */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Reply Autopilot <span style={{ fontSize: '12px', background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
+        <p className="text-sm text-light mb-4">
+          Configure AI to automatically handle routine replies. Sensitive replies (containing keywords like pricing, contracts) are always flagged for human review.
+        </p>
+
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {/* Master toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={autopilotConfig.enabled}
+              onChange={(e) => setAutopilotConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+            />
+            <div>
+              <span style={{ fontWeight: 600 }}>Enable Reply Autopilot</span>
+              <p className="text-sm text-light" style={{ margin: 0 }}>When enabled, AI will automatically process and respond to incoming replies</p>
+            </div>
+          </label>
+
+          {autopilotConfig.enabled && (
+            <>
+              {/* Per-sentiment toggles */}
+              <div style={{ padding: '1rem', background: '#F9FAFB', borderRadius: '0.5rem' }}>
+                <h4 style={{ marginBottom: '0.75rem', fontSize: '0.9rem' }}>Auto-respond by sentiment</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={autopilotConfig.auto_respond_positive}
+                      onChange={(e) => setAutopilotConfig(prev => ({ ...prev, auto_respond_positive: e.target.checked }))}
+                    />
+                    <span style={{ color: '#065F46', fontWeight: 500 }}>Positive replies</span>
+                    <span className="text-sm text-light">- Auto-send meeting follow-up with calendar availability</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={autopilotConfig.auto_respond_negative}
+                      onChange={(e) => setAutopilotConfig(prev => ({ ...prev, auto_respond_negative: e.target.checked }))}
+                    />
+                    <span style={{ color: '#991B1B', fontWeight: 500 }}>Negative replies</span>
+                    <span className="text-sm text-light">- Auto-send graceful close / rebuttal</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={autopilotConfig.auto_respond_neutral}
+                      onChange={(e) => setAutopilotConfig(prev => ({ ...prev, auto_respond_neutral: e.target.checked }))}
+                    />
+                    <span style={{ color: '#374151', fontWeight: 500 }}>Neutral replies</span>
+                    <span className="text-sm text-light">- Auto-send acknowledgment</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Calendar integration */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={autopilotConfig.auto_schedule_enabled}
+                  onChange={(e) => setAutopilotConfig(prev => ({ ...prev, auto_schedule_enabled: e.target.checked }))}
+                />
+                <span style={{ fontWeight: 500 }}>Include real calendar availability</span>
+                <span className="text-sm text-light">in positive reply responses</span>
+              </label>
+
+              {/* Keywords */}
+              <div>
+                <label style={{ fontWeight: 'bold', display: 'block', marginBottom: '0.25rem' }}>
+                  Human Review Keywords
+                </label>
+                <p className="text-sm text-light" style={{ marginBottom: '0.5rem' }}>
+                  Replies containing any of these words will be flagged for human review instead of auto-responding. Comma-separated.
+                </p>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={autopilotConfig.human_review_keywords}
+                  onChange={(e) => setAutopilotConfig(prev => ({ ...prev, human_review_keywords: e.target.value }))}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </>
+          )}
+
+          <div>
+            <button
+              className="btn btn-primary"
+              onClick={handleSaveAutopilot}
+              disabled={savingAutopilot}
+            >
+              {savingAutopilot ? 'Saving...' : 'Save Autopilot Settings'}
+            </button>
           </div>
         </div>
       </div>

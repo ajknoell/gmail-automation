@@ -2,9 +2,10 @@ from app import db
 from datetime import datetime
 
 # Valid statuses for the pipeline
-CONTACT_STATUSES = ['new', 'contacted', 'replied', 'interested', 'client', 'lost']
+CONTACT_STATUSES = ['discovered', 'new', 'contacted', 'replied', 'interested', 'client', 'lost']
 
 STATUS_LABELS = {
+    'discovered': 'Discovered',
     'new': 'New Lead',
     'contacted': 'Contacted',
     'replied': 'Replied',
@@ -14,6 +15,7 @@ STATUS_LABELS = {
 }
 
 STATUS_COLORS = {
+    'discovered': '#A855F7',
     'new': '#6B7280',
     'contacted': '#3B82F6',
     'replied': '#8B5CF6',
@@ -34,6 +36,18 @@ class Contact(db.Model):
     website = db.Column(db.String(255))
     notes = db.Column(db.Text)
     status = db.Column(db.String(20), default='new')
+
+    # Discovery fields
+    discovery_source = db.Column(db.String(50))  # google_maps, directory, website_scrape, manual
+    discovered_at = db.Column(db.DateTime)
+    google_rating = db.Column(db.Float)
+    review_count = db.Column(db.Integer)
+    phone = db.Column(db.String(50))
+    address = db.Column(db.String(500))
+    business_category = db.Column(db.String(200))
+    qualified = db.Column(db.Boolean)
+    qualification_reason = db.Column(db.Text)
+    discovery_criteria_id = db.Column(db.Integer)
 
     # Follow-up tracking
     follow_up_date = db.Column(db.Date)
@@ -69,6 +83,16 @@ class Contact(db.Model):
             'follow_up_date': self.follow_up_date.isoformat() if self.follow_up_date else None,
             'follow_up_note': self.follow_up_note,
             'last_replied_at': self.last_replied_at.isoformat() if self.last_replied_at else None,
+            'discovery_source': self.discovery_source,
+            'discovered_at': self.discovered_at.isoformat() if self.discovered_at else None,
+            'google_rating': self.google_rating,
+            'review_count': self.review_count,
+            'phone': self.phone,
+            'address': self.address,
+            'business_category': self.business_category,
+            'qualified': self.qualified,
+            'qualification_reason': self.qualification_reason,
+            'discovery_criteria_id': self.discovery_criteria_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

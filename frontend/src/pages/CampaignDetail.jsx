@@ -660,6 +660,44 @@ function CampaignDetail() {
         </span>
       </div>
 
+      {/* Auto-Send Settings */}
+      {campaign.status === 'draft' && (
+        <div className="card mb-4">
+          <h3 className="card-title mb-2">Confidence Auto-Send</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!campaign.auto_send_enabled}
+                onChange={(e) => updateCampaign(id, { auto_send_enabled: e.target.checked }).then(loadData)}
+              />
+              <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>Auto-approve emails above confidence threshold</span>
+            </label>
+            {campaign.auto_send_enabled && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="0.95"
+                  step="0.05"
+                  value={campaign.auto_send_threshold || 0.8}
+                  onChange={(e) => updateCampaign(id, { auto_send_threshold: parseFloat(e.target.value) }).then(loadData)}
+                  style={{ width: '120px' }}
+                />
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#4F46E5', minWidth: '40px' }}>
+                  {((campaign.auto_send_threshold || 0.8) * 100).toFixed(0)}%
+                </span>
+              </div>
+            )}
+          </div>
+          {campaign.auto_send_enabled && (
+            <p className="text-sm text-light" style={{ marginTop: '0.5rem' }}>
+              Emails scoring above {((campaign.auto_send_threshold || 0.8) * 100).toFixed(0)}% confidence will be auto-approved during generation.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Progress Card */}
       <div className="card mb-4">
         <div className="grid grid-4">
@@ -1021,6 +1059,7 @@ function CampaignDetail() {
                   <th>Name</th>
                   <th>Company</th>
                   <th>Notes</th>
+                  <th>Confidence</th>
                   <th>Status</th>
                   <th>Approved</th>
                   {hasSentEmails && <th>Opened</th>}
@@ -1088,6 +1127,26 @@ function CampaignDetail() {
                             </span>
                           )}
                         </div>
+                      )}
+                    </td>
+                    <td>
+                      {recipient.confidence_score != null ? (
+                        <span
+                          title={recipient.confidence_breakdown ? Object.entries(recipient.confidence_breakdown).map(([k,v]) => `${k}: ${(v*100).toFixed(0)}%`).join('\n') : ''}
+                          style={{
+                            padding: '0.15rem 0.5rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'help',
+                            background: recipient.confidence_score >= 0.8 ? '#D1FAE5' : recipient.confidence_score >= 0.5 ? '#FEF3C7' : '#FEE2E2',
+                            color: recipient.confidence_score >= 0.8 ? '#065F46' : recipient.confidence_score >= 0.5 ? '#92400E' : '#991B1B',
+                          }}
+                        >
+                          {(recipient.confidence_score * 100).toFixed(0)}%
+                        </span>
+                      ) : (
+                        <span style={{ color: '#9CA3AF' }}>-</span>
                       )}
                     </td>
                     <td>
@@ -1371,6 +1430,23 @@ function CampaignDetail() {
                       </span>
                     )}
                     {recipient.approved && <span style={{ color: '#10B981', marginLeft: '0.5rem', fontSize: '0.75rem' }}>Approved</span>}
+                    {recipient.confidence_score != null && (
+                      <span
+                        title={recipient.confidence_breakdown ? Object.entries(recipient.confidence_breakdown).map(([k,v]) => `${k}: ${(v*100).toFixed(0)}%`).join('\n') : ''}
+                        style={{
+                          marginLeft: '0.5rem',
+                          padding: '0.1rem 0.5rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          cursor: 'help',
+                          background: recipient.confidence_score >= 0.8 ? '#D1FAE5' : recipient.confidence_score >= 0.5 ? '#FEF3C7' : '#FEE2E2',
+                          color: recipient.confidence_score >= 0.8 ? '#065F46' : recipient.confidence_score >= 0.5 ? '#92400E' : '#991B1B',
+                        }}
+                      >
+                        Confidence: {(recipient.confidence_score * 100).toFixed(0)}%
+                      </span>
+                    )}
                   </div>
                 </div>
 
