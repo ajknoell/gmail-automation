@@ -17,9 +17,7 @@ import MapExplorer from './pages/MapExplorer';
 import Discovery from './pages/Discovery';
 import DailyBrief from './pages/DailyBrief';
 import Triggers from './pages/Triggers';
-import Signals from './pages/Signals';
-import BusinessProfile from './pages/BusinessProfile';
-import OpportunityFeed from './pages/OpportunityFeed';
+import Pipeline from './pages/Pipeline';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
 import './App.css';
@@ -79,11 +77,9 @@ function App() {
       <Route path="/contacts/:id" element={<ContactDetail />} />
       <Route path="/replies" element={<ReplyHub />} />
       <Route path="/map-explorer" element={<MapExplorer />} />
+      <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/listings" element={<Listings />} />
       <Route path="/triggers" element={<Triggers />} />
-      <Route path="/signals" element={<Signals />} />
-      <Route path="/business-profile" element={<BusinessProfile />} />
-      <Route path="/opportunities" element={<OpportunityFeed />} />
       <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
     </Routes>
   );
@@ -135,10 +131,6 @@ function App() {
                 <NavLink to="/" exact>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8L8 2L14 8V14H10V10H6V14H2V8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Dashboard</span>
-                </NavLink>
-                <NavLink to="/opportunities">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1V3M8 13V15M1 8H3M13 8H15M3.05 3.05L4.46 4.46M11.54 11.54L12.95 12.95M12.95 3.05L11.54 4.46M4.46 11.54L3.05 12.95" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="1.5"/></svg>
-                  <span>Opportunities</span>
                 </NavLink>
                 <NavLink to="/brief">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2H13V14H3V2ZM5 5H11M5 8H11M5 11H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -196,6 +188,10 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1C5.24 1 3 3.24 3 6C3 9.5 8 15 8 15S13 9.5 13 6C13 3.24 10.76 1 8 1ZM8 7.5C7.17 7.5 6.5 6.83 6.5 6S7.17 4.5 8 4.5 9.5 5.17 9.5 6 8.83 7.5 8 7.5Z" stroke="currentColor" strokeWidth="1.5"/></svg>
                   <span>Map Explorer</span>
                 </NavLink>
+                <NavLink to="/pipeline">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 3H14M2 3V5L6 8V13L10 11V8L14 5V3" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                  <span>Pipeline</span>
+                </NavLink>
                 {isFeatureEnabled('listings') && (
                   <NavLink to="/listings">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
@@ -206,18 +202,10 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1L3 9H8L7 15L13 7H8L9 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Triggers</span>
                 </NavLink>
-                <NavLink to="/signals">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12C4 10 4 6 2 4M6 10.5C7 9.5 7 6.5 6 5.5M10 9C10.5 8.5 10.5 7.5 10 7M14 8C14 8 14 8 14 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  <span>Signals</span>
-                </NavLink>
               </div>
             </nav>
 
             <div className="sidebar-footer">
-              <NavLink to="/business-profile">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 14V3C2 2.45 2.45 2 3 2H13C13.55 2 14 2.45 14 3V14L8 11L2 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-                <span>Business Profile</span>
-              </NavLink>
               <NavLink to="/settings">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10C9.1 10 10 9.1 10 8S9.1 6 8 6 6 6.9 6 8 6.9 10 8 10ZM13.5 8C13.5 8.34 13.47 8.66 13.42 8.98L15 10.19L14.1 11.81L12.25 11.14C11.77 11.54 11.21 11.84 10.6 12.02L10.2 14H7.8L7.4 12.02C6.79 11.84 6.23 11.54 5.75 11.14L3.9 11.81L3 10.19L4.58 8.98C4.53 8.66 4.5 8.34 4.5 8S4.53 7.34 4.58 7.02L3 5.81L3.9 4.19L5.75 4.86C6.23 4.46 6.79 4.16 7.4 3.98L7.8 2H10.2L10.6 3.98C11.21 4.16 11.77 4.46 12.25 4.86L14.1 4.19L15 5.81L13.42 7.02C13.47 7.34 13.5 7.66 13.5 8Z" stroke="currentColor" strokeWidth="1.3"/></svg>
                 <span>Settings</span>

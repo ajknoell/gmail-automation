@@ -5,6 +5,9 @@ import {
   searchNearbyPlaces,
   textSearchPlaces,
   addPlaceToOutreach,
+  addPlaceToPipeline,
+  bulkAddToPipeline,
+  getMapSources,
   getCampaigns,
 } from '../api/client';
 
@@ -194,6 +197,8 @@ function MapExplorer() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [sourceCounts, setSourceCounts] = useState(null); // {google: N, yelp: N, total: N}
+  const [dataSources, setDataSources] = useState({ google: true, yelp: false });
 
   // Filters
   const [selectedTypes, setSelectedTypes] = useState([]); // array of type values
@@ -216,6 +221,7 @@ function MapExplorer() {
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
+  const [pipelineMsg, setPipelineMsg] = useState(null); // {type, message}
 
   // Map refs
   const mapRef = useRef(null);
@@ -238,6 +244,10 @@ function MapExplorer() {
 
     getCampaigns()
       .then((res) => setCampaigns(res.data.campaigns || res.data || []))
+      .catch(() => {});
+
+    getMapSources()
+      .then((res) => setDataSources(res.data))
       .catch(() => {});
 
     const handleWsChange = () => {
@@ -374,6 +384,7 @@ function MapExplorer() {
         });
       }
       setResults(searchRes.data.results || []);
+      setSourceCounts(searchRes.data.sources || null);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found in this area. Try expanding your radius or changing the business type.');
       }
@@ -381,6 +392,7 @@ function MapExplorer() {
       const msg = err.response?.data?.error || 'Search failed. Please try again.';
       setError(msg);
       setResults([]);
+      setSourceCounts(null);
     }
     setSearching(false);
   };
@@ -418,6 +430,7 @@ function MapExplorer() {
         });
       }
       setResults(searchRes.data.results || []);
+      setSourceCounts(searchRes.data.sources || null);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found with these filters. Try adjusting your criteria.');
       }
@@ -475,6 +488,45 @@ function MapExplorer() {
       });
     }
     setAdding(false);
+  };
+
+  const handleAddToPipeline = async (place) => {
+    try {
+      const res = await addPlaceToPipeline({
+        place_id: place.place_id,
+        name: place.name,
+        address: place.address,
+        phone: place.phone,
+        website: place.website,
+        rating: place.rating,
+        user_ratings_total: place.user_ratings_total,
+        primary_type: place.primary_type,
+        lat: place.lat,
+        lng: place.lng,
+      });
+      if (res.data.existed) {
+        setPipelineMsg({ type: 'info', message: `"${place.name}" already in pipeline` });
+      } else {
+        setPipelineMsg({ type: 'success', message: `"${place.name}" added to pipeline` });
+      }
+    } catch (err) {
+      setPipelineMsg({ type: 'error', message: err.response?.data?.error || 'Failed to add' });
+    }
+    setTimeout(() => setPipelineMsg(null), 3000);
+  };
+
+  const handleBulkAddToPipeline = async () => {
+    if (!results.length) return;
+    try {
+      const res = await bulkAddToPipeline(results);
+      setPipelineMsg({
+        type: 'success',
+        message: `Added ${res.data.added} to pipeline (${res.data.skipped} duplicates skipped)`,
+      });
+    } catch (err) {
+      setPipelineMsg({ type: 'error', message: err.response?.data?.error || 'Bulk add failed' });
+    }
+    setTimeout(() => setPipelineMsg(null), 4000);
   };
 
   const formatType = (type) => {
@@ -572,6 +624,17 @@ function MapExplorer() {
         >
           {searching ? 'Searching...' : 'Search'}
         </button>
+      </div>
+
+      {/* Data sources indicator */}
+      <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginBottom: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <span>Sources:</span>
+        <span style={{ color: dataSources.google ? '#10B981' : '#EF4444' }}>
+          Google Maps {dataSources.google ? '\u2713' : '\u2717'}
+        </span>
+        <span style={{ color: dataSources.yelp ? '#10B981' : '#6B7280' }}>
+          Yelp {dataSources.yelp ? '\u2713' : '(add key in Settings)'}
+        </span>
       </div>
 
       {/* Filters */}
@@ -899,9 +962,45 @@ function MapExplorer() {
                 fontSize: '0.8rem',
                 color: '#6B7280',
                 fontWeight: 500,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}>
-                {results.length} business{results.length !== 1 ? 'es' : ''} found
+                <span>
+                  {results.length} business{results.length !== 1 ? 'es' : ''} found
+                  {sourceCounts && sourceCounts.yelp > 0 && (
+                    <span style={{ marginLeft: 6, fontSize: '0.65rem', color: '#9CA3AF' }}>
+                      (Google: {sourceCounts.google}, Yelp: {sourceCounts.yelp})
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={handleBulkAddToPipeline}
+                  style={{
+                    padding: '0.2rem 0.5rem',
+                    background: '#7C3AED',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '0.25rem',
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  All to Pipeline
+                </button>
               </div>
+              {pipelineMsg && (
+                <div style={{
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  background: pipelineMsg.type === 'success' ? '#D1FAE5' : pipelineMsg.type === 'error' ? '#FEE2E2' : '#DBEAFE',
+                  color: pipelineMsg.type === 'success' ? '#065F46' : pipelineMsg.type === 'error' ? '#991B1B' : '#1E40AF',
+                }}>
+                  {pipelineMsg.message}
+                </div>
+              )}
               {results.map((place) => (
                 <div
                   key={place.place_id}
@@ -936,42 +1035,76 @@ function MapExplorer() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.2rem' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         {place.name}
+                        {place.sources && place.sources.length > 1 && (
+                          <span style={{ fontSize: '0.55rem', background: '#DBEAFE', color: '#1E40AF', padding: '1px 4px', borderRadius: 3, fontWeight: 500 }}>
+                            2 sources
+                          </span>
+                        )}
+                        {place.source === 'yelp' && (!place.sources || place.sources.length === 1) && (
+                          <span style={{ fontSize: '0.55rem', background: '#FEE2E2', color: '#DC2626', padding: '1px 4px', borderRadius: 3, fontWeight: 500 }}>
+                            Yelp
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#6B7280', marginBottom: '0.2rem' }}>
                         {place.address}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {place.rating > 0 && (
                           <span style={{ color: '#F59E0B' }}>{renderStars(place.rating)}</span>
                         )}
                         {place.primary_type && (
                           <span>{formatType(place.primary_type)}</span>
                         )}
+                        {place.yelp_price && (
+                          <span style={{ color: '#059669' }}>{place.yelp_price}</span>
+                        )}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAddModal(place);
-                      }}
-                      title="Add to outreach"
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        background: '#10B981',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      + Add
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flexShrink: 0 }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddToPipeline(place);
+                        }}
+                        title="Add to pipeline for enrichment"
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: '#7C3AED',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Pipeline
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAddModal(place);
+                        }}
+                        title="Add to outreach"
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: '#10B981',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        + Add
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

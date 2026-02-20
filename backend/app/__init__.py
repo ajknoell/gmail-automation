@@ -43,11 +43,10 @@ def create_app(config_class=None):
     from app.routes.brief import brief_bp
     from app.routes.triggers import triggers_bp
     from app.routes.features import features_bp
-    from app.routes.signals import signals_bp
-    from app.routes.profile import profile_bp
-    from app.routes.opportunities import opportunities_bp
+    from app.routes.pipeline import pipeline_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
     app.register_blueprint(map_explorer_bp, url_prefix='/api/map-explorer')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
     app.register_blueprint(campaigns_bp, url_prefix='/api/campaigns')
@@ -65,9 +64,6 @@ def create_app(config_class=None):
     app.register_blueprint(brief_bp, url_prefix='/api/brief')
     app.register_blueprint(triggers_bp, url_prefix='/api/triggers')
     app.register_blueprint(features_bp, url_prefix='/api/features')
-    app.register_blueprint(signals_bp, url_prefix='/api/signals')
-    app.register_blueprint(profile_bp, url_prefix='/api/profile')
-    app.register_blueprint(opportunities_bp, url_prefix='/api/opportunities')
 
     # Create database tables and run migrations
     with app.app_context():
@@ -144,15 +140,10 @@ def create_app(config_class=None):
     trigger_interval = app.config.get('TRIGGER_CHECK_INTERVAL', 86400)
     TriggerMonitor.start_background_polling(app, interval=trigger_interval)
 
-    # Start signal engine (hourly check across all signal sources)
-    from app.services.signal_engine import SignalEngine
-    signal_interval = app.config.get('SIGNAL_CHECK_INTERVAL', 3600)
-    SignalEngine.start_background_polling(app, interval=signal_interval)
-
-    # Start insights auto-refresh scheduler (every 6 hours)
-    from app.services.insights_scheduler import InsightsScheduler
-    insights_interval = app.config.get('INSIGHTS_CHECK_INTERVAL', 21600)
-    InsightsScheduler.start_background_polling(app, interval=insights_interval)
+    # Start lead enrichment worker (every 10 minutes)
+    from app.services.enrichment_service import EnrichmentWorker
+    enrichment_interval = app.config.get('ENRICHMENT_CHECK_INTERVAL', 600)
+    EnrichmentWorker.start_background_polling(app, interval=enrichment_interval)
 
     return app
 
@@ -244,15 +235,6 @@ def _run_migrations(app):
     _add_column('reply_messages', 'auto_response_type', 'VARCHAR(50)')
     _add_column('reply_messages', 'flagged_for_review', 'BOOLEAN', default=0)
     _add_column('reply_messages', 'flag_reason', 'VARCHAR(200)')
-
-    # Contact signal intelligence fields
-    _add_column('contacts', 'intent_score', 'FLOAT')
-    _add_column('contacts', 'warmth_score', 'FLOAT')
-    _add_column('contacts', 'relevance_score', 'FLOAT')
-    _add_column('contacts', 'linkedin_url', 'VARCHAR(500)')
-    _add_column('contacts', 'role', 'VARCHAR(100)')
-    _add_column('contacts', 'tech_stack', 'TEXT')
-    _add_column('contacts', 'industry', 'VARCHAR(200)')
 
     # Create index on tracking_id
     try:

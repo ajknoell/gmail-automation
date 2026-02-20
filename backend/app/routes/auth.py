@@ -185,6 +185,7 @@ def get_settings():
     anthropic_key = Settings.get('anthropic_api_key', '')
     tavily_key = Settings.get('tavily_api_key', '')
     google_places_key = Settings.get('google_places_api_key', '')
+    yelp_key = Settings.get('yelp_api_key', '')
     tracking_base_url = Settings.get('tracking_base_url', '')
 
     # Writing style: workspace-scoped, fallback to global
@@ -196,6 +197,7 @@ def get_settings():
         'anthropic_api_key': '***' + anthropic_key[-4:] if anthropic_key and len(anthropic_key) > 4 else '',
         'tavily_api_key': '***' + tavily_key[-4:] if tavily_key and len(tavily_key) > 4 else '',
         'google_places_api_key': '***' + google_places_key[-4:] if google_places_key and len(google_places_key) > 4 else '',
+        'yelp_api_key': '***' + yelp_key[-4:] if yelp_key and len(yelp_key) > 4 else '',
         'tracking_base_url': tracking_base_url,
         'writing_style': json.loads(writing_style_raw) if writing_style_raw else None
     })
@@ -213,6 +215,9 @@ def save_settings():
 
     if 'google_places_api_key' in data:
         Settings.set('google_places_api_key', data['google_places_api_key'])
+
+    if 'yelp_api_key' in data:
+        Settings.set('yelp_api_key', data['yelp_api_key'])
 
     if 'tracking_base_url' in data:
         Settings.set('tracking_base_url', data['tracking_base_url'].rstrip('/') if data['tracking_base_url'] else '')

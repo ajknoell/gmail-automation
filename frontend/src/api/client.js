@@ -246,8 +246,26 @@ export const searchNearbyPlaces = (data) =>
   api.post('/api/map-explorer/search', data);
 export const textSearchPlaces = (data) =>
   api.post('/api/map-explorer/text-search', data);
+export const getMapSources = () => api.get('/api/map-explorer/sources');
 export const addPlaceToOutreach = (data) =>
   api.post('/api/map-explorer/add-to-outreach', data);
+export const addPlaceToPipeline = (data) =>
+  api.post('/api/map-explorer/add-to-pipeline', data);
+export const bulkAddToPipeline = (businesses) =>
+  api.post('/api/map-explorer/bulk-add-to-pipeline', { businesses });
+
+// --- Pipeline ---
+export const getPipelineLeads = (params) => api.get('/api/pipeline/', { params });
+export const getPipelineStats = () => api.get('/api/pipeline/stats');
+export const getPipelineLead = (id) => api.get(`/api/pipeline/${id}`);
+export const createPipelineLead = (data) => api.post('/api/pipeline/', data);
+export const updatePipelineLead = (id, data) => api.put(`/api/pipeline/${id}`, data);
+export const deletePipelineLead = (id) => api.delete(`/api/pipeline/${id}`);
+export const enrichPipelineLead = (id) => api.post(`/api/pipeline/${id}/enrich`);
+export const bulkEnrichLeads = (leadIds) => api.post('/api/pipeline/bulk-enrich', { lead_ids: leadIds });
+export const approvePipelineLead = (id, data) => api.post(`/api/pipeline/${id}/approve`, data);
+export const bulkApproveLeads = (data) => api.post('/api/pipeline/bulk-approve', data);
+export const bulkRejectLeads = (leadIds) => api.post('/api/pipeline/bulk-reject', { lead_ids: leadIds });
 
 // --- Discovery (Phase 1) ---
 export const getDiscoveryCriteria = () => api.get('/api/discovery/criteria');
