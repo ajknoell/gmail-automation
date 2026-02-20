@@ -143,6 +143,8 @@ def _run_migrations(app):
 
     # Recipients migrations
     _add_column('recipients', 'notes', 'TEXT')
+    _add_column('recipients', 'enrolled_at', 'DATETIME', default="CURRENT_TIMESTAMP")
+    _add_column('recipients', 'created_at', 'DATETIME', default="CURRENT_TIMESTAMP")
 
     # EmailLog tracking migrations
     _add_column('email_logs', 'step_id', 'INTEGER')
