@@ -38,8 +38,10 @@ def create_app(config_class=None):
     from app.routes.attachments import attachments_bp
     from app.routes.listings import listings_bp
     from app.routes.cold_calls import cold_calls_bp
+    from app.routes.map_explorer import map_explorer_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(map_explorer_bp, url_prefix='/api/map-explorer')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
     app.register_blueprint(campaigns_bp, url_prefix='/api/campaigns')
     app.register_blueprint(quick_send_bp, url_prefix='/api/quick-send')
