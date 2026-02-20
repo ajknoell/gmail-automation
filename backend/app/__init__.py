@@ -161,8 +161,10 @@ def _run_migrations(app):
 
     # Recipients migrations
     _add_column('recipients', 'notes', 'TEXT')
-    _add_column('recipients', 'enrolled_at', 'DATETIME', default="CURRENT_TIMESTAMP")
-    _add_column('recipients', 'created_at', 'DATETIME', default="CURRENT_TIMESTAMP")
+    # SQLite cannot ALTER TABLE ADD COLUMN with non-constant defaults like
+    # CURRENT_TIMESTAMP, so add without default then backfill NULLs.
+    _add_column('recipients', 'enrolled_at', 'DATETIME')
+    _add_column('recipients', 'created_at', 'DATETIME')
 
     # EmailLog tracking migrations
     _add_column('email_logs', 'step_id', 'INTEGER')
