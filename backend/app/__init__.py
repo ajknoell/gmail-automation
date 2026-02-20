@@ -149,6 +149,11 @@ def create_app(config_class=None):
     signal_interval = app.config.get('SIGNAL_CHECK_INTERVAL', 3600)
     SignalEngine.start_background_polling(app, interval=signal_interval)
 
+    # Start insights auto-refresh scheduler (every 6 hours)
+    from app.services.insights_scheduler import InsightsScheduler
+    insights_interval = app.config.get('INSIGHTS_CHECK_INTERVAL', 21600)
+    InsightsScheduler.start_background_polling(app, interval=insights_interval)
+
     return app
 
 
