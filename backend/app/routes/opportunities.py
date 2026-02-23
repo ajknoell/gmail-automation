@@ -72,18 +72,25 @@ def opportunity_feed():
     total = results.count()
     items = results.offset((page - 1) * per_page).limit(per_page).all()
 
-    # Build response with top signals per contact
+    # Batch fetch top signals for all contacts on this page (avoids N+1)
+    contact_ids = [item[0].id for item in items]
+    signals_map = {}
+    if contact_ids:
+        all_signals = Signal.query.filter(
+            Signal.workspace_id == ws_id,
+            Signal.contact_id.in_(contact_ids),
+            Signal.dismissed == False,
+        ).order_by(Signal.intent_score.desc()).all()
+        for sig in all_signals:
+            if sig.contact_id not in signals_map:
+                signals_map[sig.contact_id] = []
+            if len(signals_map[sig.contact_id]) < 3:
+                signals_map[sig.contact_id].append(sig)
+
+    # Build response
     opportunities = []
     for contact, max_intent, max_relevance, signal_count, latest_signal in items:
-        # Get top 3 signals for this contact
-        top_signals = Signal.query.filter(
-            Signal.workspace_id == ws_id,
-            Signal.contact_id == contact.id,
-            Signal.dismissed == False,
-        ).order_by(
-            Signal.intent_score.desc()
-        ).limit(3).all()
-
+        top_signals = signals_map.get(contact.id, [])
         combined_score = (max_intent or 0) * (max_relevance or 0.5)
 
         opportunities.append({

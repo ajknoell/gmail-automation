@@ -61,11 +61,12 @@ function OpportunityFeed() {
     setGeneratingId(signalId);
     try {
       await createSignalOutreach(signalId);
-      loadFeed();
+      try { await loadFeed(); } catch (_) { /* reload failed, non-critical */ }
     } catch (err) {
       alert('Generation failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setGeneratingId(null);
     }
-    setGeneratingId(null);
   };
 
   return (

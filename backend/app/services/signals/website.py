@@ -10,12 +10,37 @@ import hashlib
 import re
 import json
 import logging
+import ipaddress
 from datetime import datetime
+from urllib.parse import urlparse
 
 from app.services.signals.base import SignalCollector
 from app.services.signals.registry import register_collector
 
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_url(url):
+    """Validate that a URL is safe for external fetching (not internal/private)."""
+    if not url:
+        return False
+    if not url.startswith('http'):
+        url = f'https://{url}'
+    parsed = urlparse(url)
+    hostname = (parsed.netloc or parsed.path).split(':')[0].strip()
+    if not hostname:
+        return False
+    # Block obvious internal hostnames
+    if hostname in ('localhost', '0.0.0.0'):
+        return False
+    # Block private/loopback IPs
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+            return False
+    except ValueError:
+        pass  # It's a domain name, that's fine
+    return True
 
 
 @register_collector('website')
@@ -25,7 +50,7 @@ class WebsiteSignalCollector(SignalCollector):
     source_type = 'website'
 
     def collect(self, contact, workspace_id, config=None):
-        if not contact.website:
+        if not contact.website or not _is_safe_url(contact.website):
             return []
 
         signals = []
@@ -54,14 +79,13 @@ class WebsiteSignalCollector(SignalCollector):
 
     def _check_ssl(self, contact, workspace_id):
         from app.models.signal import Signal
-        from urllib.parse import urlparse
 
         url = contact.website
         if not url.startswith('http'):
             url = f'https://{url}'
 
         parsed = urlparse(url)
-        hostname = parsed.netloc or parsed.path
+        hostname = (parsed.netloc or parsed.path).split(':')[0]
 
         try:
             ctx = ssl.create_default_context()
@@ -235,6 +259,7 @@ class WebsiteSignalCollector(SignalCollector):
                     dismissed=True,
                 )
                 db.session.add(baseline)
+                db.session.commit()
 
         except Exception:
             pass

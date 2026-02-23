@@ -130,15 +130,23 @@ class SignalEngine:
             return
 
         def poll_loop():
+            consecutive_errors = 0
             while True:
                 time.sleep(interval)
                 with app.app_context():
                     try:
                         count = cls.check_all_due()
+                        consecutive_errors = 0
                         if count > 0:
                             app.logger.info(f'Signal engine collected {count} new signals')
                     except Exception as e:
-                        app.logger.error(f'Signal engine error: {e}')
+                        consecutive_errors += 1
+                        app.logger.error(f'Signal engine error (attempt {consecutive_errors}): {e}')
+                        if consecutive_errors >= 5:
+                            app.logger.critical(
+                                'Signal engine stopping after 5 consecutive errors'
+                            )
+                            break
 
         cls._thread = threading.Thread(target=poll_loop, daemon=True)
         cls._thread.start()

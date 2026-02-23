@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getSignals, createSignalOutreach, dismissSignal,
   getSignalStats, signalCollectNow,
@@ -55,9 +55,7 @@ function Signals() {
   const [filterSource, setFilterSource] = useState('');
   const [showSourceSetup, setShowSourceSetup] = useState(false);
 
-  useEffect(() => { loadAll(); }, [filterSource]);
-
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
@@ -74,7 +72,9 @@ function Signals() {
       console.error('Signals load error:', err);
     }
     setLoading(false);
-  };
+  }, [filterSource]);
+
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const handleCollectNow = async () => {
     setCollecting(true);

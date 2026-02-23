@@ -57,13 +57,17 @@ class Signal(db.Model):
         return None
 
     def to_dict(self):
+        try:
+            contact = self.contact
+        except Exception:
+            contact = None
         return {
             'id': self.id,
             'workspace_id': self.workspace_id,
             'contact_id': self.contact_id,
-            'contact_name': self.contact.name if self.contact else None,
-            'contact_email': self.contact.email if self.contact else None,
-            'contact_company': self.contact.company if self.contact else None,
+            'contact_name': contact.name if contact else None,
+            'contact_email': contact.email if contact else None,
+            'contact_company': contact.company if contact else None,
             'source_type': self.source_type,
             'signal_type': self.signal_type,
             'title': self.title,
