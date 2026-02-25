@@ -122,6 +122,11 @@ export const regenerateStepRecipient = (campaignId, stepId, srId) =>
   api.post(`/api/campaigns/${campaignId}/steps/${stepId}/recipients/${srId}/regenerate`);
 export const startStep = (campaignId, stepId) => api.post(`/api/campaigns/${campaignId}/steps/${stepId}/start`);
 
+// Campaign A/B Tests
+export const createABTest = (campaignId, data) => api.post(`/api/campaigns/${campaignId}/steps/ab-test`, data);
+export const getABTestStats = (campaignId, variantGroup) => api.get(`/api/campaigns/${campaignId}/ab-test/${variantGroup}/stats`);
+export const reassignABTest = (campaignId, variantGroup) => api.post(`/api/campaigns/${campaignId}/steps/ab-test/${variantGroup}/reassign`);
+
 // Campaign Actions
 export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);

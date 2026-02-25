@@ -15,6 +15,8 @@ import json
 import csv
 import io
 import os
+import random
+import uuid
 
 campaigns_bp = Blueprint('campaigns', __name__)
 
@@ -1232,6 +1234,12 @@ def create_step(id):
     else:
         position = max_pos + 1
 
+    # Handle delay: prefer delay_minutes, fall back to delay_days for backward compat
+    delay_minutes = data.get('delay_minutes')
+    delay_days = data.get('delay_days', 3)
+    if delay_minutes is None:
+        delay_minutes = delay_days * 1440
+
     step = CampaignStep(
         campaign_id=id,
         position=position,
@@ -1239,7 +1247,8 @@ def create_step(id):
         step_type=data.get('step_type', 'ai_followup'),
         template_id=data.get('template_id'),
         ai_prompt=data.get('ai_prompt'),
-        delay_days=data.get('delay_days', 3),
+        delay_days=delay_days,
+        delay_minutes=delay_minutes,
         use_web_research=data.get('use_web_research', False),
         web_research_prompt=data.get('web_research_prompt'),
         auto_send=data.get('auto_send', False),
@@ -1272,8 +1281,13 @@ def update_step(id, step_id):
         step.template_id = data['template_id']
     if 'ai_prompt' in data:
         step.ai_prompt = data['ai_prompt']
-    if 'delay_days' in data:
+    if 'delay_minutes' in data:
+        step.delay_minutes = data['delay_minutes']
+        # Keep delay_days in sync for backward compat
+        step.delay_days = max(1, data['delay_minutes'] // 1440)
+    elif 'delay_days' in data:
         step.delay_days = data['delay_days']
+        step.delay_minutes = data['delay_days'] * 1440
     if 'use_web_research' in data:
         step.use_web_research = data['use_web_research']
     if 'web_research_prompt' in data:
@@ -1295,16 +1309,183 @@ def delete_step(id, step_id):
         return jsonify({'error': 'Cannot delete a running step'}), 400
 
     position = step.position
-    db.session.delete(step)
+    variant_group = step.variant_group
 
-    # Reorder: shift positions down for steps after the deleted one
-    CampaignStep.query.filter(
-        CampaignStep.campaign_id == id,
-        CampaignStep.position > position,
-    ).update({CampaignStep.position: CampaignStep.position - 1})
+    db.session.delete(step)
+    db.session.flush()
+
+    if variant_group:
+        # Handle A/B test variant deletion
+        remaining = CampaignStep.query.filter_by(
+            campaign_id=id, variant_group=variant_group
+        ).all()
+
+        if len(remaining) == 1:
+            # Convert last remaining variant back to a regular step
+            remaining[0].variant_group = None
+            remaining[0].variant_label = None
+            remaining[0].variant_pct = None
+            # Re-populate with all recipients
+            _populate_step_recipients(remaining[0])
+        elif len(remaining) > 1:
+            # Redistribute percentages proportionally
+            total_remaining_pct = sum(r.variant_pct or 50 for r in remaining)
+            for r in remaining:
+                r.variant_pct = round((r.variant_pct or 50) * 100 / total_remaining_pct)
+        else:
+            # No variants left — shift positions down
+            CampaignStep.query.filter(
+                CampaignStep.campaign_id == id,
+                CampaignStep.position > position,
+            ).update({CampaignStep.position: CampaignStep.position - 1})
+    else:
+        # Regular step deletion: shift positions down
+        CampaignStep.query.filter(
+            CampaignStep.campaign_id == id,
+            CampaignStep.position > position,
+        ).update({CampaignStep.position: CampaignStep.position - 1})
 
     db.session.commit()
     return jsonify({'success': True})
+
+
+@campaigns_bp.route('/<int:id>/steps/ab-test', methods=['POST'])
+def create_ab_test(id):
+    """Create an A/B test at a given position with multiple variants."""
+    campaign = Campaign.query.get_or_404(id)
+    if campaign.status in ('running',):
+        return jsonify({'error': 'Cannot add steps to a running campaign'}), 400
+
+    data = request.get_json()
+    position = data.get('position')
+    delay_minutes = data.get('delay_minutes', 4320)
+    delay_days = max(1, delay_minutes // 1440)
+    variants = data.get('variants', [])
+
+    if len(variants) < 2:
+        return jsonify({'error': 'A/B test requires at least 2 variants'}), 400
+
+    total_pct = sum(v.get('pct', 0) for v in variants)
+    if total_pct != 100:
+        return jsonify({'error': f'Variant percentages must sum to 100 (got {total_pct})'}), 400
+
+    variant_group = f'ab_{uuid.uuid4().hex[:8]}'
+
+    max_pos = db.session.query(db.func.max(CampaignStep.position)).filter_by(
+        campaign_id=id).scalar() or 0
+
+    if not position:
+        position = max_pos + 1
+    elif position <= max_pos:
+        # Shift existing steps at >= position up
+        CampaignStep.query.filter(
+            CampaignStep.campaign_id == id,
+            CampaignStep.position >= position,
+        ).update({CampaignStep.position: CampaignStep.position + 1})
+
+    created_steps = []
+    for v in variants:
+        step = CampaignStep(
+            campaign_id=id,
+            position=position,
+            name=v.get('name', f'Variant {v["label"]}'),
+            step_type=v.get('step_type', 'ai_followup'),
+            template_id=v.get('template_id'),
+            ai_prompt=v.get('ai_prompt'),
+            delay_days=delay_days,
+            delay_minutes=delay_minutes,
+            use_web_research=v.get('use_web_research', False),
+            web_research_prompt=v.get('web_research_prompt'),
+            auto_send=v.get('auto_send', False),
+            variant_group=variant_group,
+            variant_label=v['label'],
+            variant_pct=v['pct'],
+        )
+        db.session.add(step)
+        created_steps.append(step)
+
+    db.session.commit()
+
+    _assign_ab_variants(id, variant_group)
+
+    return jsonify({
+        'variant_group': variant_group,
+        'steps': [s.to_dict() for s in created_steps],
+    }), 201
+
+
+@campaigns_bp.route('/<int:id>/steps/ab-test/<variant_group>/reassign', methods=['POST'])
+def reassign_ab_test(id, variant_group):
+    """Re-randomize recipient assignments for an A/B test group."""
+    Campaign.query.get_or_404(id)
+
+    variant_steps = CampaignStep.query.filter_by(
+        campaign_id=id, variant_group=variant_group
+    ).all()
+
+    if not variant_steps:
+        return jsonify({'error': 'Variant group not found'}), 404
+
+    # Check none are running or sent
+    for vs in variant_steps:
+        if vs.status in ('running', 'completed'):
+            return jsonify({'error': 'Cannot reassign variants that are already running or completed'}), 400
+
+    # Clear existing step recipients for these variant steps
+    for vs in variant_steps:
+        StepRecipient.query.filter_by(step_id=vs.id).delete()
+
+    db.session.commit()
+
+    _assign_ab_variants(id, variant_group)
+
+    return jsonify({
+        'success': True,
+        'steps': [s.to_dict() for s in variant_steps],
+    })
+
+
+@campaigns_bp.route('/<int:id>/ab-test/<variant_group>/stats', methods=['GET'])
+def ab_test_stats(id, variant_group):
+    """Get performance stats per variant in an A/B test."""
+    Campaign.query.get_or_404(id)
+
+    steps = CampaignStep.query.filter_by(
+        campaign_id=id, variant_group=variant_group
+    ).all()
+
+    if not steps:
+        return jsonify({'error': 'Variant group not found'}), 404
+
+    results = []
+    for step in steps:
+        step_recipients = StepRecipient.query.filter_by(step_id=step.id).all()
+        log_ids = [sr.email_log_id for sr in step_recipients if sr.email_log_id]
+        logs = EmailLog.query.filter(EmailLog.id.in_(log_ids)).all() if log_ids else []
+
+        total_sent = len(logs)
+        total_opened = sum(1 for l in logs if l.opened_at)
+        total_clicked = sum(1 for l in logs if l.clicked_at)
+        total_replied = sum(1 for l in logs if l.replied_at)
+        total_bounced = sum(1 for l in logs if l.bounced_at)
+
+        results.append({
+            'step_id': step.id,
+            'variant_label': step.variant_label,
+            'variant_pct': step.variant_pct,
+            'name': step.name,
+            'total_recipients': step.total_recipients,
+            'total_sent': total_sent,
+            'total_opened': total_opened,
+            'total_clicked': total_clicked,
+            'total_replied': total_replied,
+            'total_bounced': total_bounced,
+            'open_rate': round(total_opened / total_sent, 2) if total_sent else 0,
+            'click_rate': round(total_clicked / total_sent, 2) if total_sent else 0,
+            'reply_rate': round(total_replied / total_sent, 2) if total_sent else 0,
+        })
+
+    return jsonify(results)
 
 
 @campaigns_bp.route('/<int:id>/steps/<int:step_id>/recipients', methods=['GET'])
@@ -1671,7 +1852,13 @@ def start_step(id, step_id):
 # ---- Step helper functions ----
 
 def _populate_step_recipients(step):
-    """Create StepRecipient rows for all recipients in the campaign."""
+    """Create StepRecipient rows for all recipients in the campaign.
+
+    For variant steps (A/B tests), skip — use _assign_ab_variants instead.
+    """
+    if step.variant_group:
+        return
+
     recipients = Recipient.query.filter_by(campaign_id=step.campaign_id).all()
     for r in recipients:
         existing = StepRecipient.query.filter_by(step_id=step.id, recipient_id=r.id).first()
@@ -1679,6 +1866,51 @@ def _populate_step_recipients(step):
             sr = StepRecipient(step_id=step.id, recipient_id=r.id)
             db.session.add(sr)
     step.total_recipients = len(recipients)
+    db.session.commit()
+
+
+def _assign_ab_variants(campaign_id, variant_group):
+    """Randomly assign recipients to A/B variants for a given variant group.
+
+    Finds all steps in the variant group, gets all campaign recipients,
+    and randomly distributes them according to variant_pct.
+    """
+    variant_steps = (
+        CampaignStep.query
+        .filter_by(campaign_id=campaign_id, variant_group=variant_group)
+        .order_by(CampaignStep.variant_label)
+        .all()
+    )
+    if not variant_steps:
+        return
+
+    recipient_ids = [r.id for r in Recipient.query.filter_by(campaign_id=campaign_id).all()]
+    random.shuffle(recipient_ids)
+
+    total = len(recipient_ids)
+    assignments = {}
+    start = 0
+    for i, step in enumerate(variant_steps):
+        if i == len(variant_steps) - 1:
+            end = total
+        else:
+            end = start + int(total * (step.variant_pct or 50) / 100)
+        assignments[step.id] = recipient_ids[start:end]
+        start = end
+
+    for step in variant_steps:
+        assigned_ids = assignments.get(step.id, [])
+        for rid in assigned_ids:
+            existing = StepRecipient.query.filter_by(step_id=step.id, recipient_id=rid).first()
+            if not existing:
+                sr = StepRecipient(
+                    step_id=step.id,
+                    recipient_id=rid,
+                    variant_assignment=variant_group,
+                )
+                db.session.add(sr)
+        step.total_recipients = len(assigned_ids)
+
     db.session.commit()
 
 
