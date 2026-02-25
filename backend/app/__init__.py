@@ -44,6 +44,9 @@ def create_app(config_class=None):
     from app.routes.triggers import triggers_bp
     from app.routes.features import features_bp
     from app.routes.pipeline import pipeline_bp
+    from app.routes.signals import signals_bp
+    from app.routes.profile import profile_bp
+    from app.routes.opportunities import opportunities_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
@@ -64,6 +67,9 @@ def create_app(config_class=None):
     app.register_blueprint(brief_bp, url_prefix='/api/brief')
     app.register_blueprint(triggers_bp, url_prefix='/api/triggers')
     app.register_blueprint(features_bp, url_prefix='/api/features')
+    app.register_blueprint(signals_bp, url_prefix='/api/signals')
+    app.register_blueprint(profile_bp, url_prefix='/api/profile')
+    app.register_blueprint(opportunities_bp, url_prefix='/api/opportunities')
 
     # Create database tables and run migrations
     with app.app_context():
@@ -144,6 +150,11 @@ def create_app(config_class=None):
     from app.services.enrichment_service import EnrichmentWorker
     enrichment_interval = app.config.get('ENRICHMENT_CHECK_INTERVAL', 600)
     EnrichmentWorker.start_background_polling(app, interval=enrichment_interval)
+
+    # Start signal engine (hourly check across all signal sources)
+    from app.services.signal_engine import SignalEngine
+    signal_interval = app.config.get('SIGNAL_CHECK_INTERVAL', 3600)
+    SignalEngine.start_background_polling(app, interval=signal_interval)
 
     return app
 
