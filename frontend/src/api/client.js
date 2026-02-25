@@ -75,8 +75,12 @@ export const moveRecipients = (campaignId, recipientIds, targetCampaignId, newCa
     target_campaign_id: targetCampaignId || undefined,
     new_campaign_name: newCampaignName || undefined,
   });
-export const generatePreview = (id, batchSize) =>
-  api.post(`/api/campaigns/${id}/generate-preview`, batchSize != null ? { batch_size: batchSize } : {});
+export const generatePreview = (id, batchSize, { regenerate } = {}) => {
+  const body = {};
+  if (batchSize != null) body.batch_size = batchSize;
+  if (regenerate) body.regenerate = true;
+  return api.post(`/api/campaigns/${id}/generate-preview`, body);
+};
 export const approveRecipients = (id, recipientIds) =>
   api.post(`/api/campaigns/${id}/approve`, { recipient_ids: recipientIds });
 export const sendIndividual = (campaignId, recipientId) =>
@@ -127,6 +131,8 @@ export const exportCampaign = (id) => `/api/campaigns/${id}/export`;
 
 // SSE Progress
 export const getCampaignProgressUrl = (id) => `/api/campaigns/${id}/progress`;
+export const getGenerationProgressUrl = (id) => `/api/campaigns/${id}/generation-progress`;
+export const cancelGeneration = (id) => api.post(`/api/campaigns/${id}/cancel-generation`);
 
 // Sample CSV
 export const getSampleCsvUrl = () => '/api/campaigns/sample-csv';
@@ -238,8 +244,28 @@ export const geocodeAddress = (address) =>
   api.get('/api/map-explorer/geocode', { params: { address } });
 export const searchNearbyPlaces = (data) =>
   api.post('/api/map-explorer/search', data);
+export const textSearchPlaces = (data) =>
+  api.post('/api/map-explorer/text-search', data);
+export const getMapSources = () => api.get('/api/map-explorer/sources');
 export const addPlaceToOutreach = (data) =>
   api.post('/api/map-explorer/add-to-outreach', data);
+export const addPlaceToPipeline = (data) =>
+  api.post('/api/map-explorer/add-to-pipeline', data);
+export const bulkAddToPipeline = (businesses) =>
+  api.post('/api/map-explorer/bulk-add-to-pipeline', { businesses });
+
+// --- Pipeline ---
+export const getPipelineLeads = (params) => api.get('/api/pipeline/', { params });
+export const getPipelineStats = () => api.get('/api/pipeline/stats');
+export const getPipelineLead = (id) => api.get(`/api/pipeline/${id}`);
+export const createPipelineLead = (data) => api.post('/api/pipeline/', data);
+export const updatePipelineLead = (id, data) => api.put(`/api/pipeline/${id}`, data);
+export const deletePipelineLead = (id) => api.delete(`/api/pipeline/${id}`);
+export const enrichPipelineLead = (id) => api.post(`/api/pipeline/${id}/enrich`);
+export const bulkEnrichLeads = (leadIds) => api.post('/api/pipeline/bulk-enrich', { lead_ids: leadIds });
+export const approvePipelineLead = (id, data) => api.post(`/api/pipeline/${id}/approve`, data);
+export const bulkApproveLeads = (data) => api.post('/api/pipeline/bulk-approve', data);
+export const bulkRejectLeads = (leadIds) => api.post('/api/pipeline/bulk-reject', { lead_ids: leadIds });
 
 // --- Discovery (Phase 1) ---
 export const getDiscoveryCriteria = () => api.get('/api/discovery/criteria');

@@ -8,6 +8,7 @@ import requests
 # In-memory caches with TTL
 _geocode_cache: Dict[str, dict] = {}
 _nearby_cache: Dict[str, dict] = {}
+_text_search_cache: Dict[str, dict] = {}
 _CACHE_TTL = 600  # 10 minutes
 
 
@@ -54,6 +55,7 @@ class PlacesService:
         lng: float,
         radius: int = 5000,
         included_type: str = '',
+        included_types: Optional[List[str]] = None,
         keyword: str = '',
         min_rating: float = 0,
         max_results: int = 20,
@@ -61,10 +63,13 @@ class PlacesService:
         """Search for businesses using Places API (New) searchNearby.
 
         Uses POST https://places.googleapis.com/v1/places:searchNearby
+        Accepts either a single included_type or a list of included_types.
         Returns list of normalized business dicts.
         """
+        # Build the types list from either parameter
+        types_list = included_types or ([included_type] if included_type else [])
         cache_key = hashlib.md5(
-            f'{lat},{lng},{radius},{included_type},{keyword},{min_rating}'.encode()
+            f'{lat},{lng},{radius},{",".join(sorted(types_list))},{keyword},{min_rating}'.encode()
         ).hexdigest()
         cached = _nearby_cache.get(cache_key)
         if cached and (time.time() - cached['ts']) < _CACHE_TTL:
@@ -79,8 +84,8 @@ class PlacesService:
             },
             'maxResultCount': min(max_results, 20),
         }
-        if included_type:
-            body['includedTypes'] = [included_type]
+        if types_list:
+            body['includedTypes'] = types_list
 
         field_mask = ','.join([
             'places.id',
@@ -135,4 +140,92 @@ class PlacesService:
             })
 
         _nearby_cache[cache_key] = {'results': results, 'ts': time.time()}
+        return results
+
+    def search_text(
+        self,
+        query: str,
+        lat: float,
+        lng: float,
+        radius: int = 5000,
+        min_rating: float = 0,
+        max_results: int = 20,
+    ) -> List[dict]:
+        """Search for businesses using Places API (New) Text Search.
+
+        Uses POST https://places.googleapis.com/v1/places:searchText
+        Supports free-form queries like "vegan bakery" or "mobile dog groomer".
+        Returns list of normalized business dicts.
+        """
+        cache_key = hashlib.md5(
+            f'text:{query},{lat},{lng},{radius},{min_rating}'.encode()
+        ).hexdigest()
+        cached = _text_search_cache.get(cache_key)
+        if cached and (time.time() - cached['ts']) < _CACHE_TTL:
+            return cached['results']
+
+        body: dict = {
+            'textQuery': query,
+            'locationBias': {
+                'circle': {
+                    'center': {'latitude': lat, 'longitude': lng},
+                    'radius': float(radius),
+                }
+            },
+            'maxResultCount': min(max_results, 20),
+        }
+
+        field_mask = ','.join([
+            'places.id',
+            'places.displayName',
+            'places.formattedAddress',
+            'places.location',
+            'places.rating',
+            'places.userRatingCount',
+            'places.types',
+            'places.nationalPhoneNumber',
+            'places.internationalPhoneNumber',
+            'places.websiteUri',
+            'places.businessStatus',
+            'places.primaryType',
+        ])
+
+        resp = requests.post(
+            'https://places.googleapis.com/v1/places:searchText',
+            headers={
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': self.api_key,
+                'X-Goog-FieldMask': field_mask,
+            },
+            json=body,
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        results = []
+        for place in data.get('places', []):
+            rating = place.get('rating', 0)
+            if min_rating and rating < min_rating:
+                continue
+
+            results.append({
+                'place_id': place.get('id', ''),
+                'name': place.get('displayName', {}).get('text', ''),
+                'address': place.get('formattedAddress', ''),
+                'lat': place.get('location', {}).get('latitude'),
+                'lng': place.get('location', {}).get('longitude'),
+                'rating': rating,
+                'user_ratings_total': place.get('userRatingCount', 0),
+                'types': place.get('types', []),
+                'primary_type': place.get('primaryType', ''),
+                'phone': (
+                    place.get('nationalPhoneNumber')
+                    or place.get('internationalPhoneNumber', '')
+                ),
+                'website': place.get('websiteUri', ''),
+                'business_status': place.get('businessStatus', ''),
+            })
+
+        _text_search_cache[cache_key] = {'results': results, 'ts': time.time()}
         return results

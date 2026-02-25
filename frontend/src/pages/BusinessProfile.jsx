@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { getBusinessProfile, updateBusinessProfile } from '../api/client';
+import { useToast } from '../components/Toast';
 
 function BusinessProfile() {
+  const showToast = useToast();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,10 +53,9 @@ function BusinessProfile() {
         target_market: targetMarket,
         keywords,
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      showToast('Profile saved', 'success');
     } catch (err) {
-      alert('Save failed: ' + (err.response?.data?.error || err.message));
+      showToast('Save failed: ' + (err.response?.data?.error || err.message), 'error');
     }
     setSaving(false);
   };

@@ -43,11 +43,13 @@ def create_app(config_class=None):
     from app.routes.brief import brief_bp
     from app.routes.triggers import triggers_bp
     from app.routes.features import features_bp
+    from app.routes.pipeline import pipeline_bp
     from app.routes.signals import signals_bp
     from app.routes.profile import profile_bp
     from app.routes.opportunities import opportunities_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
     app.register_blueprint(map_explorer_bp, url_prefix='/api/map-explorer')
     app.register_blueprint(templates_bp, url_prefix='/api/templates')
     app.register_blueprint(campaigns_bp, url_prefix='/api/campaigns')
@@ -144,6 +146,11 @@ def create_app(config_class=None):
     trigger_interval = app.config.get('TRIGGER_CHECK_INTERVAL', 86400)
     TriggerMonitor.start_background_polling(app, interval=trigger_interval)
 
+    # Start lead enrichment worker (every 10 minutes)
+    from app.services.enrichment_service import EnrichmentWorker
+    enrichment_interval = app.config.get('ENRICHMENT_CHECK_INTERVAL', 600)
+    EnrichmentWorker.start_background_polling(app, interval=enrichment_interval)
+
     # Start signal engine (hourly check across all signal sources)
     from app.services.signal_engine import SignalEngine
     signal_interval = app.config.get('SIGNAL_CHECK_INTERVAL', 3600)
@@ -172,8 +179,10 @@ def _run_migrations(app):
 
     # Recipients migrations
     _add_column('recipients', 'notes', 'TEXT')
-    _add_column('recipients', 'enrolled_at', 'DATETIME', default="CURRENT_TIMESTAMP")
-    _add_column('recipients', 'created_at', 'DATETIME', default="CURRENT_TIMESTAMP")
+    # SQLite cannot ALTER TABLE ADD COLUMN with non-constant defaults like
+    # CURRENT_TIMESTAMP, so add without default then backfill NULLs.
+    _add_column('recipients', 'enrolled_at', 'DATETIME')
+    _add_column('recipients', 'created_at', 'DATETIME')
 
     # EmailLog tracking migrations
     _add_column('email_logs', 'step_id', 'INTEGER')
@@ -238,14 +247,9 @@ def _run_migrations(app):
     _add_column('reply_messages', 'flagged_for_review', 'BOOLEAN', default=0)
     _add_column('reply_messages', 'flag_reason', 'VARCHAR(200)')
 
-    # Contact signal intelligence fields
-    _add_column('contacts', 'intent_score', 'FLOAT')
-    _add_column('contacts', 'warmth_score', 'FLOAT')
-    _add_column('contacts', 'relevance_score', 'FLOAT')
-    _add_column('contacts', 'linkedin_url', 'VARCHAR(500)')
-    _add_column('contacts', 'role', 'VARCHAR(100)')
-    _add_column('contacts', 'tech_stack', 'TEXT')
-    _add_column('contacts', 'industry', 'VARCHAR(200)')
+    # Owner retirement likelihood detection
+    _add_column('leads', 'retirement_score', 'INTEGER')
+    _add_column('leads', 'retirement_label', 'VARCHAR(20)')
 
     # Create index on tracking_id
     try:

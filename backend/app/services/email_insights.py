@@ -14,6 +14,7 @@ import random
 from datetime import datetime
 
 from app.models.email_log import EmailLog
+from app.models.campaign import Campaign
 from app.models.reply_message import ReplyMessage
 from app.models.settings import WorkspaceSettings
 from app.services.email_scoring import (
@@ -62,8 +63,18 @@ class EmailInsightsService:
         winner_sample = _sample(winners, MAX_SAMPLES_PER_TIER)
         loser_sample = _sample(losers, MAX_SAMPLES_PER_TIER)
 
+        # Load business context and previous insights for evolutionary learning
+        campaign_contexts = self._load_campaign_contexts(workspace_id)
+        previous_insights = self.get_insights(workspace_id)
+        previous_metadata = self.get_insights_metadata(workspace_id)
+
         # Build & send analysis prompt to Claude
-        prompt = self._build_analysis_prompt(winner_sample, loser_sample, len(scored))
+        prompt = self._build_analysis_prompt(
+            winner_sample, loser_sample, len(scored),
+            campaign_contexts=campaign_contexts,
+            previous_insights=previous_insights,
+            previous_metadata=previous_metadata,
+        )
         insights = self._run_analysis(prompt)
 
         if not insights:
@@ -84,7 +95,8 @@ class EmailInsightsService:
         # Compute summary stats
         summary = self._compute_summary(scored)
 
-        # Build metadata
+        # Build metadata with version tracking
+        prev_version = previous_metadata.get('version', 0) if previous_metadata else 0
         metadata = {
             'analyzed_at': datetime.utcnow().isoformat(),
             'email_count': len(scored),
@@ -92,6 +104,7 @@ class EmailInsightsService:
             'loser_count': len(losers),
             'avg_score': summary['avg_score'],
             'confidence': insights['confidence'],
+            'version': prev_version + 1,
         }
 
         # Persist to workspace settings
@@ -173,8 +186,22 @@ class EmailInsightsService:
             'avg_score': round(sum(scores) / n, 1) if n else 0,
         }
 
-    def _build_analysis_prompt(self, winners, losers, total_count):
-        """Build the Claude comparison prompt."""
+    def _load_campaign_contexts(self, workspace_id):
+        """Load campaign_context and ai_prompt from campaigns in this workspace."""
+        campaigns = Campaign.query.filter_by(workspace_id=workspace_id).all()
+        contexts = set()
+        for camp in campaigns:
+            if camp.campaign_context:
+                contexts.add(camp.campaign_context.strip())
+            if camp.ai_prompt:
+                contexts.add(camp.ai_prompt.strip())
+        return contexts
+
+    def _build_analysis_prompt(
+        self, winners, losers, total_count,
+        campaign_contexts=None, previous_insights=None, previous_metadata=None,
+    ):
+        """Build the Claude comparison prompt with business context and evolutionary learning."""
 
         def _format_email(e, idx):
             breakdown_parts = []
@@ -197,6 +224,43 @@ Body:
         winner_block = '\n'.join(_format_email(e, i) for i, e in enumerate(winners))
         loser_block = '\n'.join(_format_email(e, i) for i, e in enumerate(losers))
 
+        # Build business context section
+        biz_context = ''
+        if campaign_contexts:
+            ctx_list = '\n'.join(f'- {c}' for c in campaign_contexts)
+            biz_context = f"""
+═══════════════════════════════════════
+SENDER'S BUSINESS CONTEXT
+═══════════════════════════════════════
+These emails are sent by a business that describes itself / its service as:
+{ctx_list}
+
+Keep this context in mind when analyzing patterns. Insights about subject lines,
+tone, and personalization are most useful when they account for the sender's
+specific industry and service offering.
+
+"""
+
+        # Build evolutionary learning section
+        evolution_block = ''
+        if previous_insights:
+            prev_date = previous_metadata.get('analyzed_at', 'unknown') if previous_metadata else 'unknown'
+            prev_count = previous_metadata.get('email_count', 'unknown') if previous_metadata else 'unknown'
+            prev_version = previous_metadata.get('version', 1) if previous_metadata else 1
+            evolution_block = f"""
+═══════════════════════════════════════
+PREVIOUS INSIGHTS (v{prev_version}, from {prev_date}, based on {prev_count} emails)
+═══════════════════════════════════════
+{json.dumps(previous_insights, indent=2)}
+
+EVOLUTIONARY INSTRUCTION: Compare your new observations against these previous insights.
+- If a pattern still holds with the new data, STRENGTHEN the wording (e.g. "consistently" or "reliably")
+- If a pattern has weakened or reversed, UPDATE it and note the shift
+- If you see a NEW pattern not in the previous insights, ADD it
+- Do NOT simply copy previous insights — re-evaluate everything against the current data
+
+"""
+
         return f"""You are an expert cold email analyst. I'm going to show you two groups of outreach emails from the same sender:
 
 - **WINNERS**: Emails that got replies, clicks, and/or opens (top performers)
@@ -205,7 +269,7 @@ Body:
 Your job: Compare the two groups and identify the specific patterns that differentiate them. What makes the winners work? What makes the losers fail?
 
 This analysis is based on {total_count} total sent emails.
-
+{biz_context}
 ═══════════════════════════════════════
 TOP PERFORMING EMAILS (WINNERS)
 ═══════════════════════════════════════
@@ -215,7 +279,7 @@ TOP PERFORMING EMAILS (WINNERS)
 WORST PERFORMING EMAILS (LOSERS)
 ═══════════════════════════════════════
 {loser_block}
-
+{evolution_block}
 ═══════════════════════════════════════
 
 Analyze the patterns and return ONLY a valid JSON object with these exact keys. Each value should be 1-3 concise, actionable sentences:

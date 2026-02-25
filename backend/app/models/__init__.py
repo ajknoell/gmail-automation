@@ -18,6 +18,7 @@ from app.models.step_recipient import StepRecipient
 from app.models.cold_call import ColdCall
 from app.models.discovery_criteria import DiscoveryCriteria
 from app.models.website_trigger import WebsiteTrigger
+from app.models.lead import Lead
 from app.models.signal import Signal
 from app.models.business_profile import BusinessProfile
 from app.models.signal_source import SignalSource
@@ -28,6 +29,6 @@ __all__ = [
     'LinkClick', 'OpenEvent', 'Contact', 'Tag', 'contact_tags', 'ReplyMessage',
     'MonitoredSite', 'Listing', 'DealCriteria', 'WebsiteAnalysisLog',
     'CampaignStep', 'StepRecipient', 'ColdCall',
-    'DiscoveryCriteria', 'WebsiteTrigger',
+    'DiscoveryCriteria', 'WebsiteTrigger', 'Lead',
     'Signal', 'BusinessProfile', 'SignalSource',
 ]

@@ -5,6 +5,8 @@ backend/credentials.json
 backend/token.json
 backend/data/app.db
 backend/veloro.db
+backend/gmail_automation.db
+*.db
 .env
 
 # Original script (contains API keys)

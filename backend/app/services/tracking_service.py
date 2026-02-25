@@ -6,6 +6,20 @@ import html as html_lib
 class TrackingService:
 
     @staticmethod
+    def get_base_url():
+        """Return the public tracking base URL.
+
+        Checks the database setting first (configurable via Settings UI),
+        then falls back to the TRACKING_BASE_URL config/env variable.
+        """
+        from flask import current_app
+        from app.models.settings import Settings
+        db_url = Settings.get('tracking_base_url')
+        if db_url:
+            return db_url.rstrip('/')
+        return current_app.config.get('TRACKING_BASE_URL', 'http://localhost:5001').rstrip('/')
+
+    @staticmethod
     def generate_tracking_id():
         return str(uuid.uuid4())
 

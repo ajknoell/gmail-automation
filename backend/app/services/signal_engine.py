@@ -6,7 +6,7 @@ import threading
 import time
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -17,18 +17,23 @@ class SignalEngine:
     _thread = None
 
     @classmethod
-    def collect_for_workspace(cls, workspace_id):
-        """Run all active signal sources for a workspace."""
+    def collect_for_workspace(cls, workspace_id, source_ids=None):
+        """Run signal sources for a workspace. If source_ids is provided,
+        only collect from those specific sources."""
         from app import db
         from app.models.signal_source import SignalSource
         from app.models.contact import Contact
         from app.services.signals import get_collector
         from app.services.profile_service import ProfileService
 
-        sources = SignalSource.query.filter_by(
+        query = SignalSource.query.filter_by(
             workspace_id=workspace_id,
             is_active=True,
-        ).all()
+        )
+        if source_ids:
+            query = query.filter(SignalSource.id.in_(source_ids))
+
+        sources = query.all()
 
         total_signals = 0
 
@@ -45,14 +50,8 @@ class SignalEngine:
                     Contact.status.notin_(['lost']),
                 )
 
-                # Website collector needs contacts with websites
-                if source.source_type == 'website':
-                    contacts_query = contacts_query.filter(
-                        Contact.website.isnot(None),
-                        Contact.website != '',
-                    )
                 # Job and news collectors need contacts with company names
-                elif source.source_type in ('job_posting', 'news'):
+                if source.source_type in ('job_posting', 'news'):
                     contacts_query = contacts_query.filter(
                         Contact.company.isnot(None),
                         Contact.company != '',
@@ -92,31 +91,28 @@ class SignalEngine:
         """Check all workspaces for signal sources that are due."""
         from app.models.workspace import Workspace
         from app.models.signal_source import SignalSource
-        from datetime import timedelta
 
         workspaces = Workspace.query.all()
         total = 0
 
         for ws in workspaces:
-            # Get sources due for checking
             sources = SignalSource.query.filter_by(
                 workspace_id=ws.id,
                 is_active=True,
             ).all()
 
             now = datetime.utcnow()
-            any_due = False
+            due_source_ids = []
 
             for source in sources:
                 if source.last_checked_at:
                     next_check = source.last_checked_at + timedelta(hours=source.check_interval_hours)
                     if now < next_check:
                         continue
-                any_due = True
-                break
+                due_source_ids.append(source.id)
 
-            if any_due:
-                count = cls.collect_for_workspace(ws.id)
+            if due_source_ids:
+                count = cls.collect_for_workspace(ws.id, source_ids=due_source_ids)
                 total += count
                 if count > 0:
                     logger.info(f'Signal engine found {count} new signals for workspace {ws.id}')
@@ -131,22 +127,25 @@ class SignalEngine:
 
         def poll_loop():
             consecutive_errors = 0
-            while True:
-                time.sleep(interval)
-                with app.app_context():
-                    try:
-                        count = cls.check_all_due()
-                        consecutive_errors = 0
-                        if count > 0:
-                            app.logger.info(f'Signal engine collected {count} new signals')
-                    except Exception as e:
-                        consecutive_errors += 1
-                        app.logger.error(f'Signal engine error (attempt {consecutive_errors}): {e}')
-                        if consecutive_errors >= 5:
-                            app.logger.critical(
-                                'Signal engine stopping after 5 consecutive errors'
-                            )
-                            break
+            try:
+                while True:
+                    time.sleep(interval)
+                    with app.app_context():
+                        try:
+                            count = cls.check_all_due()
+                            consecutive_errors = 0
+                            if count > 0:
+                                app.logger.info(f'Signal engine collected {count} new signals')
+                        except Exception as e:
+                            consecutive_errors += 1
+                            app.logger.error(f'Signal engine error (attempt {consecutive_errors}): {e}')
+                            if consecutive_errors >= 5:
+                                app.logger.critical(
+                                    'Signal engine stopping after 5 consecutive errors'
+                                )
+                                break
+            finally:
+                cls._thread = None
 
         cls._thread = threading.Thread(target=poll_loop, daemon=True)
         cls._thread.start()

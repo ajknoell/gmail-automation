@@ -79,8 +79,12 @@ function Triggers() {
   };
 
   const handleDismiss = async (triggerId) => {
-    await dismissTrigger(triggerId);
-    loadAll();
+    try {
+      await dismissTrigger(triggerId);
+      await loadAll();
+    } catch (err) {
+      alert('Failed to dismiss trigger: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   return (
@@ -111,7 +115,7 @@ function Triggers() {
       {/* Filter */}
       <div style={{ marginBottom: '1rem' }}>
         <select value={filterType} onChange={e => setFilterType(e.target.value)}
-          className="input" style={{ maxWidth: '200px' }}>
+          className="form-select" style={{ maxWidth: '200px' }}>
           <option value="">All Types</option>
           {Object.entries(TRIGGER_LABELS).map(([key, label]) => (
             <option key={key} value={key}>{label}</option>
@@ -171,8 +175,7 @@ function Triggers() {
                       View Email
                     </button>
                   )}
-                  <button className="btn btn-sm" onClick={() => handleDismiss(t.id)}
-                    style={{ color: 'var(--text-light)' }}>
+                  <button className="btn btn-sm btn-secondary" onClick={() => handleDismiss(t.id)}>
                     Dismiss
                   </button>
                 </div>

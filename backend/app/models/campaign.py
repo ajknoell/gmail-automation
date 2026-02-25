@@ -18,7 +18,7 @@ class Campaign(db.Model):
     use_ai_personalization = db.Column(db.Boolean, default=True)
     ai_prompt = db.Column(db.Text)  # Special instructions for AI
     campaign_context = db.Column(db.Text)  # Things to include in every email for this campaign
-    competitor_search_query = db.Column(db.Text)  # Tavily query for competitor discovery; None = disabled
+    competitor_search_query = db.Column(db.Text)  # Google Places query for competitor discovery; None = disabled
     attachments = db.Column(db.Text)  # JSON array of attachment metadata
     auto_send_enabled = db.Column(db.Boolean, default=False)
     auto_send_threshold = db.Column(db.Float, default=0.8)

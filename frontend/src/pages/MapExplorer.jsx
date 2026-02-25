@@ -3,39 +3,156 @@ import {
   getMapApiKey,
   geocodeAddress,
   searchNearbyPlaces,
+  textSearchPlaces,
   addPlaceToOutreach,
+  addPlaceToPipeline,
+  bulkAddToPipeline,
+  getMapSources,
   getCampaigns,
 } from '../api/client';
 
-const BUSINESS_TYPES = [
-  { value: '', label: 'All Types' },
-  { value: 'restaurant', label: 'Restaurant' },
-  { value: 'cafe', label: 'Cafe' },
-  { value: 'bar', label: 'Bar' },
-  { value: 'store', label: 'Retail Store' },
-  { value: 'plumber', label: 'Plumber' },
-  { value: 'electrician', label: 'Electrician' },
-  { value: 'dentist', label: 'Dentist' },
-  { value: 'doctor', label: 'Doctor' },
-  { value: 'lawyer', label: 'Lawyer' },
-  { value: 'accounting', label: 'Accounting' },
-  { value: 'real_estate_agency', label: 'Real Estate' },
-  { value: 'insurance_agency', label: 'Insurance' },
-  { value: 'car_repair', label: 'Auto Repair' },
-  { value: 'beauty_salon', label: 'Beauty Salon' },
-  { value: 'hair_care', label: 'Hair Care' },
-  { value: 'gym', label: 'Gym / Fitness' },
-  { value: 'veterinary_care', label: 'Veterinarian' },
-  { value: 'bakery', label: 'Bakery' },
-  { value: 'florist', label: 'Florist' },
-  { value: 'laundry', label: 'Laundry' },
-  { value: 'locksmith', label: 'Locksmith' },
-  { value: 'moving_company', label: 'Moving Company' },
-  { value: 'painter', label: 'Painter' },
-  { value: 'pet_store', label: 'Pet Store' },
-  { value: 'pharmacy', label: 'Pharmacy' },
-  { value: 'roofing_contractor', label: 'Roofing' },
-  { value: 'travel_agency', label: 'Travel Agency' },
+const BUSINESS_TYPE_GROUPS = [
+  {
+    label: 'Food & Dining',
+    types: [
+      { value: 'restaurant', label: 'Restaurant' },
+      { value: 'cafe', label: 'Cafe' },
+      { value: 'bar', label: 'Bar' },
+      { value: 'bakery', label: 'Bakery' },
+      { value: 'pizza_restaurant', label: 'Pizza Restaurant' },
+      { value: 'ice_cream_shop', label: 'Ice Cream Shop' },
+      { value: 'coffee_shop', label: 'Coffee Shop' },
+      { value: 'meal_delivery', label: 'Meal Delivery' },
+      { value: 'meal_takeaway', label: 'Meal Takeaway' },
+      { value: 'night_club', label: 'Night Club' },
+    ],
+  },
+  {
+    label: 'Shopping & Retail',
+    types: [
+      { value: 'store', label: 'General Store' },
+      { value: 'grocery_store', label: 'Grocery Store' },
+      { value: 'convenience_store', label: 'Convenience Store' },
+      { value: 'clothing_store', label: 'Clothing Store' },
+      { value: 'shoe_store', label: 'Shoe Store' },
+      { value: 'jewelry_store', label: 'Jewelry Store' },
+      { value: 'book_store', label: 'Book Store' },
+      { value: 'gift_shop', label: 'Gift Shop' },
+      { value: 'bicycle_store', label: 'Bicycle Store' },
+      { value: 'pet_store', label: 'Pet Store' },
+      { value: 'sporting_goods_store', label: 'Sporting Goods' },
+      { value: 'hardware_store', label: 'Hardware Store' },
+      { value: 'electronics_store', label: 'Electronics Store' },
+      { value: 'furniture_store', label: 'Furniture Store' },
+      { value: 'home_goods_store', label: 'Home Goods' },
+      { value: 'home_improvement_store', label: 'Home Improvement' },
+      { value: 'liquor_store', label: 'Liquor Store' },
+      { value: 'florist', label: 'Florist' },
+      { value: 'discount_store', label: 'Discount Store' },
+    ],
+  },
+  {
+    label: 'Health & Medical',
+    types: [
+      { value: 'doctor', label: 'Doctor' },
+      { value: 'dentist', label: 'Dentist' },
+      { value: 'pharmacy', label: 'Pharmacy' },
+      { value: 'veterinary_care', label: 'Veterinarian' },
+      { value: 'physiotherapist', label: 'Physiotherapist' },
+      { value: 'optician', label: 'Optician' },
+      { value: 'medical_lab', label: 'Medical Lab' },
+    ],
+  },
+  {
+    label: 'Beauty & Wellness',
+    types: [
+      { value: 'beauty_salon', label: 'Beauty Salon' },
+      { value: 'hair_salon', label: 'Hair Salon' },
+      { value: 'hair_care', label: 'Hair Care' },
+      { value: 'nail_salon', label: 'Nail Salon' },
+      { value: 'barbershop', label: 'Barbershop' },
+      { value: 'spa', label: 'Spa' },
+      { value: 'tattoo_shop', label: 'Tattoo Shop' },
+      { value: 'gym', label: 'Gym / Fitness' },
+    ],
+  },
+  {
+    label: 'Home & Trade Services',
+    types: [
+      { value: 'plumber', label: 'Plumber' },
+      { value: 'electrician', label: 'Electrician' },
+      { value: 'roofing_contractor', label: 'Roofing' },
+      { value: 'painter', label: 'Painter' },
+      { value: 'locksmith', label: 'Locksmith' },
+      { value: 'moving_company', label: 'Moving Company' },
+      { value: 'laundry', label: 'Laundry' },
+      { value: 'shoe_repair', label: 'Shoe Repair' },
+      { value: 'tailor', label: 'Tailor' },
+      { value: 'funeral_home', label: 'Funeral Home' },
+      { value: 'storage', label: 'Storage' },
+    ],
+  },
+  {
+    label: 'Auto & Transport',
+    types: [
+      { value: 'car_repair', label: 'Auto Repair' },
+      { value: 'car_wash', label: 'Car Wash' },
+      { value: 'car_dealer', label: 'Car Dealer' },
+      { value: 'car_rental', label: 'Car Rental' },
+      { value: 'gas_station', label: 'Gas Station' },
+      { value: 'electric_vehicle_charging_station', label: 'EV Charging' },
+    ],
+  },
+  {
+    label: 'Professional & Financial',
+    types: [
+      { value: 'lawyer', label: 'Lawyer' },
+      { value: 'accounting', label: 'Accounting' },
+      { value: 'real_estate_agency', label: 'Real Estate' },
+      { value: 'insurance_agency', label: 'Insurance' },
+      { value: 'consultant', label: 'Consultant' },
+      { value: 'travel_agency', label: 'Travel Agency' },
+      { value: 'courier_service', label: 'Courier Service' },
+    ],
+  },
+  {
+    label: 'Arts & Entertainment',
+    types: [
+      { value: 'art_gallery', label: 'Art Gallery' },
+      { value: 'museum', label: 'Museum' },
+      { value: 'movie_theater', label: 'Movie Theater' },
+      { value: 'bowling_alley', label: 'Bowling Alley' },
+      { value: 'amusement_center', label: 'Amusement Center' },
+      { value: 'event_venue', label: 'Event Venue' },
+      { value: 'wedding_venue', label: 'Wedding Venue' },
+    ],
+  },
+  {
+    label: 'Lodging',
+    types: [
+      { value: 'hotel', label: 'Hotel' },
+      { value: 'bed_and_breakfast', label: 'Bed & Breakfast' },
+      { value: 'campground', label: 'Campground' },
+      { value: 'rv_park', label: 'RV Park' },
+    ],
+  },
+  {
+    label: 'Education & Childcare',
+    types: [
+      { value: 'school', label: 'School' },
+      { value: 'preschool', label: 'Preschool' },
+      { value: 'child_care_agency', label: 'Child Care' },
+    ],
+  },
+  {
+    label: 'Other Niche',
+    types: [
+      { value: 'photo_studio', label: 'Photo Studio' },
+      { value: 'phone_repair', label: 'Phone Repair' },
+      { value: 'marina', label: 'Marina' },
+      { value: 'golf_course', label: 'Golf Course' },
+    ],
+  },
 ];
 
 const RATING_OPTIONS = [
@@ -80,9 +197,15 @@ function MapExplorer() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [sourceCounts, setSourceCounts] = useState(null); // {google: N, yelp: N, total: N}
+  const [dataSources, setDataSources] = useState({ google: true, yelp: false });
 
   // Filters
-  const [businessType, setBusinessType] = useState('');
+  const [selectedTypes, setSelectedTypes] = useState([]); // array of type values
+  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+  const typeDropdownRef = useRef(null);
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [searchMode, setSearchMode] = useState('type'); // 'type' or 'keyword'
   const [radius, setRadius] = useState(5000);
   const [minRating, setMinRating] = useState(0);
 
@@ -98,6 +221,7 @@ function MapExplorer() {
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
+  const [pipelineMsg, setPipelineMsg] = useState(null); // {type, message}
 
   // Map refs
   const mapRef = useRef(null);
@@ -122,6 +246,10 @@ function MapExplorer() {
       .then((res) => setCampaigns(res.data.campaigns || res.data || []))
       .catch(() => {});
 
+    getMapSources()
+      .then((res) => setDataSources(res.data))
+      .catch(() => {});
+
     const handleWsChange = () => {
       getCampaigns()
         .then((res) => setCampaigns(res.data.campaigns || res.data || []))
@@ -133,6 +261,17 @@ function MapExplorer() {
     };
     window.addEventListener('workspace-changed', handleWsChange);
     return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, []);
+
+  // Close type dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target)) {
+        setTypeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Initialize map when Maps JS API is loaded
@@ -224,15 +363,28 @@ function MapExplorer() {
       setCenter({ lat, lng });
       setFormattedAddress(formatted_address);
 
-      const searchRes = await searchNearbyPlaces({
-        lat,
-        lng,
-        radius,
-        type: businessType,
-        min_rating: minRating,
-        max_results: 20,
-      });
+      let searchRes;
+      if (searchMode === 'keyword' && keywordSearch.trim()) {
+        searchRes = await textSearchPlaces({
+          query: keywordSearch.trim(),
+          lat,
+          lng,
+          radius,
+          min_rating: minRating,
+          max_results: 20,
+        });
+      } else {
+        searchRes = await searchNearbyPlaces({
+          lat,
+          lng,
+          radius,
+          types: selectedTypes.length > 0 ? selectedTypes : undefined,
+          min_rating: minRating,
+          max_results: 20,
+        });
+      }
       setResults(searchRes.data.results || []);
+      setSourceCounts(searchRes.data.sources || null);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found in this area. Try expanding your radius or changing the business type.');
       }
@@ -240,27 +392,45 @@ function MapExplorer() {
       const msg = err.response?.data?.error || 'Search failed. Please try again.';
       setError(msg);
       setResults([]);
+      setSourceCounts(null);
     }
     setSearching(false);
   };
 
   // Re-search when filters change (if we already have a center)
-  const handleFilterSearch = useCallback(async (newType, newRadius, newRating) => {
+  const handleFilterSearch = useCallback(async (types, newRadius, newRating, mode, keyword) => {
     if (!center) return;
     setError('');
     setSearching(true);
     setSelectedPlace(null);
 
+    const activeMode = mode !== undefined ? mode : searchMode;
+    const activeKeyword = keyword !== undefined ? keyword : keywordSearch;
+    const activeTypes = types !== undefined ? types : selectedTypes;
+
     try {
-      const searchRes = await searchNearbyPlaces({
-        lat: center.lat,
-        lng: center.lng,
-        radius: newRadius,
-        type: newType,
-        min_rating: newRating,
-        max_results: 20,
-      });
+      let searchRes;
+      if (activeMode === 'keyword' && activeKeyword.trim()) {
+        searchRes = await textSearchPlaces({
+          query: activeKeyword.trim(),
+          lat: center.lat,
+          lng: center.lng,
+          radius: newRadius,
+          min_rating: newRating,
+          max_results: 20,
+        });
+      } else {
+        searchRes = await searchNearbyPlaces({
+          lat: center.lat,
+          lng: center.lng,
+          radius: newRadius,
+          types: activeTypes.length > 0 ? activeTypes : undefined,
+          min_rating: newRating,
+          max_results: 20,
+        });
+      }
       setResults(searchRes.data.results || []);
+      setSourceCounts(searchRes.data.sources || null);
       if ((searchRes.data.results || []).length === 0) {
         setError('No businesses found with these filters. Try adjusting your criteria.');
       }
@@ -268,7 +438,7 @@ function MapExplorer() {
       setError('Search failed.');
     }
     setSearching(false);
-  }, [center]);
+  }, [center, searchMode, keywordSearch, selectedTypes]);
 
   // Add to outreach modal handlers
   const openAddModal = (place) => {
@@ -318,6 +488,45 @@ function MapExplorer() {
       });
     }
     setAdding(false);
+  };
+
+  const handleAddToPipeline = async (place) => {
+    try {
+      const res = await addPlaceToPipeline({
+        place_id: place.place_id,
+        name: place.name,
+        address: place.address,
+        phone: place.phone,
+        website: place.website,
+        rating: place.rating,
+        user_ratings_total: place.user_ratings_total,
+        primary_type: place.primary_type,
+        lat: place.lat,
+        lng: place.lng,
+      });
+      if (res.data.existed) {
+        setPipelineMsg({ type: 'info', message: `"${place.name}" already in pipeline` });
+      } else {
+        setPipelineMsg({ type: 'success', message: `"${place.name}" added to pipeline` });
+      }
+    } catch (err) {
+      setPipelineMsg({ type: 'error', message: err.response?.data?.error || 'Failed to add' });
+    }
+    setTimeout(() => setPipelineMsg(null), 3000);
+  };
+
+  const handleBulkAddToPipeline = async () => {
+    if (!results.length) return;
+    try {
+      const res = await bulkAddToPipeline(results);
+      setPipelineMsg({
+        type: 'success',
+        message: `Added ${res.data.added} to pipeline (${res.data.skipped} duplicates skipped)`,
+      });
+    } catch (err) {
+      setPipelineMsg({ type: 'error', message: err.response?.data?.error || 'Bulk add failed' });
+    }
+    setTimeout(() => setPipelineMsg(null), 4000);
   };
 
   const formatType = (type) => {
@@ -417,6 +626,17 @@ function MapExplorer() {
         </button>
       </div>
 
+      {/* Data sources indicator */}
+      <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginBottom: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <span>Sources:</span>
+        <span style={{ color: dataSources.google ? '#10B981' : '#EF4444' }}>
+          Google Maps {dataSources.google ? '\u2713' : '\u2717'}
+        </span>
+        <span style={{ color: dataSources.yelp ? '#10B981' : '#6B7280' }}>
+          Yelp {dataSources.yelp ? '\u2713' : '(add key in Settings)'}
+        </span>
+      </div>
+
       {/* Filters */}
       <div style={{
         display: 'flex',
@@ -425,27 +645,229 @@ function MapExplorer() {
         flexWrap: 'wrap',
         alignItems: 'center',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Type:</label>
-          <select
-            value={businessType}
-            onChange={(e) => {
-              setBusinessType(e.target.value);
-              handleFilterSearch(e.target.value, radius, minRating);
+        {/* Search mode toggle */}
+        <div style={{
+          display: 'flex',
+          border: '1px solid #D1D5DB',
+          borderRadius: '0.375rem',
+          overflow: 'hidden',
+        }}>
+          <button
+            onClick={() => {
+              setSearchMode('type');
+              if (center && selectedTypes.length > 0) {
+                handleFilterSearch(selectedTypes, radius, minRating, 'type');
+              }
             }}
             style={{
-              padding: '0.35rem 0.5rem',
-              border: '1px solid #D1D5DB',
-              borderRadius: '0.375rem',
-              fontSize: '0.8rem',
-              background: '#fff',
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              border: 'none',
+              cursor: 'pointer',
+              background: searchMode === 'type' ? '#3B82F6' : '#fff',
+              color: searchMode === 'type' ? '#fff' : '#374151',
             }}
           >
-            {BUSINESS_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
+            By Category
+          </button>
+          <button
+            onClick={() => {
+              setSearchMode('keyword');
+            }}
+            style={{
+              padding: '0.3rem 0.6rem',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              border: 'none',
+              borderLeft: '1px solid #D1D5DB',
+              cursor: 'pointer',
+              background: searchMode === 'keyword' ? '#3B82F6' : '#fff',
+              color: searchMode === 'keyword' ? '#fff' : '#374151',
+            }}
+          >
+            Custom Search
+          </button>
         </div>
+
+        {searchMode === 'type' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Types:</label>
+            <div ref={typeDropdownRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setTypeDropdownOpen((o) => !o)}
+                style={{
+                  padding: '0.35rem 0.5rem',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.8rem',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  minWidth: '180px',
+                  textAlign: 'left',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {selectedTypes.length === 0
+                    ? 'All Types'
+                    : `${selectedTypes.length} selected`}
+                </span>
+                <span style={{ fontSize: '0.6rem', lineHeight: 1 }}>{typeDropdownOpen ? '\u25B2' : '\u25BC'}</span>
+              </button>
+              {typeDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  zIndex: 1000,
+                  background: '#fff',
+                  border: '1px solid #D1D5DB',
+                  borderRadius: '0.5rem',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  width: '260px',
+                  maxHeight: '360px',
+                  overflowY: 'auto',
+                  marginTop: '2px',
+                }}>
+                  {/* Clear / Select all row */}
+                  <div style={{
+                    padding: '0.4rem 0.6rem',
+                    borderBottom: '1px solid #E5E7EB',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                  }}>
+                    <button
+                      onClick={() => {
+                        setSelectedTypes([]);
+                        handleFilterSearch([], radius, minRating, 'type');
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#3B82F6', cursor: 'pointer', fontWeight: 500, fontSize: '0.75rem', padding: 0 }}
+                    >
+                      Clear all
+                    </button>
+                    <span style={{ color: '#9CA3AF' }}>
+                      {selectedTypes.length} selected
+                    </span>
+                  </div>
+                  {BUSINESS_TYPE_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <div style={{
+                        padding: '0.35rem 0.6rem',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        color: '#6B7280',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.03em',
+                        background: '#F9FAFB',
+                        borderBottom: '1px solid #F3F4F6',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}>
+                        <span>{group.label}</span>
+                        <button
+                          onClick={() => {
+                            const groupValues = group.types.map((t) => t.value);
+                            const allSelected = groupValues.every((v) => selectedTypes.includes(v));
+                            let newTypes;
+                            if (allSelected) {
+                              newTypes = selectedTypes.filter((v) => !groupValues.includes(v));
+                            } else {
+                              newTypes = [...new Set([...selectedTypes, ...groupValues])];
+                            }
+                            setSelectedTypes(newTypes);
+                            handleFilterSearch(newTypes, radius, minRating, 'type');
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#3B82F6', cursor: 'pointer', fontSize: '0.65rem', padding: 0 }}
+                        >
+                          {group.types.every((t) => selectedTypes.includes(t.value)) ? 'Deselect' : 'Select all'}
+                        </button>
+                      </div>
+                      {group.types.map((t) => (
+                        <label
+                          key={t.value}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.3rem 0.6rem',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #F9FAFB',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#F3F4F6'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTypes.includes(t.value)}
+                            onChange={() => {
+                              const newTypes = selectedTypes.includes(t.value)
+                                ? selectedTypes.filter((v) => v !== t.value)
+                                : [...selectedTypes, t.value];
+                              setSelectedTypes(newTypes);
+                              handleFilterSearch(newTypes, radius, minRating, 'type');
+                            }}
+                            style={{ margin: 0 }}
+                          />
+                          {t.label}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>Find:</label>
+            <input
+              type="text"
+              value={keywordSearch}
+              onChange={(e) => setKeywordSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && center && keywordSearch.trim()) {
+                  handleFilterSearch(selectedTypes, radius, minRating, 'keyword', keywordSearch);
+                }
+              }}
+              placeholder="e.g. mobile dog groomer, vegan bakery"
+              style={{
+                padding: '0.35rem 0.5rem',
+                border: '1px solid #D1D5DB',
+                borderRadius: '0.375rem',
+                fontSize: '0.8rem',
+                background: '#fff',
+                minWidth: '250px',
+              }}
+            />
+            <button
+              onClick={() => {
+                if (center && keywordSearch.trim()) {
+                  handleFilterSearch(selectedTypes, radius, minRating, 'keyword', keywordSearch);
+                }
+              }}
+              disabled={searching || !keywordSearch.trim() || !center}
+              style={{
+                padding: '0.3rem 0.6rem',
+                background: (searching || !keywordSearch.trim() || !center) ? '#9CA3AF' : '#3B82F6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '0.375rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: (searching || !keywordSearch.trim() || !center) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Go
+            </button>
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>
@@ -461,8 +883,8 @@ function MapExplorer() {
               const v = parseInt(e.target.value);
               setRadius(v);
             }}
-            onMouseUp={() => handleFilterSearch(businessType, radius, minRating)}
-            onTouchEnd={() => handleFilterSearch(businessType, radius, minRating)}
+            onMouseUp={() => handleFilterSearch(selectedTypes, radius, minRating)}
+            onTouchEnd={() => handleFilterSearch(selectedTypes, radius, minRating)}
             style={{ width: '120px' }}
           />
         </div>
@@ -474,7 +896,7 @@ function MapExplorer() {
             onChange={(e) => {
               const v = parseFloat(e.target.value);
               setMinRating(v);
-              handleFilterSearch(businessType, radius, v);
+              handleFilterSearch(selectedTypes, radius, v);
             }}
             style={{
               padding: '0.35rem 0.5rem',
@@ -540,9 +962,45 @@ function MapExplorer() {
                 fontSize: '0.8rem',
                 color: '#6B7280',
                 fontWeight: 500,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}>
-                {results.length} business{results.length !== 1 ? 'es' : ''} found
+                <span>
+                  {results.length} business{results.length !== 1 ? 'es' : ''} found
+                  {sourceCounts && sourceCounts.yelp > 0 && (
+                    <span style={{ marginLeft: 6, fontSize: '0.65rem', color: '#9CA3AF' }}>
+                      (Google: {sourceCounts.google}, Yelp: {sourceCounts.yelp})
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={handleBulkAddToPipeline}
+                  style={{
+                    padding: '0.2rem 0.5rem',
+                    background: '#7C3AED',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '0.25rem',
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  All to Pipeline
+                </button>
               </div>
+              {pipelineMsg && (
+                <div style={{
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  background: pipelineMsg.type === 'success' ? '#D1FAE5' : pipelineMsg.type === 'error' ? '#FEE2E2' : '#DBEAFE',
+                  color: pipelineMsg.type === 'success' ? '#065F46' : pipelineMsg.type === 'error' ? '#991B1B' : '#1E40AF',
+                }}>
+                  {pipelineMsg.message}
+                </div>
+              )}
               {results.map((place) => (
                 <div
                   key={place.place_id}
@@ -577,42 +1035,76 @@ function MapExplorer() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.2rem' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                         {place.name}
+                        {place.sources && place.sources.length > 1 && (
+                          <span style={{ fontSize: '0.55rem', background: '#DBEAFE', color: '#1E40AF', padding: '1px 4px', borderRadius: 3, fontWeight: 500 }}>
+                            2 sources
+                          </span>
+                        )}
+                        {place.source === 'yelp' && (!place.sources || place.sources.length === 1) && (
+                          <span style={{ fontSize: '0.55rem', background: '#FEE2E2', color: '#DC2626', padding: '1px 4px', borderRadius: 3, fontWeight: 500 }}>
+                            Yelp
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '0.75rem', color: '#6B7280', marginBottom: '0.2rem' }}>
                         {place.address}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#9CA3AF', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         {place.rating > 0 && (
                           <span style={{ color: '#F59E0B' }}>{renderStars(place.rating)}</span>
                         )}
                         {place.primary_type && (
                           <span>{formatType(place.primary_type)}</span>
                         )}
+                        {place.yelp_price && (
+                          <span style={{ color: '#059669' }}>{place.yelp_price}</span>
+                        )}
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAddModal(place);
-                      }}
-                      title="Add to outreach"
-                      style={{
-                        padding: '0.25rem 0.5rem',
-                        background: '#10B981',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                      }}
-                    >
-                      + Add
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flexShrink: 0 }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddToPipeline(place);
+                        }}
+                        title="Add to pipeline for enrichment"
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: '#7C3AED',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Pipeline
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAddModal(place);
+                        }}
+                        title="Add to outreach"
+                        style={{
+                          padding: '0.25rem 0.5rem',
+                          background: '#10B981',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '0.375rem',
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        + Add
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

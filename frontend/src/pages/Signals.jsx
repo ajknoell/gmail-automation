@@ -4,6 +4,7 @@ import {
   getSignalStats, signalCollectNow,
   getSignalSources, createSignalSource,
 } from '../api/client';
+import { useToast } from '../components/Toast';
 
 const SOURCE_LABELS = {
   website: 'Website',
@@ -45,6 +46,7 @@ function IntentBadge({ score }) {
 }
 
 function Signals() {
+  const showToast = useToast();
   const [signals, setSignals] = useState([]);
   const [stats, setStats] = useState({});
   const [sources, setSources] = useState([]);
@@ -80,10 +82,10 @@ function Signals() {
     setCollecting(true);
     try {
       await signalCollectNow();
-      alert('Signal collection started in background.');
+      showToast('Signal collection started in background', 'info');
       setTimeout(loadAll, 5000);
     } catch (err) {
-      alert('Collection failed: ' + (err.response?.data?.error || err.message));
+      showToast('Collection failed: ' + (err.response?.data?.error || err.message), 'error');
     }
     setCollecting(false);
   };
@@ -95,7 +97,7 @@ function Signals() {
       setOutreachPreview(res.data);
       loadAll();
     } catch (err) {
-      alert('Generation failed: ' + (err.response?.data?.error || err.message));
+      showToast('Generation failed: ' + (err.response?.data?.error || err.message), 'error');
     }
     setGeneratingId(null);
   };
@@ -110,7 +112,7 @@ function Signals() {
       await createSignalSource({ source_type: sourceType });
       loadAll();
     } catch (err) {
-      alert('Failed to add source: ' + (err.response?.data?.error || err.message));
+      showToast('Failed to add source: ' + (err.response?.data?.error || err.message), 'error');
     }
   };
 

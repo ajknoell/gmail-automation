@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 
@@ -15,9 +16,13 @@ const TOOLBAR_OPTIONS = [
 /**
  * Reusable rich text editor component.
  *
+ * Uses internal state to avoid re-render lag. Saves are debounced (800ms)
+ * and also fire on blur so edits are never lost.
+ *
  * Props:
- *   value: HTML string
- *   onChange: (html) => void
+ *   value: HTML string (used as initial value; external changes only apply
+ *          when the value is replaced wholesale, e.g. after regeneration)
+ *   onChange: (html) => void — called on debounced save and blur
  *   placeholder: string
  *   style: object — applied to the wrapper div
  *   minHeight: string — min height for the editor area (default '200px')
@@ -31,11 +36,52 @@ export default function RichTextEditor({
   minHeight = '200px',
   compact = false,
 }) {
-  const modules = {
+  const [localValue, setLocalValue] = useState(value);
+  const debounceRef = useRef(null);
+  const lastSavedRef = useRef(value);
+
+  // Sync from parent when the value is replaced externally (e.g. regeneration).
+  // We compare against lastSavedRef to avoid overwriting the user's in-progress edits.
+  useEffect(() => {
+    if (value !== lastSavedRef.current) {
+      setLocalValue(value);
+      lastSavedRef.current = value;
+    }
+  }, [value]);
+
+  const handleChange = useCallback((html) => {
+    setLocalValue(html);
+    // Debounce the save
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (onChange && html !== lastSavedRef.current) {
+        lastSavedRef.current = html;
+        onChange(html);
+      }
+    }, 800);
+  }, [onChange]);
+
+  const handleBlur = useCallback(() => {
+    // Flush any pending debounce and save immediately
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (onChange && localValue !== lastSavedRef.current) {
+      lastSavedRef.current = localValue;
+      onChange(localValue);
+    }
+  }, [onChange, localValue]);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const modules = useMemo(() => ({
     toolbar: compact
       ? [['bold', 'italic', 'underline'], ['link'], [{ list: 'ordered' }, { list: 'bullet' }], ['clean']]
       : TOOLBAR_OPTIONS,
-  };
+  }), [compact]);
 
   return (
     <div
@@ -67,8 +113,9 @@ export default function RichTextEditor({
       `}</style>
       <ReactQuill
         theme="snow"
-        value={value}
-        onChange={onChange}
+        value={localValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
         modules={modules}
         placeholder={placeholder}
       />

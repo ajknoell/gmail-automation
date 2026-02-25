@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getOpportunityFeed, createSignalOutreach } from '../api/client';
+import { useToast } from '../components/Toast';
 
 const SOURCE_ICONS = {
   website: '\u{1F310}',
@@ -34,6 +35,7 @@ function ScoreBadge({ score, label }) {
 }
 
 function OpportunityFeed() {
+  const showToast = useToast();
   const [opportunities, setOpportunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -63,7 +65,7 @@ function OpportunityFeed() {
       await createSignalOutreach(signalId);
       try { await loadFeed(); } catch (_) { /* reload failed, non-critical */ }
     } catch (err) {
-      alert('Generation failed: ' + (err.response?.data?.error || err.message));
+      showToast('Generation failed: ' + (err.response?.data?.error || err.message), 'error');
     } finally {
       setGeneratingId(null);
     }
