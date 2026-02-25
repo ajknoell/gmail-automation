@@ -1,10 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { path: '/brief', label: 'Brief', icon: '📋' },
-  { path: '/discovery', label: 'Discover', icon: '🔍' },
-  { path: '/replies', label: 'Replies', icon: '💬' },
-  { path: '/contacts', label: 'Contacts', icon: '👥' },
+  { path: '/', label: 'Today', icon: 'V', exact: true },
+  { path: '/prospects', label: 'Prospects', icon: 'P' },
+  { path: '/campaigns', label: 'Campaigns', icon: 'C' },
+  { path: '/replies', label: 'Inbox', icon: 'I' },
 ];
 
 function MobileLayout({ children }) {
@@ -17,7 +17,9 @@ function MobileLayout({ children }) {
       </div>
       <nav className="mobile-bottom-nav">
         {NAV_ITEMS.map(item => {
-          const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+          const isActive = item.exact
+            ? location.pathname === item.path
+            : location.pathname === item.path || location.pathname.startsWith(item.path + '/');
           return (
             <Link
               key={item.path}
