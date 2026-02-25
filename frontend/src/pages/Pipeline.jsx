@@ -157,8 +157,12 @@ function Pipeline() {
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this lead?')) return;
-    await deletePipelineLead(id);
-    loadData();
+    try {
+      await deletePipelineLead(id);
+      await loadData();
+    } catch (err) {
+      alert('Failed to delete lead: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   const scoreColor = (score) => {
