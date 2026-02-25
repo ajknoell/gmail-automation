@@ -24,7 +24,7 @@ function Pipeline() {
   const [selected, setSelected] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [enrichingIds, setEnrichingIds] = useState(new Set());
-  const [filter, setFilter] = useState({ status: '', min_score: '' });
+  const [filter, setFilter] = useState({ status: '', min_score: '', retirement_label: '' });
   const [sort, setSort] = useState({ by: 'created_at', order: 'desc' });
   const [search, setSearch] = useState('');
   const [approveModal, setApproveModal] = useState(null);
@@ -40,6 +40,7 @@ function Pipeline() {
       const params = { sort: sort.by, order: sort.order };
       if (filter.status) params.status = filter.status;
       if (filter.min_score) params.min_score = filter.min_score;
+      if (filter.retirement_label) params.retirement_label = filter.retirement_label;
 
       const [leadsRes, statsRes, campaignsRes] = await Promise.all([
         getPipelineLeads(params),
@@ -193,6 +194,12 @@ function Pipeline() {
     return '#EF4444';
   };
 
+  const retirementColor = (label) => {
+    if (label === 'high') return '#F59E0B';
+    if (label === 'medium') return '#3B82F6';
+    return '#6B7280';
+  };
+
   if (loading) {
     return (
       <div style={{ maxWidth: 1400 }}>
@@ -247,6 +254,8 @@ function Pipeline() {
         <StatCard label="Approved" value={(stats.by_status?.approved || 0) + (stats.by_status?.in_campaign || 0)} color="#10B981" />
         <StatCard label="Avg Score" value={stats.avg_score || 0} color="#4F46E5" />
         <StatCard label="Has Email" value={stats.with_email || 0} color="#059669" />
+        <StatCard label="Has Employee #" value={stats.with_employee_count || 0} color="#7C3AED" />
+        <StatCard label="Likely Retiring" value={stats.with_high_retirement || 0} color="#F59E0B" />
       </div>
 
       {/* Search */}
@@ -296,6 +305,18 @@ function Pipeline() {
         <select
           className="form-select"
           style={{ width: 'auto' }}
+          value={filter.retirement_label}
+          onChange={e => setFilter(f => ({ ...f, retirement_label: e.target.value }))}
+        >
+          <option value="">Any Retirement</option>
+          <option value="high">Likely Retiring</option>
+          <option value="medium">Maybe Retiring</option>
+          <option value="low">Unlikely</option>
+        </select>
+
+        <select
+          className="form-select"
+          style={{ width: 'auto' }}
           value={`${sort.by}:${sort.order}`}
           onChange={e => {
             const [by, order] = e.target.value.split(':');
@@ -306,6 +327,8 @@ function Pipeline() {
           <option value="created_at:asc">Oldest First</option>
           <option value="score:desc">Highest Score</option>
           <option value="score:asc">Lowest Score</option>
+          <option value="retirement_score:desc">Highest Retirement</option>
+          <option value="retirement_score:asc">Lowest Retirement</option>
           <option value="employee_count:desc">Most Employees</option>
           <option value="employee_count:asc">Fewest Employees</option>
         </select>
@@ -368,6 +391,7 @@ function Pipeline() {
                 <th>Rating</th>
                 <th>Enrichment</th>
                 <th>Score</th>
+                <th>Retirement</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -386,6 +410,7 @@ function Pipeline() {
                   expanded={expandedLead === lead.id}
                   onExpand={() => setExpandedLead(expandedLead === lead.id ? null : lead.id)}
                   scoreColor={scoreColor}
+                  retirementColor={retirementColor}
                 />
               ))}
             </tbody>
@@ -473,7 +498,7 @@ function Pipeline() {
   );
 }
 
-function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enriching, expanded, onExpand, scoreColor }) {
+function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enriching, expanded, onExpand, scoreColor, retirementColor }) {
   const emails = lead.emails_found || [];
   const hasEmail = emails.length > 0;
 
@@ -547,6 +572,27 @@ function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enri
           ) : <span className="text-light">--</span>}
         </td>
         <td>
+          {lead.retirement_score != null ? (
+            <span style={{
+              fontWeight: 600,
+              color: retirementColor(lead.retirement_label),
+              background: retirementColor(lead.retirement_label) + '20',
+              padding: '2px 8px',
+              borderRadius: 4,
+              fontSize: '0.75rem',
+            }}>
+              {lead.retirement_label === 'high' ? 'Likely' :
+               lead.retirement_label === 'medium' ? 'Maybe' :
+               lead.retirement_label === 'low' ? 'Unlikely' : '?'}
+              <span style={{ fontSize: '0.625rem', marginLeft: 4, opacity: 0.7 }}>
+                {lead.retirement_score}
+              </span>
+            </span>
+          ) : (
+            <span className="text-light">{lead.status === 'new' ? '' : '—'}</span>
+          )}
+        </td>
+        <td>
           <span className={`badge badge-${lead.status}`}>
             {STATUS_LABELS[lead.status] || lead.status}
           </span>
@@ -577,9 +623,9 @@ function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enri
       {/* Expanded detail row */}
       {expanded && (
         <tr>
-          <td colSpan={7} style={{ background: 'var(--bg)', padding: 0 }}>
+          <td colSpan={8} style={{ background: 'var(--bg)', padding: 0 }}>
             <div style={{ padding: '1rem 1.5rem' }}>
-              <div className="grid grid-3">
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                 <div>
                   <h4 className="text-light" style={{ margin: '0 0 8px', fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                     Contact Info
@@ -610,6 +656,27 @@ function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enri
                   ))}
                   {(!lead.score_breakdown || Object.keys(lead.score_breakdown).length === 0) && (
                     <span className="text-light text-sm">Not scored yet</span>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-light" style={{ margin: '0 0 8px', fontWeight: 500, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    Retirement Signals
+                  </h4>
+                  {lead.retirement_score != null ? (
+                    <>
+                      <Detail label="Score" value={`${lead.retirement_score}/100 (${lead.retirement_label})`} />
+                      {lead.enrichment_data?.retirement_signals?.analysis?.key_evidence?.map((ev, i) => (
+                        <div key={i} style={{ marginBottom: 4 }} className="text-sm">
+                          <span className="text-light">Signal: </span>
+                          <span>{ev}</span>
+                        </div>
+                      ))}
+                      {(!lead.enrichment_data?.retirement_signals?.analysis?.key_evidence?.length) && (
+                        <span className="text-light text-sm">No specific signals found</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-light text-sm">Not assessed yet</span>
                   )}
                 </div>
               </div>

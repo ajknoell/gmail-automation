@@ -57,6 +57,10 @@ class Lead(db.Model):
     score = db.Column(db.Integer)  # 0-100
     score_breakdown = db.Column(db.Text)  # JSON
 
+    # Retirement likelihood detection
+    retirement_score = db.Column(db.Integer)  # 0-100, NULL = not assessed
+    retirement_label = db.Column(db.String(20))  # 'high', 'medium', 'low', 'unknown'
+
     # Pipeline status
     status = db.Column(db.String(20), default='new', index=True)
     source = db.Column(db.String(50), default='map_explorer')  # map_explorer, discovery, manual
@@ -126,6 +130,8 @@ class Lead(db.Model):
             'enrichment_data': self.get_enrichment_data(),
             'score': self.score,
             'score_breakdown': self.get_score_breakdown(),
+            'retirement_score': self.retirement_score,
+            'retirement_label': self.retirement_label,
             'status': self.status,
             'status_label': LEAD_STATUS_LABELS.get(self.status, 'New'),
             'status_color': LEAD_STATUS_COLORS.get(self.status, '#6B7280'),

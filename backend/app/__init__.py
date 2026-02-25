@@ -236,6 +236,10 @@ def _run_migrations(app):
     _add_column('reply_messages', 'flagged_for_review', 'BOOLEAN', default=0)
     _add_column('reply_messages', 'flag_reason', 'VARCHAR(200)')
 
+    # Owner retirement likelihood detection
+    _add_column('leads', 'retirement_score', 'INTEGER')
+    _add_column('leads', 'retirement_label', 'VARCHAR(20)')
+
     # Create index on tracking_id
     try:
         db.session.execute(text('CREATE INDEX IF NOT EXISTS idx_email_logs_tracking_id ON email_logs(tracking_id)'))
