@@ -81,6 +81,9 @@ def create_app(config_class=None):
         # Backfill contacts from existing email logs (one-time)
         _backfill_contacts(app)
 
+        # Backfill delay_minutes from delay_days (one-time)
+        _backfill_delay_minutes(app)
+
         # Ensure default workspace exists and backfill workspace_id
         _ensure_default_workspace(app)
 
@@ -251,6 +254,15 @@ def _run_migrations(app):
     _add_column('leads', 'retirement_score', 'INTEGER')
     _add_column('leads', 'retirement_label', 'VARCHAR(20)')
 
+    # Flexible delay timing (minutes instead of days)
+    _add_column('campaign_steps', 'delay_minutes', 'INTEGER')
+
+    # A/B testing fields
+    _add_column('campaign_steps', 'variant_group', 'VARCHAR(50)')
+    _add_column('campaign_steps', 'variant_label', 'VARCHAR(20)')
+    _add_column('campaign_steps', 'variant_pct', 'INTEGER')
+    _add_column('step_recipients', 'variant_assignment', 'VARCHAR(50)')
+
     # Create index on tracking_id
     try:
         db.session.execute(text('CREATE INDEX IF NOT EXISTS idx_email_logs_tracking_id ON email_logs(tracking_id)'))
@@ -306,6 +318,23 @@ def _backfill_contacts(app):
     if count > 0:
         db.session.commit()
         app.logger.info(f'Backfilled {count} contacts from email_logs')
+
+
+def _backfill_delay_minutes(app):
+    """One-time backfill of delay_minutes from delay_days for existing campaign steps."""
+    from app.models.campaign_step import CampaignStep
+
+    steps = CampaignStep.query.filter(
+        CampaignStep.delay_minutes.is_(None),
+        CampaignStep.delay_days.isnot(None),
+    ).all()
+    if not steps:
+        return
+
+    for step in steps:
+        step.delay_minutes = (step.delay_days or 3) * 1440
+    db.session.commit()
+    app.logger.info(f'Backfilled delay_minutes for {len(steps)} campaign steps')
 
 
 def _ensure_default_workspace(app):

@@ -35,6 +35,7 @@ import {
   approveStepRecipients,
   startStep,
   getTemplates,
+  createABTest,
 } from '../api/client';
 import AttachmentPicker from '../components/AttachmentPicker';
 import RichTextEditor from '../components/RichTextEditor';
@@ -714,6 +715,15 @@ function CampaignDetail() {
     }
   };
 
+  const handleCreateABTest = async (data) => {
+    try {
+      await createABTest(id, data);
+      loadData();
+    } catch (error) {
+      alert('Failed to create A/B test: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const handleGenerateStepPreview = async (stepId) => {
     try {
       const res = await generateStepPreview(id, stepId);
@@ -1196,6 +1206,7 @@ function CampaignDetail() {
           onApproveStep={handleApproveStep}
           onStartStep={handleStartStep}
           onReloadSteps={loadData}
+          onCreateABTest={handleCreateABTest}
         />
       )}
 
