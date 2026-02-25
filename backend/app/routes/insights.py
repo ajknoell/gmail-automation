@@ -43,7 +43,14 @@ def get_insights():
             pass
 
     # Compute live summary stats (no Claude call needed)
-    summary = {}
+    summary = {
+        'total_sent': 0,
+        'open_rate': 0,
+        'click_rate': 0,
+        'reply_rate': 0,
+        'positive_reply_rate': 0,
+        'avg_score': 0,
+    }
     api_key = Settings.get('anthropic_api_key')
     if api_key:
         try:

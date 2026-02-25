@@ -230,7 +230,7 @@ function Home({ status }) {
             </div>
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '1.75rem', fontWeight: 700, color: insightsSummary?.reply_rate > 0 ? 'var(--success)' : 'var(--text)' }}>
-                {insightsSummary ? `${insightsSummary.reply_rate}%` : '--'}
+                {insightsSummary?.reply_rate != null ? `${insightsSummary.reply_rate}%` : '--'}
               </div>
               <div className="text-sm text-light">Reply Rate</div>
             </div>
