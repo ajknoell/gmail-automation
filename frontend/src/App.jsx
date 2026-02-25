@@ -20,6 +20,7 @@ import Triggers from './pages/Triggers';
 import Pipeline from './pages/Pipeline';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
+import { ToastProvider } from './components/Toast';
 import './App.css';
 
 function NavLink({ to, children, exact }) {
@@ -86,17 +87,20 @@ function App() {
 
   if (isMobile) {
     return (
-      <Router>
-        <MobileLayout>
-          <main className="main main-mobile">
-            {routeElements}
-          </main>
-        </MobileLayout>
-      </Router>
+      <ToastProvider>
+        <Router>
+          <MobileLayout>
+            <main className="main main-mobile">
+              {routeElements}
+            </main>
+          </MobileLayout>
+        </Router>
+      </ToastProvider>
     );
   }
 
   return (
+    <ToastProvider>
     <Router>
       <div className="app">
         <header className="header">
@@ -219,6 +223,7 @@ function App() {
         </div>
       </div>
     </Router>
+    </ToastProvider>
   );
 }
 

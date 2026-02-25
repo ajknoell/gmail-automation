@@ -26,8 +26,8 @@ function Campaigns() {
   }, []);
 
   const loadData = () => {
-    getCampaigns().then((res) => setCampaigns(res.data));
-    getTemplates().then((res) => setTemplates(res.data));
+    getCampaigns().then((res) => setCampaigns(res.data)).catch(() => {});
+    getTemplates().then((res) => setTemplates(res.data)).catch(() => {});
   };
 
   const handleCreate = async (e) => {
