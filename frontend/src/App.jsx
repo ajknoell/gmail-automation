@@ -213,7 +213,6 @@ function App() {
               </svg>
             </button>
             <Link to="/" className="logo">
-              <span className="logo-icon">V</span>
               Veloro
             </Link>
             <div className="header-right">
