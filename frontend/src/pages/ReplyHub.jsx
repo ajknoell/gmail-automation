@@ -245,9 +245,9 @@ function ReplyHub() {
   const handleDismiss = async (replyId) => {
     try {
       await dismissReply(replyId);
-      loadData();
+      await loadData();
     } catch (err) {
-      console.error('Dismiss failed:', err);
+      alert('Failed to dismiss reply: ' + (err.response?.data?.error || err.message));
     }
   };
 
