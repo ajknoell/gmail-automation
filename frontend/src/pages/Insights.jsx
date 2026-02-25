@@ -170,16 +170,16 @@ function Insights() {
       {/* ── Top Recommendation ────────────────────────────────── */}
       {insights?.top_recommendation && (
         <div className="card mb-4" style={{
-          background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)',
-          border: '1px solid #C7D2FE',
+          background: 'linear-gradient(135deg, #FFF5F1, #FEEAE3)',
+          border: '1px solid #FECDB8',
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
             <span style={{ fontSize: '2rem' }}>💡</span>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '0.5rem', color: '#3730A3' }}>
+              <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '0.5rem', color: '#C2410C' }}>
                 Top Recommendation
               </div>
-              <p style={{ margin: 0, color: '#4338CA', lineHeight: 1.6 }}>
+              <p style={{ margin: 0, color: '#D4532F', lineHeight: 1.6 }}>
                 {insights.top_recommendation}
               </p>
             </div>

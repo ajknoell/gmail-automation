@@ -96,8 +96,8 @@ function DailyBrief() {
         <div style={{ display: 'flex', gap: '4px', height: '32px', borderRadius: '8px', overflow: 'hidden' }}>
           {Object.entries(brief.pipeline || {}).map(([status, count]) => {
             const colors = {
-              discovered: '#A855F7', new: '#6B7280', contacted: '#3B82F6',
-              replied: '#8B5CF6', interested: '#F59E0B', client: '#10B981', lost: '#EF4444',
+              discovered: '#E8603C', new: '#6B7280', contacted: '#3B82F6',
+              replied: '#D4532F', interested: '#F59E0B', client: '#10B981', lost: '#EF4444',
             };
             const total = Object.values(brief.pipeline || {}).reduce((a, b) => a + b, 0) || 1;
             return (

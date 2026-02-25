@@ -348,7 +348,7 @@ function Contacts() {
                           return (
                             <span
                               style={{
-                                color: isOverdue ? '#EF4444' : isToday ? '#F59E0B' : '#7C3AED',
+                                color: isOverdue ? '#EF4444' : isToday ? '#F59E0B' : '#D4532F',
                                 fontWeight: 500,
                               }}
                               title={c.follow_up_note || ''}

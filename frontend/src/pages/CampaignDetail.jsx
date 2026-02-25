@@ -797,7 +797,7 @@ function CampaignDetail() {
                   onChange={(e) => updateCampaign(id, { auto_send_threshold: parseFloat(e.target.value) }).then(loadData)}
                   style={{ width: '120px' }}
                 />
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#4F46E5', minWidth: '40px' }}>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#E8603C', minWidth: '40px' }}>
                   {((campaign.auto_send_threshold || 0.8) * 100).toFixed(0)}%
                 </span>
               </div>
@@ -894,7 +894,7 @@ function CampaignDetail() {
               <div className="stat-label">Opened ({Math.round(tracking.open_rate * 100)}%)</div>
             </div>
             <div className="stat-card">
-              <div className="stat-value" style={{ color: '#8B5CF6' }}>{tracking.total_clicked}</div>
+              <div className="stat-value" style={{ color: '#E8603C' }}>{tracking.total_clicked}</div>
               <div className="stat-label">Clicked ({Math.round(tracking.click_rate * 100)}%)</div>
             </div>
             <div className="stat-card">
@@ -1421,7 +1421,7 @@ function CampaignDetail() {
                     {hasSentEmails && (
                       <td>
                         {recipient.tracking?.clicked_at ? (
-                          <span title={new Date(recipient.tracking.clicked_at).toLocaleString()} style={{ color: '#8B5CF6', fontWeight: 500 }}>
+                          <span title={new Date(recipient.tracking.clicked_at).toLocaleString()} style={{ color: '#E8603C', fontWeight: 500 }}>
                             ✓ ({recipient.tracking.click_count})
                           </span>
                         ) : recipient.status === 'sent' ? (

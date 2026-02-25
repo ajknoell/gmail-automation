@@ -269,12 +269,12 @@ function ReplyHub() {
   // --- Stat cards ---
 
   const statCards = [
-    { key: 'total', label: 'Total Replies', value: stats.total, color: '#6366F1' },
+    { key: 'total', label: 'Total Replies', value: stats.total, color: '#E8603C' },
     { key: 'positive', label: 'Positive', value: stats.positive, color: '#10B981' },
     { key: 'negative', label: 'Negative', value: stats.negative, color: '#EF4444' },
     { key: 'neutral', label: 'Neutral', value: stats.neutral, color: '#6B7280' },
     { key: 'needs_response', label: 'Needs Response', value: stats.needs_response, color: '#F59E0B' },
-    { key: 'follow_ups', label: 'Follow-Ups Due', value: stats.follow_ups_due, color: '#8B5CF6' },
+    { key: 'follow_ups', label: 'Follow-Ups Due', value: stats.follow_ups_due, color: '#E8603C' },
   ];
 
   // --- Helper: format follow-up date ---
@@ -312,7 +312,7 @@ function ReplyHub() {
         <div
           className="card"
           style={{
-            border: isSelected ? '2px solid #6366F1' : '1px solid #E5E7EB',
+            border: isSelected ? '2px solid #E8603C' : '1px solid #E5E7EB',
             transition: 'border 0.2s',
           }}
         >
@@ -348,8 +348,8 @@ function ReplyHub() {
                       borderRadius: '12px',
                       fontSize: '12px',
                       fontWeight: 600,
-                      backgroundColor: '#E0E7FF',
-                      color: '#4338CA',
+                      backgroundColor: '#FEEAE3',
+                      color: '#D4532F',
                     }}
                   >
                     Auto-Responded ({reply.auto_response_type || 'auto'})
@@ -532,7 +532,7 @@ function ReplyHub() {
               style={{
                 marginTop: '12px',
                 padding: '12px',
-                backgroundColor: '#F5F3FF',
+                backgroundColor: '#FFF5F1',
                 borderRadius: '8px',
                 display: 'flex',
                 gap: '8px',
@@ -597,7 +597,7 @@ function ReplyHub() {
           <div
             style={{
               marginTop: '4px',
-              border: '1px solid #E0E7FF',
+              border: '1px solid #FEEAE3',
               borderRadius: '12px',
               overflow: 'hidden',
             }}
@@ -609,12 +609,12 @@ function ReplyHub() {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '10px 16px',
-                backgroundColor: '#EEF2FF',
-                borderBottom: '1px solid #E0E7FF',
+                backgroundColor: '#FFF5F1',
+                borderBottom: '1px solid #FEEAE3',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#4338CA' }}>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#D4532F' }}>
                   {generatedResponse.type === 'meeting_followup' ? 'Meeting Follow-Up' : 'Response Draft'}
                 </span>
                 {generatedResponse.type === 'meeting_followup' && !calendarStatus.has_calendar && (
@@ -658,11 +658,11 @@ function ReplyHub() {
                       key={i}
                       style={{
                         padding: '3px 9px',
-                        backgroundColor: '#EEF2FF',
+                        backgroundColor: '#FFF5F1',
                         borderRadius: '6px',
                         fontSize: '12px',
-                        color: '#4338CA',
-                        border: '1px solid #E0E7FF',
+                        color: '#D4532F',
+                        border: '1px solid #FEEAE3',
                       }}
                     >
                       {slot.display}
@@ -832,8 +832,8 @@ function ReplyHub() {
               borderRadius: '10px',
               fontSize: '12px',
               fontWeight: 600,
-              backgroundColor: followUps.length > 0 ? '#EDE9FE' : '#F3F4F6',
-              color: followUps.length > 0 ? '#7C3AED' : '#6B7280',
+              backgroundColor: followUps.length > 0 ? '#FFF1EC' : '#F3F4F6',
+              color: followUps.length > 0 ? '#D4532F' : '#6B7280',
             }}
           >
             {followUps.length}
@@ -918,11 +918,11 @@ function ReplyHub() {
                         style={{
                           marginTop: '12px',
                           padding: '14px',
-                          backgroundColor: '#F5F3FF',
+                          backgroundColor: '#FFF5F1',
                           borderRadius: '8px',
                         }}
                       >
-                        <h4 style={{ marginBottom: '10px', color: '#7C3AED', fontSize: '14px' }}>Follow-Up Draft</h4>
+                        <h4 style={{ marginBottom: '10px', color: '#D4532F', fontSize: '14px' }}>Follow-Up Draft</h4>
                         <div style={{ marginBottom: '8px' }}>
                           <label className="text-sm" style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Subject</label>
                           <input
@@ -1024,9 +1024,9 @@ function ReplyHub() {
 
       {/* Autopilot Stats */}
       {(autopilotStats.total_auto_responded > 0) && (
-        <div className="card mb-4" style={{ background: '#F5F3FF', border: '1px solid #E0E7FF' }}>
+        <div className="card mb-4" style={{ background: '#FFF5F1', border: '1px solid #FEEAE3' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, color: '#4338CA', fontSize: '0.875rem' }}>Autopilot Summary:</span>
+            <span style={{ fontWeight: 600, color: '#D4532F', fontSize: '0.875rem' }}>Autopilot Summary:</span>
             <span style={{ fontSize: '0.875rem' }}>{autopilotStats.total_auto_responded || 0} auto-responded</span>
             <span style={{ fontSize: '0.875rem' }}>{autopilotStats.total_flagged || 0} flagged for review</span>
             {autopilotStats.by_type && Object.entries(autopilotStats.by_type).map(([type, count]) => (

@@ -354,7 +354,7 @@ function ProspectReviewTab({ onStatsChange }) {
                     </td>
                     <td>
                       <div className="flex items-center gap-1" style={{ flexWrap: 'wrap' }}>
-                        {lead.employee_count ? <span className="badge" style={{ background: '#EDE9FE', color: '#5B21B6' }}>{lead.employee_count} emp</span> : null}
+                        {lead.employee_count ? <span className="badge" style={{ background: '#FFF1EC', color: '#C2410C' }}>{lead.employee_count} emp</span> : null}
                         {emails.length > 0 ? <span className="badge" style={{ background: '#D1FAE5', color: '#065F46' }}>Email</span> : null}
                         {lead.linkedin_url ? <span className="badge" style={{ background: '#DBEAFE', color: '#1E40AF' }}>LinkedIn</span> : null}
                         {!lead.employee_count && !emails.length && !lead.linkedin_url && <span className="text-sm text-light">{lead.status === 'new' ? 'Pending' : '--'}</span>}

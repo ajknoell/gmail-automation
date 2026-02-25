@@ -93,6 +93,15 @@ function CollapsibleSection({ label, defaultOpen = true, children }) {
   );
 }
 
+function PageTransition({ children }) {
+  const location = useLocation();
+  return (
+    <div className="page-transition" key={location.key}>
+      {children}
+    </div>
+  );
+}
+
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -165,7 +174,9 @@ function App() {
         <Router>
           <MobileLayout>
             <main className="main main-mobile">
-              {routeElements}
+              <PageTransition>
+                {routeElements}
+              </PageTransition>
             </main>
           </MobileLayout>
           <QuickSendPanel open={quickSendOpen} onClose={() => setQuickSendOpen(false)} prefill={quickSendPrefill} />
@@ -299,7 +310,9 @@ function App() {
           </aside>
 
           <main className="main">
-            {routeElements}
+            <PageTransition>
+              {routeElements}
+            </PageTransition>
           </main>
         </div>
       </div>

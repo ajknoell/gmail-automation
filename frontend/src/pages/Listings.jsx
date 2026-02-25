@@ -485,7 +485,7 @@ function Listings() {
           <div className="text-sm text-light">Sites Monitored</div>
         </div>
         <div className="card" style={{ textAlign: 'center', padding: '16px' }}>
-          <div style={{ fontSize: '28px', fontWeight: 700, color: '#6366F1' }}>{stats.total_listings || 0}</div>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#E8603C' }}>{stats.total_listings || 0}</div>
           <div className="text-sm text-light">Total Listings</div>
         </div>
         <div className="card" style={{ textAlign: 'center', padding: '16px' }}>
@@ -776,7 +776,7 @@ function Listings() {
 
       {/* ─── Quick Add Form ─── */}
       {showQuickAdd && (
-        <div className="card" style={{ marginBottom: '20px', padding: '20px', borderLeft: '4px solid #8B5CF6' }}>
+        <div className="card" style={{ marginBottom: '20px', padding: '20px', borderLeft: '4px solid #E8603C' }}>
           <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>Quick Add Listing</h3>
           <p className="text-sm text-light" style={{ margin: '0 0 16px 0' }}>
             Manually add a listing you spotted outside the scrapers — paste in the details below.
@@ -1103,7 +1103,7 @@ function Listings() {
           )}
           {appliedFilters.q && (
             <span style={{
-              backgroundColor: '#F5F3FF', color: '#7C3AED', borderRadius: '14px',
+              backgroundColor: '#FFF5F1', color: '#D4532F', borderRadius: '14px',
               padding: '3px 10px', fontSize: '12px', fontWeight: 600,
             }}>
               &ldquo;{appliedFilters.q}&rdquo;
@@ -1278,7 +1278,7 @@ function Listings() {
                 {group.site.contact && (
                   <Link
                     to={`/contacts/${group.site.contact.id}`}
-                    style={{ marginLeft: '10px', fontSize: '13px', color: '#6366F1' }}
+                    style={{ marginLeft: '10px', fontSize: '13px', color: '#E8603C' }}
                   >
                     {group.site.contact.name || group.site.contact.email}
                   </Link>
@@ -1339,7 +1339,7 @@ function Listings() {
                   <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px' }}>
                     {listing.source && listing.source !== 'scraper' && (
                       <span style={{
-                        backgroundColor: listing.source === 'email' ? '#DBEAFE' : '#EDE9FE',
+                        backgroundColor: listing.source === 'email' ? '#DBEAFE' : '#FFF1EC',
                         color: listing.source === 'email' ? '#1D4ED8' : '#6D28D9',
                         fontSize: '10px',
                         fontWeight: 700,
@@ -1422,7 +1422,7 @@ function Listings() {
                         </span>
                       )}
                       {listing.cash_flow_str && (
-                        <span style={{ backgroundColor: '#F5F3FF', color: '#7C3AED', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}>
+                        <span style={{ backgroundColor: '#FFF5F1', color: '#D4532F', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: 600 }}>
                           CF: {listing.cash_flow_str}
                         </span>
                       )}

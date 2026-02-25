@@ -827,7 +827,7 @@ function MapExplorer() {
                   onClick={handleBulkAddToPipeline}
                   style={{
                     padding: '0.2rem 0.5rem',
-                    background: '#7C3AED',
+                    background: '#D4532F',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '0.25rem',
@@ -921,7 +921,7 @@ function MapExplorer() {
                         title="Add to pipeline for enrichment"
                         style={{
                           padding: '0.25rem 0.5rem',
-                          background: '#7C3AED',
+                          background: '#D4532F',
                           color: '#fff',
                           border: 'none',
                           borderRadius: '0.375rem',

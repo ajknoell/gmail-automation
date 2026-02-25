@@ -73,11 +73,11 @@ export default function AttachmentPicker({ attachments = [], onChange, compact =
               alignItems: 'center',
               gap: '6px',
               padding: '4px 10px',
-              backgroundColor: '#EEF2FF',
+              backgroundColor: '#FFF5F1',
               borderRadius: '6px',
               fontSize: '13px',
-              color: '#4338CA',
-              border: '1px solid #E0E7FF',
+              color: '#D4532F',
+              border: '1px solid #FEEAE3',
             }}
           >
             <a
@@ -89,7 +89,7 @@ export default function AttachmentPicker({ attachments = [], onChange, compact =
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: '#4338CA',
+                color: '#D4532F',
                 textDecoration: 'none',
                 cursor: 'pointer',
               }}

@@ -10,7 +10,7 @@ const STATUS_COLORS = {
   draft: '#6B7280',
   generating: '#F59E0B',
   ready: '#3B82F6',
-  running: '#8B5CF6',
+  running: '#E8603C',
   completed: '#10B981',
   cancelled: '#EF4444',
 };

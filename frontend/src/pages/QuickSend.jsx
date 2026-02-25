@@ -459,7 +459,7 @@ function QuickSend() {
                     </td>
                     <td>
                       {log.clicked_at ? (
-                        <span title={new Date(log.clicked_at).toLocaleString()} style={{ color: '#8B5CF6', fontWeight: 500 }}>
+                        <span title={new Date(log.clicked_at).toLocaleString()} style={{ color: '#E8603C', fontWeight: 500 }}>
                           ✓ ({log.click_count})
                         </span>
                       ) : (

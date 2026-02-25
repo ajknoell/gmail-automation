@@ -148,8 +148,8 @@ function ContactDirectoryPicker({ selectedIds, onSelectionChange, campaignId }) 
                     marginTop: '0.25rem',
                     padding: '0.125rem 0.375rem',
                     borderRadius: '0.25rem',
-                    background: '#E0E7FF',
-                    color: '#4338CA',
+                    background: '#FEEAE3',
+                    color: '#D4532F',
                     display: 'inline-block',
                   }}>
                     {contact.status}

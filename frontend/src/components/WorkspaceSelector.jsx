@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getWorkspaces, createWorkspace, updateWorkspace, setActiveWorkspaceId, getActiveWorkspaceId } from '../api/client';
 
-const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'];
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#E8603C', '#EC4899', '#06B6D4', '#F97316'];
 
 export default function WorkspaceSelector() {
   const [workspaces, setWorkspaces] = useState([]);

@@ -413,7 +413,7 @@ function ContactDetail() {
             {contact.follow_up_date && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
                 <span style={{
-                  color: new Date(contact.follow_up_date + 'T00:00:00') < new Date().setHours(0,0,0,0) ? '#EF4444' : '#7C3AED',
+                  color: new Date(contact.follow_up_date + 'T00:00:00') < new Date().setHours(0,0,0,0) ? '#EF4444' : '#D4532F',
                   fontWeight: 500,
                 }}>
                   {new Date(contact.follow_up_date + 'T00:00:00') < new Date().setHours(0,0,0,0)
@@ -496,7 +496,7 @@ function ContactDetail() {
                     </td>
                     <td>
                       {log.clicked_at ? (
-                        <span title={new Date(log.clicked_at).toLocaleString()} style={{ color: '#8B5CF6', fontWeight: 500 }}>
+                        <span title={new Date(log.clicked_at).toLocaleString()} style={{ color: '#E8603C', fontWeight: 500 }}>
                           ✓ ({log.click_count})
                         </span>
                       ) : <span style={{ color: '#9CA3AF' }}>-</span>}

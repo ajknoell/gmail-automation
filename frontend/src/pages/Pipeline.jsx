@@ -252,9 +252,9 @@ function Pipeline() {
         <StatCard label="New" value={stats.by_status?.new || 0} color="#6B7280" />
         <StatCard label="Enriched" value={(stats.by_status?.enriched || 0) + (stats.by_status?.qualified || 0)} color="#3B82F6" />
         <StatCard label="Approved" value={(stats.by_status?.approved || 0) + (stats.by_status?.in_campaign || 0)} color="#10B981" />
-        <StatCard label="Avg Score" value={stats.avg_score || 0} color="#4F46E5" />
+        <StatCard label="Avg Score" value={stats.avg_score || 0} color="#E8603C" />
         <StatCard label="Has Email" value={stats.with_email || 0} color="#059669" />
-        <StatCard label="Has Employee #" value={stats.with_employee_count || 0} color="#7C3AED" />
+        <StatCard label="Has Employee #" value={stats.with_employee_count || 0} color="#D4532F" />
         <StatCard label="Likely Retiring" value={stats.with_high_retirement || 0} color="#F59E0B" />
       </div>
 
@@ -529,7 +529,7 @@ function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enri
         <td>
           <div className="flex items-center gap-1" style={{ flexWrap: 'wrap' }}>
             {lead.employee_count ? (
-              <span className="badge" style={{ background: '#EDE9FE', color: '#5B21B6' }}>
+              <span className="badge" style={{ background: '#FFF1EC', color: '#C2410C' }}>
                 {lead.employee_count} emp
               </span>
             ) : null}

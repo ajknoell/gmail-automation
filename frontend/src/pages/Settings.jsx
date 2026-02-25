@@ -538,7 +538,7 @@ function Settings({ onStatusChange }) {
 
       {/* Writing Style Profile */}
       <div className="card mb-4">
-        <h3 className="card-title mb-2">✍️ Your Writing Style <span style={{ fontSize: '12px', background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
+        <h3 className="card-title mb-2">✍️ Your Writing Style <span style={{ fontSize: '12px', background: '#FFF5F1', color: '#D4532F', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
         <p className="text-sm text-light mb-4">
           Train the AI to write emails exactly like you. This style is saved per workspace — each business can have its own voice.
         </p>
@@ -679,7 +679,7 @@ function Settings({ onStatusChange }) {
 
       {/* Reply Autopilot */}
       <div className="card mb-4">
-        <h3 className="card-title mb-2">Reply Autopilot <span style={{ fontSize: '12px', background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
+        <h3 className="card-title mb-2">Reply Autopilot <span style={{ fontSize: '12px', background: '#FFF5F1', color: '#D4532F', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
         <p className="text-sm text-light mb-4">
           Configure AI to automatically handle routine replies. Sensitive replies (containing keywords like pricing, contracts) are always flagged for human review.
         </p>
@@ -778,7 +778,7 @@ function Settings({ onStatusChange }) {
 
       {/* Feature Visibility */}
       <div className="card mb-4">
-        <h3 className="card-title mb-2">Feature Visibility <span style={{ fontSize: '12px', background: '#EEF2FF', color: '#4338CA', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
+        <h3 className="card-title mb-2">Feature Visibility <span style={{ fontSize: '12px', background: '#FFF5F1', color: '#D4532F', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Per Workspace</span></h3>
         <p className="text-sm text-light mb-4">
           Control which features are visible in this workspace. Hidden features preserve their data — you can re-enable them anytime.
         </p>

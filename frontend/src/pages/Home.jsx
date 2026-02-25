@@ -142,7 +142,7 @@ function Home({ status }) {
             </Link>
           )}
           {enrichedLeads > 0 && (
-            <Link to="/prospects/review" className="action-card" style={{ '--action-color': '#8B5CF6' }}>
+            <Link to="/prospects/review" className="action-card" style={{ '--action-color': '#E8603C' }}>
               <span className="action-card-count">{enrichedLeads}</span>
               <div>
                 <div className="action-card-label">Leads to Review</div>
@@ -252,7 +252,7 @@ function Home({ status }) {
           {insightsSummary?.top_recommendation && (
             <div style={{
               marginTop: '1rem', padding: '0.75rem 1rem',
-              background: 'rgba(79, 70, 229, 0.04)', borderRadius: '0.5rem',
+              background: 'rgba(232, 96, 60, 0.04)', borderRadius: '0.5rem',
               fontSize: '0.8125rem', lineHeight: 1.5
             }}>
               <strong style={{ color: 'var(--primary)' }}>AI Tip:</strong>{' '}
