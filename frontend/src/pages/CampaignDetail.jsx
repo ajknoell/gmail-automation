@@ -837,7 +837,7 @@ function CampaignDetail() {
             <div className="stat-label">Failed</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{pendingCount}</div>
+            <div className="stat-value" style={{ color: '#6B7280' }}>{pendingCount}</div>
             <div className="stat-label">Pending</div>
           </div>
         </div>
@@ -872,14 +872,27 @@ function CampaignDetail() {
 
         {campaign.total_recipients > 0 && (
           <div className="mt-2">
-            <div className="progress-bar" style={{ height: '1rem' }}>
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${((campaign.sent_count + campaign.failed_count) / campaign.total_recipients) * 100}%`,
-                  background: campaign.failed_count > 0 ? 'linear-gradient(to right, #10B981, #EF4444)' : '#10B981',
-                }}
-              />
+            <div className="progress-bar" style={{ height: '1rem', display: 'flex' }}>
+              {campaign.sent_count > 0 && (
+                <div
+                  style={{
+                    width: `${(campaign.sent_count / campaign.total_recipients) * 100}%`,
+                    height: '100%',
+                    background: '#10B981',
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              )}
+              {campaign.failed_count > 0 && (
+                <div
+                  style={{
+                    width: `${(campaign.failed_count / campaign.total_recipients) * 100}%`,
+                    height: '100%',
+                    background: '#EF4444',
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              )}
             </div>
           </div>
         )}

@@ -269,12 +269,12 @@ function ReplyHub() {
   // --- Stat cards ---
 
   const statCards = [
-    { key: 'total', label: 'Total Replies', value: stats.total, color: '#E8603C' },
+    { key: 'total', label: 'Total Replies', value: stats.total, color: null },
     { key: 'positive', label: 'Positive', value: stats.positive, color: '#10B981' },
     { key: 'negative', label: 'Negative', value: stats.negative, color: '#EF4444' },
     { key: 'neutral', label: 'Neutral', value: stats.neutral, color: '#6B7280' },
     { key: 'needs_response', label: 'Needs Response', value: stats.needs_response, color: '#F59E0B' },
-    { key: 'follow_ups', label: 'Follow-Ups Due', value: stats.follow_ups_due, color: '#E8603C' },
+    { key: 'follow_ups', label: 'Follow-Ups Due', value: stats.follow_ups_due, color: '#3B82F6' },
   ];
 
   // --- Helper: format follow-up date ---
