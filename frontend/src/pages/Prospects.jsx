@@ -8,6 +8,7 @@ import {
 } from '../api/client';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { scoreColor } from '../utils/colors';
 
 const STATUS_LABELS = {
   new: 'New', enriching: 'Enriching...', enriched: 'Enriched',
@@ -281,13 +282,6 @@ function ProspectReviewTab({ onStatsChange }) {
         } catch { showToast('Reject failed', 'error'); }
       },
     });
-  };
-
-  const scoreColor = (score) => {
-    if (!score && score !== 0) return '#6B7280';
-    if (score >= 70) return '#10B981';
-    if (score >= 40) return '#F59E0B';
-    return '#EF4444';
   };
 
   if (loading) return <div className="card"><p className="text-light" style={{ padding: '2rem', textAlign: 'center' }}>Loading leads...</p></div>;

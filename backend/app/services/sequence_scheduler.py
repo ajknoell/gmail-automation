@@ -40,25 +40,27 @@ class SequenceScheduler:
             )
 
             for step in steps:
-                # Find previous step
-                prev_step = (
+                # Find all steps at previous position (supports A/B tests with multiple steps at same position)
+                prev_steps = (
                     CampaignStep.query
                     .filter_by(campaign_id=campaign.id, position=step.position - 1)
-                    .first()
+                    .all()
                 )
-                if not prev_step:
+                if not prev_steps:
                     continue
 
-                # Previous step must be completed (or at least have some sent recipients)
-                if prev_step.status not in ('completed', 'running'):
+                # At least one previous step must be completed or running
+                if not any(ps.status in ('completed', 'running') for ps in prev_steps):
                     continue
 
-                cutoff = now - timedelta(days=step.delay_days)
+                cutoff = now - timedelta(minutes=step.effective_delay_minutes)
 
-                # Find recipients from previous step that were sent before cutoff
+                # Find recipients from ANY previous step at that position sent before cutoff
+                prev_step_ids = [ps.id for ps in prev_steps]
                 prev_sent = (
                     StepRecipient.query
-                    .filter_by(step_id=prev_step.id, status='sent')
+                    .filter(StepRecipient.step_id.in_(prev_step_ids))
+                    .filter_by(status='sent')
                     .filter(StepRecipient.sent_at <= cutoff)
                     .all()
                 )

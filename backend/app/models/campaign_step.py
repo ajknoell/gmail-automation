@@ -22,7 +22,14 @@ class CampaignStep(db.Model):
     web_research_prompt = db.Column(db.Text)
 
     # Delay before this step fires (days after previous step's send per recipient)
-    delay_days = db.Column(db.Integer, default=3)
+    delay_days = db.Column(db.Integer, default=3)  # legacy — kept for backward compat
+    # Flexible delay in minutes (0 = immediate, 60 = 1 hour, 1440 = 1 day, 4320 = 3 days)
+    delay_minutes = db.Column(db.Integer, default=4320)
+
+    # A/B testing fields
+    variant_group = db.Column(db.String(50), nullable=True)   # groups variant steps together
+    variant_label = db.Column(db.String(20), nullable=True)    # e.g., 'A', 'B'
+    variant_pct = db.Column(db.Integer, nullable=True)         # percentage allocation
 
     # Whether to auto-send when due or require manual approval
     auto_send = db.Column(db.Boolean, default=False)
@@ -44,6 +51,13 @@ class CampaignStep(db.Model):
     template = db.relationship('Template', foreign_keys=[template_id])
     step_recipients = db.relationship('StepRecipient', backref='step', lazy='dynamic', cascade='all, delete-orphan')
 
+    @property
+    def effective_delay_minutes(self):
+        """Return delay in minutes, preferring delay_minutes, falling back to delay_days."""
+        if self.delay_minutes is not None:
+            return self.delay_minutes
+        return (self.delay_days or 3) * 1440
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -56,6 +70,11 @@ class CampaignStep(db.Model):
             'use_web_research': self.use_web_research,
             'web_research_prompt': self.web_research_prompt,
             'delay_days': self.delay_days,
+            'delay_minutes': self.delay_minutes,
+            'effective_delay_minutes': self.effective_delay_minutes,
+            'variant_group': self.variant_group,
+            'variant_label': self.variant_label,
+            'variant_pct': self.variant_pct,
             'auto_send': self.auto_send,
             'status': self.status,
             'total_recipients': self.total_recipients,

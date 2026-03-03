@@ -12,6 +12,10 @@
   --success: #10B981;
   --warning: #F59E0B;
   --error: #EF4444;
+  --info: #3B82F6;
+  --teal: #0891B2;
+  --purple: #8B5CF6;
+  --neutral: #6B7280;
   --bg: #FAF8F6;
   --bg-warm: #F5F0EB;
   --bg-white: #FFFFFE;
@@ -540,7 +544,7 @@ select.input {
 .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--text);
   line-height: 1.2;
 }
 
