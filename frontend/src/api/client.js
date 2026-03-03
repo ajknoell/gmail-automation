@@ -314,4 +314,13 @@ export const updateBusinessProfile = (data) => api.put('/api/profile', data);
 // --- Opportunities ---
 export const getOpportunityFeed = (params) => api.get('/api/opportunities/feed', { params });
 
+// --- Agents ---
+export const getAgentTasks = (params) => api.get('/api/agents/tasks', { params });
+export const getAgentTask = (id) => api.get(`/api/agents/tasks/${id}`);
+export const startProspectResearch = (leadId) => api.post('/api/agents/research', { lead_id: leadId });
+export const startLeadDiscovery = (data) => api.post('/api/agents/discover', data);
+export const startCompetitiveIntel = (data) => api.post('/api/agents/competitive-intel', data);
+export const cancelAgentTask = (id) => api.post(`/api/agents/tasks/${id}/cancel`);
+export const getAgentStats = () => api.get('/api/agents/stats');
+
 export default api;

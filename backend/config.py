@@ -21,6 +21,9 @@ class Config:
     # Anthropic
     ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
 
+    # Firecrawl
+    FIRECRAWL_API_KEY = os.environ.get('FIRECRAWL_API_KEY')
+
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     UPLOAD_FOLDER = os.path.join(basedir, 'data', 'uploads')

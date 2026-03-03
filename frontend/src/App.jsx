@@ -22,6 +22,7 @@ import Signals from './pages/Signals';
 import BusinessProfile from './pages/BusinessProfile';
 import OpportunityFeed from './pages/OpportunityFeed';
 import Prospects from './pages/Prospects';
+import Agents from './pages/Agents';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
 import QuickSendPanel from './components/QuickSendPanel';
@@ -164,6 +165,7 @@ function App() {
       <Route path="/signals" element={<Signals />} />
       <Route path="/business-profile" element={<BusinessProfile />} />
       <Route path="/opportunities" element={<OpportunityFeed />} />
+      <Route path="/agents" element={<Agents />} />
       <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
     </Routes>
   );
@@ -253,6 +255,10 @@ function App() {
                     <span>Contacts</span>
                   </NavLink>
                 )}
+                <NavLink to="/agents">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1V3M8 13V15M1 8H3M13 8H15M3.05 3.05L4.46 4.46M11.54 11.54L12.95 12.95M3.05 12.95L4.46 11.54M11.54 4.46L12.95 3.05M5 8C5 6.34 6.34 5 8 5S11 6.34 11 8 9.66 11 8 11 5 9.66 5 8Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  <span>AI Agents</span>
+                </NavLink>
               </div>
 
               {/* OUTREACH */}
