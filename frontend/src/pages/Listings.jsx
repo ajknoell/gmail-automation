@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   getMonitoredSites,
   createMonitoredSite,
+  uploadBrokerSites,
   deleteMonitoredSite,
   checkSiteNow,
   checkAllSitesNow,
@@ -55,6 +56,12 @@ function Listings() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSite, setNewSite] = useState({ name: '', url: '', contact_id: '', check_interval_hours: 24 });
   const [fetchingName, setFetchingName] = useState(false);
+
+  // CSV upload
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
 
   // Filters
   const [filterSiteId, setFilterSiteId] = useState(null);
@@ -241,6 +248,23 @@ function Listings() {
       console.error('Failed to add site:', err);
       alert('Failed to add site');
     }
+  };
+
+  const handleCsvUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const res = await uploadBrokerSites(uploadFile);
+      setUploadResult(res.data);
+      if (res.data.created > 0) {
+        loadData();
+      }
+    } catch (err) {
+      const errData = err.response?.data || {};
+      setUploadResult({ error: errData.error || 'Upload failed', headers: errData.headers });
+    }
+    setUploading(false);
   };
 
   const handleDeleteSite = async (siteId) => {
@@ -470,8 +494,14 @@ function Listings() {
             + Quick Add
           </button>
           <button
+            className={`btn ${showCsvUpload ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => { setShowCsvUpload(!showCsvUpload); setShowAddForm(false); setUploadFile(null); setUploadResult(null); }}
+          >
+            Upload CSV
+          </button>
+          <button
             className="btn btn-primary"
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => { setShowAddForm(!showAddForm); setShowCsvUpload(false); }}
           >
             + Add Site
           </button>
@@ -1189,6 +1219,97 @@ function Listings() {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* CSV Upload Form */}
+      {showCsvUpload && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h3 style={{ marginBottom: '16px' }}>Upload Broker Sites from CSV</h3>
+          <p className="text-sm text-light" style={{ marginBottom: '12px' }}>
+            Upload a CSV or Excel file with broker website URLs. The system will auto-detect
+            columns for URL, name, scraper type, and check interval. Duplicate URLs will be skipped.
+          </p>
+          <div style={{
+            border: '2px dashed #D1D5DB',
+            borderRadius: '8px',
+            padding: '24px',
+            textAlign: 'center',
+            marginBottom: '12px',
+            backgroundColor: uploadFile ? '#F0FDF4' : '#F9FAFB',
+          }}>
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => {
+                setUploadFile(e.target.files[0] || null);
+                setUploadResult(null);
+              }}
+            />
+            {uploadFile && (
+              <div className="text-sm" style={{ color: '#059669', marginTop: '8px' }}>
+                Selected: {uploadFile.name}
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleCsvUpload}
+              disabled={!uploadFile || uploading}
+            >
+              {uploading ? 'Uploading & Scraping...' : 'Upload & Add Sites'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setShowCsvUpload(false); setUploadFile(null); setUploadResult(null); }}
+            >
+              Cancel
+            </button>
+          </div>
+          {uploadResult && (
+            <div style={{
+              marginTop: '12px',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: uploadResult.error ? '#FEF2F2' : '#F0FDF4',
+              border: `1px solid ${uploadResult.error ? '#FECACA' : '#BBF7D0'}`,
+            }}>
+              {uploadResult.error ? (
+                <div>
+                  <div style={{ color: '#DC2626', fontWeight: 600 }}>{uploadResult.error}</div>
+                  {uploadResult.headers && (
+                    <div className="text-sm" style={{ marginTop: '4px', color: '#78716C' }}>
+                      Detected columns: {uploadResult.headers.join(', ')}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div style={{ color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
+                    Upload complete!
+                  </div>
+                  <div className="text-sm">
+                    {uploadResult.created} site{uploadResult.created !== 1 ? 's' : ''} created and scraped
+                    {uploadResult.skipped_duplicate > 0 && `, ${uploadResult.skipped_duplicate} duplicate${uploadResult.skipped_duplicate !== 1 ? 's' : ''} skipped`}
+                    {uploadResult.skipped_invalid > 0 && `, ${uploadResult.skipped_invalid} invalid row${uploadResult.skipped_invalid !== 1 ? 's' : ''} skipped`}
+                  </div>
+                  {uploadResult.scrape_results && uploadResult.scrape_results.length > 0 && (
+                    <div className="text-sm" style={{ marginTop: '8px' }}>
+                      {uploadResult.scrape_results.map((r, i) => (
+                        <div key={i} style={{ marginTop: '2px' }}>
+                          {r.name || `Site ${r.site_id}`}: {r.error
+                            ? <span style={{ color: '#DC2626' }}>{r.error}</span>
+                            : <span>{r.new || 0} new listing{(r.new || 0) !== 1 ? 's' : ''} found{r.filtered_out ? `, ${r.filtered_out} filtered by buy box` : ''}</span>
+                          }
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
