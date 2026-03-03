@@ -76,7 +76,12 @@ function Signals() {
     setLoading(false);
   }, [filterSource]);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    loadAll();
+    const handleWsChange = () => loadAll();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadAll]);
 
   const handleCollectNow = async () => {
     setCollecting(true);

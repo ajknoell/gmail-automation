@@ -43,7 +43,12 @@ function OpportunityFeed() {
   const [filterSource, setFilterSource] = useState('');
   const [generatingId, setGeneratingId] = useState(null);
 
-  useEffect(() => { loadFeed(); }, [page, filterSource]);
+  useEffect(() => {
+    loadFeed();
+    const handleWsChange = () => loadFeed();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [page, filterSource]);
 
   const loadFeed = async () => {
     setLoading(true);
