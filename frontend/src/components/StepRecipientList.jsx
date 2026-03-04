@@ -93,6 +93,11 @@ function StepRecipientList({ campaignId, stepId, stepStatus, onReload }) {
                       ({sr.skip_reason})
                     </span>
                   )}
+                  {sr.prior_reply_status && sr.status !== 'skipped' && (
+                    <span style={{ fontSize: '0.7rem', color: '#F59E0B', marginLeft: '0.25rem' }}>
+                      (already {sr.prior_reply_status})
+                    </span>
+                  )}
                 </td>
                 <td>
                   {sr.personalized_body && stepStatus !== 'completed' ? (
