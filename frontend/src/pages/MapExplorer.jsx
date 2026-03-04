@@ -12,6 +12,7 @@ import {
   createCampaign,
 } from '../api/client';
 import { BUSINESS_TYPE_GROUPS, RATING_OPTIONS } from '../constants/businessTypes';
+import AddToPopover from '../components/AddToPopover';
 
 const MILES_TO_METERS = 1609.344;
 
@@ -64,25 +65,22 @@ function MapExplorer() {
   // Selected place & info window
   const [selectedPlace, setSelectedPlace] = useState(null);
 
-  // Add to outreach modal
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addAction, setAddAction] = useState('contact');
-  const [addEmail, setAddEmail] = useState('');
-  const [addCampaignId, setAddCampaignId] = useState('');
-  const [addNotes, setAddNotes] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [addResult, setAddResult] = useState(null);
+  // Add to popover / pipeline tracking
   const [campaigns, setCampaigns] = useState([]);
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [creatingCampaign, setCreatingCampaign] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState(null); // {type, message}
+  const [pipelinedIds, setPipelinedIds] = useState(new Set());
+  const [popoverPlaceId, setPopoverPlaceId] = useState(null);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, right: 0 });
 
   // Map refs
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
   const markersRef = useRef([]);
   const infoWindowRef = useRef(null);
+  const sidebarRef = useRef(null);
 
   // Load API key on mount
   useEffect(() => {
@@ -113,10 +111,21 @@ function MapExplorer() {
       setSelectedPlace(null);
       setCenter(null);
       setFormattedAddress('');
+      setPipelinedIds(new Set());
+      setPopoverPlaceId(null);
     };
     window.addEventListener('workspace-changed', handleWsChange);
     return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
+
+  // Close popover when sidebar scrolls (fixed-position popover would detach from card)
+  useEffect(() => {
+    if (!popoverPlaceId || !sidebarRef.current) return;
+    const handleScroll = () => setPopoverPlaceId(null);
+    const sidebar = sidebarRef.current;
+    sidebar.addEventListener('scroll', handleScroll);
+    return () => sidebar.removeEventListener('scroll', handleScroll);
+  }, [popoverPlaceId]);
 
   // Close type dropdown on outside click
   useEffect(() => {
@@ -295,40 +304,21 @@ function MapExplorer() {
     setSearching(false);
   }, [center, searchMode, keywordSearch, selectedTypes]);
 
-  // Add to outreach modal handlers
-  const openAddModal = (place) => {
-    setSelectedPlace(place);
-    setShowAddModal(true);
-    setAddEmail('');
-    setAddAction('contact');
-    setAddCampaignId('');
-    setAddNotes(`Found via Map Explorer${place.rating ? ` - Rating: ${place.rating}/5` : ''}`);
-    setAddResult(null);
-    setShowNewCampaign(false);
-    setNewCampaignName('');
-  };
-
-  const handleAddToOutreach = async () => {
-    if (!addEmail.trim()) {
-      setAddResult({ type: 'error', message: 'Email is required.' });
-      return;
-    }
-    setAdding(true);
-    setAddResult(null);
-
+  // Add to outreach/pipeline handlers
+  const handleAddToOutreach = async (place, { email, action, campaignId }) => {
     try {
       const res = await addPlaceToOutreach({
-        place_id: selectedPlace.place_id,
-        name: selectedPlace.name,
-        address: selectedPlace.address,
-        phone: selectedPlace.phone,
-        website: selectedPlace.website,
-        rating: selectedPlace.rating,
-        types: selectedPlace.types,
-        email: addEmail.trim(),
-        action: addAction,
-        campaign_id: addAction !== 'contact' ? addCampaignId : null,
-        notes: addNotes,
+        place_id: place.place_id,
+        name: place.name,
+        address: place.address,
+        phone: place.phone,
+        website: place.website,
+        rating: place.rating,
+        types: place.types,
+        email: email.trim(),
+        action: action,
+        campaign_id: action !== 'contact' ? campaignId : null,
+        notes: `Found via Map Explorer${place.rating ? ` - Rating: ${place.rating}/5` : ''}`,
       });
 
       const messages = [];
@@ -337,14 +327,13 @@ function MapExplorer() {
       if (res.data.recipient_existed) messages.push('Recipient already in campaign.');
       else if (res.data.recipient) messages.push('Added to campaign.');
 
-      setAddResult({ type: 'success', message: messages.join(' ') || 'Added successfully.' });
+      return { type: 'success', message: messages.join(' ') || 'Added successfully.' };
     } catch (err) {
-      setAddResult({
+      return {
         type: 'error',
         message: err.response?.data?.error || 'Failed to add. Please try again.',
-      });
+      };
     }
-    setAdding(false);
   };
 
   const handleAddToPipeline = async (place) => {
@@ -361,6 +350,8 @@ function MapExplorer() {
         lat: place.lat,
         lng: place.lng,
       });
+      setPipelinedIds(prev => new Set(prev).add(place.place_id));
+      setPopoverPlaceId(null);
       if (res.data.existed) {
         setPipelineMsg({ type: 'info', message: `"${place.name}" already in pipeline` });
       } else {
@@ -376,6 +367,11 @@ function MapExplorer() {
     if (!results.length) return;
     try {
       const res = await bulkAddToPipeline(results);
+      setPipelinedIds(prev => {
+        const next = new Set(prev);
+        results.forEach(r => next.add(r.place_id));
+        return next;
+      });
       setPipelineMsg({
         type: 'success',
         message: `Added ${res.data.added} to pipeline (${res.data.skipped} duplicates skipped)`,
@@ -794,7 +790,7 @@ function MapExplorer() {
       {/* Main layout: sidebar + map */}
       <div style={{ display: 'flex', gap: '1rem', height: 'calc(100vh - 310px)', minHeight: '400px' }}>
         {/* Results sidebar */}
-        <div style={{
+        <div ref={sidebarRef} style={{
           width: '340px',
           minWidth: '300px',
           overflowY: 'auto',
@@ -920,46 +916,58 @@ function MapExplorer() {
                         )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flexShrink: 0, alignItems: 'center' }}>
+                      {pipelinedIds.has(place.place_id) && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.2rem',
+                            padding: '0.2rem 0.4rem',
+                            background: '#D1FAE5',
+                            color: '#065F46',
+                            borderRadius: '0.375rem',
+                            fontSize: '0.6rem',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                          }}
+                          title="Added to pipeline"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 14 14" fill="none">
+                            <path d="M3 7L6 10L11 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          </svg>
+                          Pipeline
+                        </div>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleAddToPipeline(place);
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setPopoverPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                          setPopoverPlaceId(popoverPlaceId === place.place_id ? null : place.place_id);
                         }}
-                        title="Add to pipeline for enrichment"
+                        title="Add to pipeline or outreach"
+                        aria-label={`Add ${place.name}`}
+                        aria-expanded={popoverPlaceId === place.place_id}
+                        aria-haspopup="true"
                         style={{
-                          padding: '0.25rem 0.5rem',
-                          background: '#D4532F',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.65rem',
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: popoverPlaceId === place.place_id ? '#3B82F6' : '#F3F4F6',
+                          color: popoverPlaceId === place.place_id ? '#fff' : '#374151',
+                          border: '1px solid ' + (popoverPlaceId === place.place_id ? '#3B82F6' : '#D1D5DB'),
+                          borderRadius: '50%',
+                          fontSize: '1rem',
                           fontWeight: 600,
                           cursor: 'pointer',
-                          whiteSpace: 'nowrap',
+                          lineHeight: 1,
+                          transition: 'all 0.15s',
                         }}
                       >
-                        Pipeline
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openAddModal(place);
-                        }}
-                        title="Add to outreach"
-                        style={{
-                          padding: '0.25rem 0.5rem',
-                          background: '#10B981',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.65rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        + Add
+                        +
                       </button>
                     </div>
                   </div>
@@ -981,287 +989,16 @@ function MapExplorer() {
         />
       </div>
 
-      {/* Add to Outreach Modal */}
-      {showAddModal && selectedPlace && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-          }}
-          onClick={() => setShowAddModal(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#fff',
-              borderRadius: '0.75rem',
-              padding: '1.5rem',
-              width: '480px',
-              maxWidth: '95vw',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-            }}
-          >
-            <h2 style={{ margin: '0 0 1rem', fontSize: '1.1rem', fontWeight: 700 }}>
-              Add to Outreach
-            </h2>
-
-            {/* Business info display */}
-            <div style={{
-              padding: '0.75rem',
-              background: '#F9FAFB',
-              borderRadius: '0.5rem',
-              marginBottom: '1rem',
-              fontSize: '0.85rem',
-            }}>
-              <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{selectedPlace.name}</div>
-              <div style={{ color: '#6B7280', fontSize: '0.8rem' }}>{selectedPlace.address}</div>
-              {selectedPlace.phone && (
-                <div style={{ color: '#6B7280', fontSize: '0.8rem' }}>Phone: {selectedPlace.phone}</div>
-              )}
-              {selectedPlace.website && (
-                <div style={{ color: '#6B7280', fontSize: '0.8rem' }}>
-                  Website: <a href={selectedPlace.website} target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>
-                    {selectedPlace.website.replace(/^https?:\/\//, '').slice(0, 40)}
-                  </a>
-                </div>
-              )}
-              {selectedPlace.rating > 0 && (
-                <div style={{ color: '#F59E0B', fontSize: '0.8rem' }}>
-                  Rating: {selectedPlace.rating}/5 ({selectedPlace.user_ratings_total || 0} reviews)
-                </div>
-              )}
-            </div>
-
-            {/* Email (required) */}
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label style={{ display: 'block', fontWeight: 500, fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                Email Address <span style={{ color: '#EF4444' }}>*</span>
-              </label>
-              <input
-                type="email"
-                value={addEmail}
-                onChange={(e) => setAddEmail(e.target.value)}
-                placeholder="business@example.com"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem 0.75rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.85rem',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <p style={{ fontSize: '0.75rem', color: '#9CA3AF', margin: '0.25rem 0 0' }}>
-                Google Places doesn't provide emails. Check the business website for contact info.
-              </p>
-            </div>
-
-            {/* Action type */}
-            <div style={{ marginBottom: '0.75rem' }}>
-              <label style={{ display: 'block', fontWeight: 500, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-                Add as
-              </label>
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                {[
-                  { value: 'contact', label: 'Contact' },
-                  { value: 'recipient', label: 'Campaign Recipient' },
-                  { value: 'both', label: 'Both' },
-                ].map((opt) => (
-                  <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="addAction"
-                      value={opt.value}
-                      checked={addAction === opt.value}
-                      onChange={() => setAddAction(opt.value)}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Campaign selector */}
-            {addAction !== 'contact' && (
-              <div style={{ marginBottom: '0.75rem' }}>
-                <label style={{ display: 'block', fontWeight: 500, fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                  Campaign
-                </label>
-                <select
-                  value={addCampaignId}
-                  onChange={(e) => {
-                    if (e.target.value === '__new__') {
-                      setShowNewCampaign(true);
-                      setAddCampaignId('');
-                    } else {
-                      setShowNewCampaign(false);
-                      setAddCampaignId(e.target.value);
-                    }
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem 0.75rem',
-                    border: '1px solid #D1D5DB',
-                    borderRadius: '0.375rem',
-                    fontSize: '0.85rem',
-                    background: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <option value="">Select a campaign...</option>
-                  {campaigns.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.status})
-                    </option>
-                  ))}
-                  <option value="__new__">+ Create new campaign</option>
-                </select>
-                {showNewCampaign && (
-                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      placeholder="Campaign name"
-                      value={newCampaignName}
-                      onChange={(e) => setNewCampaignName(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem 0.75rem',
-                        border: '1px solid #D1D5DB',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.85rem',
-                        boxSizing: 'border-box',
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      disabled={!newCampaignName.trim() || creatingCampaign}
-                      onClick={async () => {
-                        setCreatingCampaign(true);
-                        try {
-                          const res = await createCampaign({ name: newCampaignName.trim() });
-                          const newCampaign = res.data;
-                          setCampaigns(prev => [newCampaign, ...prev]);
-                          setAddCampaignId(String(newCampaign.id));
-                          setShowNewCampaign(false);
-                          setNewCampaignName('');
-                        } catch (err) {
-                          setAddResult({ type: 'error', message: 'Failed to create campaign' });
-                        }
-                        setCreatingCampaign(false);
-                      }}
-                      style={{
-                        padding: '0.5rem 0.75rem',
-                        border: 'none',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.85rem',
-                        background: '#3B82F6',
-                        color: '#fff',
-                        cursor: !newCampaignName.trim() || creatingCampaign ? 'not-allowed' : 'pointer',
-                        opacity: !newCampaignName.trim() || creatingCampaign ? 0.5 : 1,
-                      }}
-                    >
-                      {creatingCampaign ? '...' : 'Create'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowNewCampaign(false); setNewCampaignName(''); }}
-                      style={{
-                        padding: '0.5rem 0.75rem',
-                        border: '1px solid #D1D5DB',
-                        borderRadius: '0.375rem',
-                        fontSize: '0.85rem',
-                        background: '#fff',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Notes */}
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontWeight: 500, fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                Notes
-              </label>
-              <textarea
-                value={addNotes}
-                onChange={(e) => setAddNotes(e.target.value)}
-                rows={2}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem 0.75rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem',
-                  fontSize: '0.85rem',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            {/* Result message */}
-            {addResult && (
-              <div style={{
-                padding: '0.5rem 0.75rem',
-                marginBottom: '0.75rem',
-                borderRadius: '0.375rem',
-                fontSize: '0.85rem',
-                background: addResult.type === 'success' ? '#ECFDF5' : '#FEF2F2',
-                color: addResult.type === 'success' ? '#065F46' : '#991B1B',
-                border: `1px solid ${addResult.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
-              }}>
-                {addResult.message}
-              </div>
-            )}
-
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowAddModal(false)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  border: '1px solid #D1D5DB',
-                  borderRadius: '0.375rem',
-                  background: '#fff',
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                }}
-              >
-                Close
-              </button>
-              <button
-                onClick={handleAddToOutreach}
-                disabled={adding || !addEmail.trim() || (addAction !== 'contact' && !addCampaignId)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: adding ? '#9CA3AF' : '#3B82F6',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '0.375rem',
-                  fontWeight: 600,
-                  fontSize: '0.85rem',
-                  cursor: adding ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {adding ? 'Adding...' : 'Add to Outreach'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Add-to popover */}
+      {popoverPlaceId && results.find(r => r.place_id === popoverPlaceId) && (
+        <AddToPopover
+          place={results.find(r => r.place_id === popoverPlaceId)}
+          campaigns={campaigns}
+          position={popoverPosition}
+          onAddToPipeline={handleAddToPipeline}
+          onAddToOutreach={handleAddToOutreach}
+          onClose={() => setPopoverPlaceId(null)}
+        />
       )}
     </div>
   );
