@@ -178,6 +178,10 @@ class GenerationRunner:
         writing_style = get_writing_style()
         learned_insights = get_learned_insights()
 
+        # Load business profile for workspace context
+        from app.models.business_profile import BusinessProfile
+        business_profile = BusinessProfile.query.filter_by(workspace_id=campaign.workspace_id).first()
+
         # Competitor discovery
         competitor_service = None
         if campaign.competitor_search_query:
@@ -203,12 +207,14 @@ class GenerationRunner:
                 ai_prompt, campaign_context, writing_style, learned_insights,
                 competitor_service, campaign, workspace_id,
                 get_learned_website_insights, log_website_analysis,
+                business_profile=business_profile,
             )
         else:
             cls._run_parallel_path(
                 state, recipient_ids, claude, tpl_subject, tpl_body,
                 ai_prompt, campaign_context, writing_style, learned_insights,
                 competitor_service, campaign,
+                business_profile=business_profile,
             )
 
     @classmethod
@@ -216,7 +222,8 @@ class GenerationRunner:
                               tpl_subject, tpl_body, ai_prompt, campaign_context,
                               writing_style, learned_insights,
                               competitor_service, campaign, workspace_id,
-                              get_learned_website_insights, log_website_analysis):
+                              get_learned_website_insights, log_website_analysis,
+                              business_profile=None):
         """Website analysis path — sequential, one recipient at a time."""
         from app import db
         from app.models import Recipient
@@ -285,6 +292,7 @@ class GenerationRunner:
                     team_contacts=team_contacts,
                     competitors=competitors,
                     competitor_location=competitor_location,
+                    business_profile=business_profile,
                 )
 
                 recipient.personalized_subject = result.get('subject', tpl_subject)
@@ -309,7 +317,8 @@ class GenerationRunner:
     def _run_parallel_path(cls, state, recipient_ids, claude,
                             tpl_subject, tpl_body, ai_prompt, campaign_context,
                             writing_style, learned_insights,
-                            competitor_service, campaign):
+                            competitor_service, campaign,
+                            business_profile=None):
         """Fast parallel path — no website analysis, concurrent Claude calls."""
         from app import db
         from app.models import Recipient
@@ -382,6 +391,7 @@ class GenerationRunner:
                 team_contacts=[],
                 competitors=comps,
                 competitor_location=comp_loc,
+                business_profile=business_profile,
             )
 
         # Process in batches of 5 to update progress incrementally

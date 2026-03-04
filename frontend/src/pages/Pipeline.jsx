@@ -6,6 +6,8 @@ import {
 } from '../api/client';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+import StatCard from '../components/StatCard';
+import { scoreColor } from '../utils/colors';
 
 const STATUS_LABELS = {
   new: 'New',
@@ -56,7 +58,12 @@ function Pipeline() {
     setLoading(false);
   }, [filter, sort]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const filteredLeads = leads.filter(lead => {
     if (!search) return true;
@@ -200,13 +207,6 @@ function Pipeline() {
     });
   };
 
-  const scoreColor = (score) => {
-    if (!score && score !== 0) return '#6B7280';
-    if (score >= 70) return '#10B981';
-    if (score >= 40) return '#F59E0B';
-    return '#EF4444';
-  };
-
   const retirementColor = (label) => {
     if (label === 'high') return '#F59E0B';
     if (label === 'medium') return '#3B82F6';
@@ -266,8 +266,8 @@ function Pipeline() {
         <StatCard label="Enriched" value={(stats.by_status?.enriched || 0) + (stats.by_status?.qualified || 0)} color="#3B82F6" />
         <StatCard label="Approved" value={(stats.by_status?.approved || 0) + (stats.by_status?.in_campaign || 0)} color="#10B981" />
         <StatCard label="Avg Score" value={stats.avg_score || 0} color="#E8603C" />
-        <StatCard label="Has Email" value={stats.with_email || 0} color="#059669" />
-        <StatCard label="Has Employee #" value={stats.with_employee_count || 0} color="#D4532F" />
+        <StatCard label="Has Email" value={stats.with_email || 0} color="#0891B2" />
+        <StatCard label="Has Employee #" value={stats.with_employee_count || 0} color="#8B5CF6" />
         <StatCard label="Likely Retiring" value={stats.with_high_retirement || 0} color="#F59E0B" />
       </div>
 
@@ -728,18 +728,6 @@ function Detail({ label, value, link }) {
       ) : (
         <span>{value}</span>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div
-      className={`card stat-card-compact${color ? ' stat-card-accent' : ''}`}
-      style={color ? { '--stat-accent': color } : undefined}
-    >
-      <div className="stat-label">{label}</div>
-      <div className="stat-value" style={{ color: color || 'var(--text)' }}>{value}</div>
     </div>
   );
 }

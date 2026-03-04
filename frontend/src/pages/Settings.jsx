@@ -15,7 +15,9 @@ import {
   updateAutopilotConfig,
   getAllFeatures,
   getEnabledFeatures,
-  updateFeatureVisibility
+  updateFeatureVisibility,
+  triggerGmailSync,
+  getGmailSyncStatus,
 } from '../api/client';
 import { useFeatureVisibility } from '../hooks/useFeatureVisibility';
 
@@ -64,6 +66,8 @@ function Settings({ onStatusChange }) {
   const [allFeatures, setAllFeatures] = useState({});
   const [featureVisibility, setFeatureVisibility] = useState({});
   const { reloadFeatures } = useFeatureVisibility();
+  const [gmailSyncStatus, setGmailSyncStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   const loadGmailAccounts = async () => {
     try {
@@ -104,6 +108,9 @@ function Settings({ onStatusChange }) {
     // Load Clay settings
     getClaySettings().then((res) => setClaySettings(res.data)).catch(() => {});
     getClayWebhookUrl().then((res) => setClayWebhookUrl(res.data.webhook_url)).catch(() => {});
+
+    // Load Gmail sync status
+    getGmailSyncStatus().then((res) => setGmailSyncStatus(res.data)).catch(() => {});
 
     // Load autopilot config
     getAutopilotConfig().then((res) => {
@@ -300,6 +307,21 @@ function Settings({ onStatusChange }) {
     }
   };
 
+  const handleGmailSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await triggerGmailSync();
+      const data = res.data;
+      setMessage(`Gmail sync complete successfully! Synced ${data.synced_sent} sent and ${data.synced_received} received emails.`);
+      // Refresh status
+      const statusRes = await getGmailSyncStatus();
+      setGmailSyncStatus(statusRes.data);
+    } catch (error) {
+      setMessage('Gmail sync failed: ' + (error.response?.data?.error || error.message));
+    }
+    setSyncing(false);
+  };
+
   const handleToggleFeatureVisibility = async (featureName) => {
     try {
       const newEnabled = !featureVisibility[featureName];
@@ -382,6 +404,57 @@ function Settings({ onStatusChange }) {
         <a href={getGmailConnectUrl()} className="btn btn-primary">
           {gmailAccounts.length > 0 ? 'Connect Another Account' : 'Connect Gmail Account'}
         </a>
+      </div>
+
+      {/* Gmail Sync */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Gmail Email Sync <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
+        <p className="text-sm text-light mb-2">
+          Automatically records emails sent and received directly in Gmail with your contacts.
+          Runs every 10 minutes in the background, or sync manually below.
+        </p>
+
+        {gmailSyncStatus && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: '0.75rem',
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            background: '#F9FAFB',
+            borderRadius: '0.5rem',
+          }}>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase' }}>Last Sync</div>
+              <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
+                {gmailSyncStatus.last_sync
+                  ? new Date(gmailSyncStatus.last_sync).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                  : 'Never'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase' }}>Sent Recorded</div>
+              <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{gmailSyncStatus.total_synced_sent || 0}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#9CA3AF', textTransform: 'uppercase' }}>Received Recorded</div>
+              <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>{gmailSyncStatus.total_synced_received || 0}</div>
+            </div>
+          </div>
+        )}
+
+        <button
+          className="btn btn-primary"
+          onClick={handleGmailSync}
+          disabled={syncing || gmailAccounts.length === 0}
+        >
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </button>
+        {gmailAccounts.length === 0 && (
+          <span className="text-sm text-light" style={{ marginLeft: '0.75rem' }}>
+            Connect a Gmail account first
+          </span>
+        )}
       </div>
 
       {/* Anthropic API Key */}

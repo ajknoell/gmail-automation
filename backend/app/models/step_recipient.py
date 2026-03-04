@@ -31,6 +31,9 @@ class StepRecipient(db.Model):
     # Reference to the email log entry after sending
     email_log_id = db.Column(db.Integer, db.ForeignKey('email_logs.id'), nullable=True)
 
+    # A/B testing: which variant group this assignment came from
+    variant_assignment = db.Column(db.String(50), nullable=True)
+
     __table_args__ = (
         db.UniqueConstraint('step_id', 'recipient_id', name='uq_step_recipient'),
     )

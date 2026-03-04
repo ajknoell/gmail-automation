@@ -79,7 +79,7 @@ class PlacesService:
             'locationRestriction': {
                 'circle': {
                     'center': {'latitude': lat, 'longitude': lng},
-                    'radius': float(radius),
+                    'radius': min(float(radius), 50000),
                 }
             },
             'maxResultCount': min(max_results, 20),
@@ -169,7 +169,7 @@ class PlacesService:
             'locationBias': {
                 'circle': {
                     'center': {'latitude': lat, 'longitude': lng},
-                    'radius': float(radius),
+                    'radius': min(float(radius), 50000),
                 }
             },
             'maxResultCount': min(max_results, 20),

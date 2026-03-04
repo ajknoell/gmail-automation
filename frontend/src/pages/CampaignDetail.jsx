@@ -35,10 +35,12 @@ import {
   approveStepRecipients,
   startStep,
   getTemplates,
+  createABTest,
 } from '../api/client';
 import AttachmentPicker from '../components/AttachmentPicker';
 import RichTextEditor from '../components/RichTextEditor';
 import SequenceBuilder from '../components/SequenceBuilder';
+import { useFeatureVisibility } from '../hooks/useFeatureVisibility';
 import ColdCallModal from '../components/ColdCallModal';
 import AddContactToRunningCampaignModal from '../components/AddContactToRunningCampaignModal';
 
@@ -156,6 +158,7 @@ function MoveModal({ campaigns, selectedCount, onMove, onClose, isMoving }) {
 
 function CampaignDetail() {
   const { id } = useParams();
+  const { isFeatureEnabled } = useFeatureVisibility();
   const [campaign, setCampaign] = useState(null);
   const [recipients, setRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -714,6 +717,15 @@ function CampaignDetail() {
     }
   };
 
+  const handleCreateABTest = async (data) => {
+    try {
+      await createABTest(id, data);
+      loadData();
+    } catch (error) {
+      alert('Failed to create A/B test: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const handleGenerateStepPreview = async (stepId) => {
     try {
       const res = await generateStepPreview(id, stepId);
@@ -827,7 +839,7 @@ function CampaignDetail() {
             <div className="stat-label">Failed</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{pendingCount}</div>
+            <div className="stat-value" style={{ color: '#6B7280' }}>{pendingCount}</div>
             <div className="stat-label">Pending</div>
           </div>
         </div>
@@ -862,14 +874,27 @@ function CampaignDetail() {
 
         {campaign.total_recipients > 0 && (
           <div className="mt-2">
-            <div className="progress-bar" style={{ height: '1rem' }}>
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${((campaign.sent_count + campaign.failed_count) / campaign.total_recipients) * 100}%`,
-                  background: campaign.failed_count > 0 ? 'linear-gradient(to right, #10B981, #EF4444)' : '#10B981',
-                }}
-              />
+            <div className="progress-bar" style={{ height: '1rem', display: 'flex' }}>
+              {campaign.sent_count > 0 && (
+                <div
+                  style={{
+                    width: `${(campaign.sent_count / campaign.total_recipients) * 100}%`,
+                    height: '100%',
+                    background: '#10B981',
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              )}
+              {campaign.failed_count > 0 && (
+                <div
+                  style={{
+                    width: `${(campaign.failed_count / campaign.total_recipients) * 100}%`,
+                    height: '100%',
+                    background: '#EF4444',
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              )}
             </div>
           </div>
         )}
@@ -1183,7 +1208,7 @@ function CampaignDetail() {
       )}
 
       {/* Follow-up Sequence Builder */}
-      {recipients.length > 0 && (
+      {recipients.length > 0 && isFeatureEnabled('follow_ups') && (
         <SequenceBuilder
           campaignId={id}
           steps={steps}
@@ -1196,6 +1221,7 @@ function CampaignDetail() {
           onApproveStep={handleApproveStep}
           onStartStep={handleStartStep}
           onReloadSteps={loadData}
+          onCreateABTest={handleCreateABTest}
         />
       )}
 

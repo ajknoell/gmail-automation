@@ -122,6 +122,11 @@ export const regenerateStepRecipient = (campaignId, stepId, srId) =>
   api.post(`/api/campaigns/${campaignId}/steps/${stepId}/recipients/${srId}/regenerate`);
 export const startStep = (campaignId, stepId) => api.post(`/api/campaigns/${campaignId}/steps/${stepId}/start`);
 
+// Campaign A/B Tests
+export const createABTest = (campaignId, data) => api.post(`/api/campaigns/${campaignId}/steps/ab-test`, data);
+export const getABTestStats = (campaignId, variantGroup) => api.get(`/api/campaigns/${campaignId}/ab-test/${variantGroup}/stats`);
+export const reassignABTest = (campaignId, variantGroup) => api.post(`/api/campaigns/${campaignId}/steps/ab-test/${variantGroup}/reassign`);
+
 // Campaign Actions
 export const startCampaign = (id, data) => api.post(`/api/campaigns/${id}/start`, data);
 export const pauseCampaign = (id) => api.post(`/api/campaigns/${id}/pause`);
@@ -145,6 +150,10 @@ export const sendQuickEmail = (data) => api.post('/api/quick-send/send', data);
 export const getCampaignTracking = (id) => api.get(`/api/campaigns/${id}/tracking`);
 export const getQuickSendHistory = () => api.get('/api/quick-send/history');
 export const triggerReplyCheck = () => api.post('/api/tracking/check-replies');
+
+// Gmail Sync
+export const triggerGmailSync = () => api.post('/api/gmail-sync/trigger');
+export const getGmailSyncStatus = () => api.get('/api/gmail-sync/status');
 
 // Clay Integration
 export const getClaySettings = () => api.get('/api/clay/settings');
@@ -218,6 +227,13 @@ export const deleteAttachment = (id) => api.delete(`/api/attachments/${id}`);
 // Listing Monitor
 export const getMonitoredSites = () => api.get('/api/listings/sites');
 export const createMonitoredSite = (data) => api.post('/api/listings/sites', data);
+export const uploadBrokerSites = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/api/listings/sites/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
 export const updateMonitoredSite = (id, data) => api.put(`/api/listings/sites/${id}`, data);
 export const deleteMonitoredSite = (id) => api.delete(`/api/listings/sites/${id}`);
 export const checkSiteNow = (id) => api.post(`/api/listings/sites/${id}/check`);
@@ -322,5 +338,15 @@ export const startLeadDiscovery = (data) => api.post('/api/agents/discover', dat
 export const startCompetitiveIntel = (data) => api.post('/api/agents/competitive-intel', data);
 export const cancelAgentTask = (id) => api.post(`/api/agents/tasks/${id}/cancel`);
 export const getAgentStats = () => api.get('/api/agents/stats');
+
+// --- Deals ---
+export const getDeals = (params) => api.get('/api/deals/', { params });
+export const getDealStats = () => api.get('/api/deals/stats');
+export const getDeal = (id) => api.get(`/api/deals/${id}`);
+export const createDeal = (data) => api.post('/api/deals/', data);
+export const updateDeal = (id, data) => api.put(`/api/deals/${id}`, data);
+export const deleteDeal = (id) => api.delete(`/api/deals/${id}`);
+export const updateDealStage = (id, stage) => api.put(`/api/deals/${id}/stage`, { stage });
+export const createDealFromListing = (listingId, data) => api.post(`/api/deals/from-listing/${listingId}`, data || {});
 
 export default api;

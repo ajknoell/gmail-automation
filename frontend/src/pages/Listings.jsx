@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   getMonitoredSites,
   createMonitoredSite,
+  uploadBrokerSites,
   deleteMonitoredSite,
   checkSiteNow,
   checkAllSitesNow,
@@ -21,7 +22,9 @@ import {
   parseEmailPreview,
   ingestEmailListing,
   scanEmailAlerts,
+  createDealFromListing,
 } from '../api/client';
+import { formatPrice } from '../utils/format';
 
 // Price presets for quick selection
 const PRICE_PRESETS = [
@@ -33,13 +36,6 @@ const PRICE_PRESETS = [
   { label: '$1M – $5M', min: '1000000', max: '5000000' },
   { label: 'Over $5M', min: '5000000', max: '' },
 ];
-
-function formatPrice(num) {
-  if (!num) return '';
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-  return `$${num}`;
-}
 
 function Listings() {
   const [sites, setSites] = useState([]);
@@ -55,6 +51,12 @@ function Listings() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSite, setNewSite] = useState({ name: '', url: '', contact_id: '', check_interval_hours: 24 });
   const [fetchingName, setFetchingName] = useState(false);
+
+  // CSV upload
+  const [showCsvUpload, setShowCsvUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
 
   // Filters
   const [filterSiteId, setFilterSiteId] = useState(null);
@@ -98,6 +100,16 @@ function Listings() {
 
   // Debounce keyword search
   const [keywordTimer, setKeywordTimer] = useState(null);
+  const navigate = useNavigate();
+
+  const handleTrackDeal = async (listing) => {
+    try {
+      await createDealFromListing(listing.id);
+      navigate('/deals');
+    } catch (err) {
+      console.error('Failed to create deal:', err);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -241,6 +253,23 @@ function Listings() {
       console.error('Failed to add site:', err);
       alert('Failed to add site');
     }
+  };
+
+  const handleCsvUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const res = await uploadBrokerSites(uploadFile);
+      setUploadResult(res.data);
+      if (res.data.created > 0) {
+        loadData();
+      }
+    } catch (err) {
+      const errData = err.response?.data || {};
+      setUploadResult({ error: errData.error || 'Upload failed', headers: errData.headers });
+    }
+    setUploading(false);
   };
 
   const handleDeleteSite = async (siteId) => {
@@ -470,8 +499,14 @@ function Listings() {
             + Quick Add
           </button>
           <button
+            className={`btn ${showCsvUpload ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => { setShowCsvUpload(!showCsvUpload); setShowAddForm(false); setUploadFile(null); setUploadResult(null); }}
+          >
+            Upload CSV
+          </button>
+          <button
             className="btn btn-primary"
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => { setShowAddForm(!showAddForm); setShowCsvUpload(false); }}
           >
             + Add Site
           </button>
@@ -1192,6 +1227,97 @@ function Listings() {
         </div>
       )}
 
+      {/* CSV Upload Form */}
+      {showCsvUpload && (
+        <div className="card" style={{ marginBottom: '20px' }}>
+          <h3 style={{ marginBottom: '16px' }}>Upload Broker Sites from CSV</h3>
+          <p className="text-sm text-light" style={{ marginBottom: '12px' }}>
+            Upload a CSV or Excel file with broker website URLs. The system will auto-detect
+            columns for URL, name, scraper type, and check interval. Duplicate URLs will be skipped.
+          </p>
+          <div style={{
+            border: '2px dashed #D1D5DB',
+            borderRadius: '8px',
+            padding: '24px',
+            textAlign: 'center',
+            marginBottom: '12px',
+            backgroundColor: uploadFile ? '#F0FDF4' : '#F9FAFB',
+          }}>
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(e) => {
+                setUploadFile(e.target.files[0] || null);
+                setUploadResult(null);
+              }}
+            />
+            {uploadFile && (
+              <div className="text-sm" style={{ color: '#059669', marginTop: '8px' }}>
+                Selected: {uploadFile.name}
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleCsvUpload}
+              disabled={!uploadFile || uploading}
+            >
+              {uploading ? 'Uploading & Scraping...' : 'Upload & Add Sites'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setShowCsvUpload(false); setUploadFile(null); setUploadResult(null); }}
+            >
+              Cancel
+            </button>
+          </div>
+          {uploadResult && (
+            <div style={{
+              marginTop: '12px',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: uploadResult.error ? '#FEF2F2' : '#F0FDF4',
+              border: `1px solid ${uploadResult.error ? '#FECACA' : '#BBF7D0'}`,
+            }}>
+              {uploadResult.error ? (
+                <div>
+                  <div style={{ color: '#DC2626', fontWeight: 600 }}>{uploadResult.error}</div>
+                  {uploadResult.headers && (
+                    <div className="text-sm" style={{ marginTop: '4px', color: '#78716C' }}>
+                      Detected columns: {uploadResult.headers.join(', ')}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div style={{ color: '#059669', fontWeight: 600, marginBottom: '4px' }}>
+                    Upload complete!
+                  </div>
+                  <div className="text-sm">
+                    {uploadResult.created} site{uploadResult.created !== 1 ? 's' : ''} created and scraped
+                    {uploadResult.skipped_duplicate > 0 && `, ${uploadResult.skipped_duplicate} duplicate${uploadResult.skipped_duplicate !== 1 ? 's' : ''} skipped`}
+                    {uploadResult.skipped_invalid > 0 && `, ${uploadResult.skipped_invalid} invalid row${uploadResult.skipped_invalid !== 1 ? 's' : ''} skipped`}
+                  </div>
+                  {uploadResult.scrape_results && uploadResult.scrape_results.length > 0 && (
+                    <div className="text-sm" style={{ marginTop: '8px' }}>
+                      {uploadResult.scrape_results.map((r, i) => (
+                        <div key={i} style={{ marginTop: '2px' }}>
+                          {r.name || `Site ${r.site_id}`}: {r.error
+                            ? <span style={{ color: '#DC2626' }}>{r.error}</span>
+                            : <span>{r.new || 0} new listing{(r.new || 0) !== 1 ? 's' : ''} found{r.filtered_out ? `, ${r.filtered_out} filtered by buy box` : ''}</span>
+                          }
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Monitored Sites Bar */}
       {sites.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
@@ -1473,6 +1599,13 @@ function Listings() {
                         style={{ fontSize: '12px', padding: '2px 8px' }}
                       >
                         {listing.notes ? 'Notes' : '+ Note'}
+                      </button>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => handleTrackDeal(listing)}
+                        style={{ fontSize: '12px', padding: '2px 8px' }}
+                      >
+                        Track Deal
                       </button>
                     </div>
                   </div>

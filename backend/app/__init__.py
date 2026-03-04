@@ -48,6 +48,7 @@ def create_app(config_class=None):
     from app.routes.profile import profile_bp
     from app.routes.opportunities import opportunities_bp
     from app.routes.agents import agents_bp
+    from app.routes.deals import deals_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
@@ -72,6 +73,7 @@ def create_app(config_class=None):
     app.register_blueprint(profile_bp, url_prefix='/api/profile')
     app.register_blueprint(opportunities_bp, url_prefix='/api/opportunities')
     app.register_blueprint(agents_bp, url_prefix='/api/agents')
+    app.register_blueprint(deals_bp, url_prefix='/api/deals')
 
     # Create database tables and run migrations
     with app.app_context():
@@ -83,6 +85,9 @@ def create_app(config_class=None):
         # Backfill contacts from existing email logs (one-time)
         _backfill_contacts(app)
 
+        # Backfill delay_minutes from delay_days (one-time)
+        _backfill_delay_minutes(app)
+
         # Ensure default workspace exists and backfill workspace_id
         _ensure_default_workspace(app)
 
@@ -91,6 +96,9 @@ def create_app(config_class=None):
 
         # Backfill campaign steps for existing campaigns (one-time)
         _ensure_campaign_steps(app)
+
+        # Fix follow-up steps incorrectly assigned position 1 (one-time)
+        _fix_followup_step_positions(app)
 
     # Workspace resolution middleware
     @app.before_request
@@ -158,6 +166,11 @@ def create_app(config_class=None):
     signal_interval = app.config.get('SIGNAL_CHECK_INTERVAL', 3600)
     SignalEngine.start_background_polling(app, interval=signal_interval)
 
+    # Start Gmail sync (every 10 minutes - records emails sent/received in Gmail)
+    from app.services.gmail_sync import GmailSyncService
+    gmail_sync_interval = app.config.get('GMAIL_SYNC_INTERVAL', 600)
+    GmailSyncService.start_background_polling(app, interval=gmail_sync_interval)
+
     return app
 
 
@@ -201,6 +214,13 @@ def _run_migrations(app):
     _add_column('email_logs', 'is_html', 'BOOLEAN', default=0)
     _add_column('email_logs', 'bounced_at', 'DATETIME')
     _add_column('email_logs', 'bounce_reason', 'TEXT')
+
+    # Email source/direction tracking
+    _add_column('email_logs', 'source', 'VARCHAR(20)')
+    _add_column('email_logs', 'direction', 'VARCHAR(10)')
+
+    # Gmail sync settings
+    _add_column('email_logs', 'sender_email', 'VARCHAR(255)')
 
     # Contacts migrations
     _add_column('contacts', 'status', "VARCHAR(20)", default="'contacted'")
@@ -252,6 +272,15 @@ def _run_migrations(app):
     # Owner retirement likelihood detection
     _add_column('leads', 'retirement_score', 'INTEGER')
     _add_column('leads', 'retirement_label', 'VARCHAR(20)')
+
+    # Flexible delay timing (minutes instead of days)
+    _add_column('campaign_steps', 'delay_minutes', 'INTEGER')
+
+    # A/B testing fields
+    _add_column('campaign_steps', 'variant_group', 'VARCHAR(50)')
+    _add_column('campaign_steps', 'variant_label', 'VARCHAR(20)')
+    _add_column('campaign_steps', 'variant_pct', 'INTEGER')
+    _add_column('step_recipients', 'variant_assignment', 'VARCHAR(50)')
 
     # Create index on tracking_id
     try:
@@ -308,6 +337,23 @@ def _backfill_contacts(app):
     if count > 0:
         db.session.commit()
         app.logger.info(f'Backfilled {count} contacts from email_logs')
+
+
+def _backfill_delay_minutes(app):
+    """One-time backfill of delay_minutes from delay_days for existing campaign steps."""
+    from app.models.campaign_step import CampaignStep
+
+    steps = CampaignStep.query.filter(
+        CampaignStep.delay_minutes.is_(None),
+        CampaignStep.delay_days.isnot(None),
+    ).all()
+    if not steps:
+        return
+
+    for step in steps:
+        step.delay_minutes = (step.delay_days or 3) * 1440
+    db.session.commit()
+    app.logger.info(f'Backfilled delay_minutes for {len(steps)} campaign steps')
 
 
 def _ensure_default_workspace(app):
@@ -517,3 +563,49 @@ def _ensure_campaign_steps(app):
     Settings.set('campaign_steps_backfilled', 'true')
     db.session.commit()
     app.logger.info(f'Backfilled steps for {len(campaigns_without_steps)} existing campaigns')
+
+
+def _fix_followup_step_positions(app):
+    """Fix follow-up steps that were incorrectly assigned position 1.
+
+    A bug in create_step() ignored the requested position when it was greater
+    than max_pos, causing the first follow-up step to get position=1 instead
+    of position=2.  These steps are invisible because the UI and scheduler
+    both filter to position > 1.
+    """
+    from app.models.settings import Settings
+    from app.models.campaign_step import CampaignStep
+
+    if Settings.get('followup_positions_fixed'):
+        return
+
+    # Follow-up steps at position 1 are identified by having a non-zero delay_days
+    # (the backfilled Initial Outreach step always has delay_days=0, while follow-ups
+    # default to delay_days=3; delay_minutes column default of 4320 is unreliable)
+    corrupted = CampaignStep.query.filter(
+        CampaignStep.position == 1,
+        CampaignStep.delay_days > 0,
+    ).all()
+
+    if not corrupted:
+        Settings.set('followup_positions_fixed', 'true')
+        db.session.commit()
+        return
+
+    fixed = 0
+    for step in corrupted:
+        # Shift any existing steps at position >= 2 up by 1 to make room
+        CampaignStep.query.filter(
+            CampaignStep.campaign_id == step.campaign_id,
+            CampaignStep.position >= 2,
+            CampaignStep.id != step.id,
+        ).update({CampaignStep.position: CampaignStep.position + 1})
+        step.position = 2
+        # Fix the name if it was incorrectly set to 'Initial Outreach'
+        if step.name == 'Initial Outreach':
+            step.name = 'Follow-up #1'
+        fixed += 1
+
+    Settings.set('followup_positions_fixed', 'true')
+    db.session.commit()
+    app.logger.info(f'Fixed positions for {fixed} corrupted follow-up steps')

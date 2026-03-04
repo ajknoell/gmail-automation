@@ -196,16 +196,40 @@ class BaseScraper:
             return True  # On error, assume allowed
 
     def fetch_page(self, url):
-        """Fetch raw HTML from a URL. Respects robots.txt."""
+        """Fetch raw HTML from a URL. Respects robots.txt.
+
+        Retries up to 2 times on transient connection failures with backoff.
+        Returns empty string on persistent failures so Playwright can be tried.
+        """
         if not self._check_robots(url):
             logger.info(f'Blocked by robots.txt: {url}')
             return ''
 
-        resp = requests.get(url, headers=self.HEADERS, timeout=30)
-        resp.raise_for_status()
-        # Rate limit: be polite
-        time.sleep(2)
-        return resp.text
+        last_err = None
+        for attempt in range(3):
+            try:
+                resp = requests.get(url, headers=self.HEADERS, timeout=30)
+                resp.raise_for_status()
+                # Rate limit: be polite
+                time.sleep(2)
+                return resp.text
+            except requests.exceptions.ConnectionError as e:
+                last_err = e
+                logger.warning(f'Connection error fetching {url} (attempt {attempt + 1}/3): {e}')
+                if attempt < 2:
+                    time.sleep(2 ** attempt)  # backoff: 1s, 2s
+            except requests.exceptions.Timeout as e:
+                last_err = e
+                logger.warning(f'Timeout fetching {url} (attempt {attempt + 1}/3): {e}')
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+            except requests.exceptions.HTTPError as e:
+                # Non-transient HTTP errors (4xx/5xx) — don't retry
+                logger.warning(f'HTTP error fetching {url}: {e}')
+                return ''
+
+        logger.warning(f'All fetch attempts failed for {url}: {last_err}')
+        return ''
 
     def fetch_page_js(self, url, extract_iframes=False):
         """Fetch HTML after JS rendering via Playwright (if available)."""
@@ -817,9 +841,26 @@ class ListingMonitor:
 
         except Exception as e:
             site.last_checked_at = datetime.utcnow()
-            site.last_error = str(e)[:500]
+            friendly = cls._friendly_error(e)
+            site.last_error = friendly[:500]
             db.session.commit()
-            return {'site_id': site.id, 'error': str(e)}
+            return {'site_id': site.id, 'error': friendly}
+
+    @staticmethod
+    def _friendly_error(e):
+        """Convert raw Python exceptions into user-friendly error messages."""
+        msg = str(e)
+        if 'MaxRetryError' in msg or 'Max retries exceeded' in msg or isinstance(e, requests.exceptions.ConnectionError):
+            return 'Could not connect to the website — it may be down, blocking access, or the domain may not exist.'
+        if 'Timeout' in msg or isinstance(e, requests.exceptions.Timeout):
+            return 'The website took too long to respond (timed out). It may be experiencing issues.'
+        if 'SSLError' in msg or 'SSL' in msg:
+            return 'The website has an SSL/security certificate problem — the connection was refused.'
+        if 'TooManyRedirects' in msg or isinstance(e, requests.exceptions.TooManyRedirects):
+            return 'The website is stuck in a redirect loop and could not be loaded.'
+        if isinstance(e, requests.exceptions.HTTPError):
+            return f'The website returned an error (HTTP {e.response.status_code if e.response else "unknown"}).'
+        return f'Scrape failed: {msg[:300]}'
 
     @classmethod
     def check_all_due(cls):

@@ -27,7 +27,12 @@ function Discovery() {
     max_results_per_query: 20, scan_interval_hours: 168,
   });
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    loadAll();
+    const handleWsChange = () => loadAll();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, []);
 
   const loadAll = async () => {
     setLoading(true);
