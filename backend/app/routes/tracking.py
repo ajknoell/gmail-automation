@@ -133,12 +133,46 @@ def check_replies():
     return jsonify(results)
 
 
+@tracking_bp.route('/api/gmail-sync/trigger', methods=['POST'])
+def trigger_gmail_sync():
+    """Manually trigger Gmail email sync."""
+    from app.services.gmail_sync import GmailSyncService
+    results = GmailSyncService.sync_gmail_emails()
+    return jsonify(results)
+
+
+@tracking_bp.route('/api/gmail-sync/status')
+def gmail_sync_status():
+    """Get Gmail sync status and last run info."""
+    from app.models import Settings
+    last_run = Settings.get('gmail_sync_last_run')
+
+    # Count synced emails for this workspace only
+    synced_sent = EmailLog.query.filter_by(
+        source='gmail_sync', direction='sent', workspace_id=g.workspace_id
+    ).count()
+    synced_received = EmailLog.query.filter_by(
+        source='gmail_sync', direction='received', workspace_id=g.workspace_id
+    ).count()
+
+    return jsonify({
+        'last_sync': last_run,
+        'total_synced_sent': synced_sent,
+        'total_synced_received': synced_received,
+        'total_synced': synced_sent + synced_received,
+    })
+
+
 @tracking_bp.route('/api/quick-send/history')
 def quick_send_history():
     """Get recent Quick Send emails with tracking data."""
     logs = (
         EmailLog.query
-        .filter_by(campaign_id=None, workspace_id=g.workspace_id)
+        .filter(
+            EmailLog.campaign_id.is_(None),
+            EmailLog.workspace_id == g.workspace_id,
+            db.or_(EmailLog.source.is_(None), EmailLog.source != 'gmail_sync'),
+        )
         .order_by(EmailLog.created_at.desc())
         .limit(50)
         .all()

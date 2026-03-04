@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getPipelineLeads, getPipelineStats, enrichPipelineLead, bulkEnrichLeads,
   approvePipelineLead, bulkApproveLeads, bulkRejectLeads, deletePipelineLead,
-  getCampaigns,
+  getCampaigns, startProspectResearch,
 } from '../api/client';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+import StatCard from '../components/StatCard';
 import { scoreColor } from '../utils/colors';
 
 const STATUS_LABELS = {
@@ -101,6 +102,19 @@ function Pipeline() {
       showToast('Enrichment failed: ' + (err.response?.data?.error || err.message), 'error');
     }
     setEnrichingIds(prev => { const n = new Set(prev); n.delete(lead.id); return n; });
+  };
+
+  const handleResearch = async (lead) => {
+    if (!lead.website) {
+      showToast('Lead has no website for research', 'error');
+      return;
+    }
+    try {
+      await startProspectResearch(lead.id);
+      showToast('Deep research agent started for ' + lead.name, 'success');
+    } catch (err) {
+      showToast('Research failed: ' + (err.response?.data?.error || err.message), 'error');
+    }
   };
 
   const handleBulkEnrich = async () => {
@@ -403,6 +417,7 @@ function Pipeline() {
                   selected={selected.has(lead.id)}
                   onToggle={() => toggleSelect(lead.id)}
                   onEnrich={() => handleEnrichOne(lead)}
+                  onResearch={() => handleResearch(lead)}
                   onApprove={() => openApproveModal(lead)}
                   onDelete={() => handleDelete(lead.id)}
                   enriching={enrichingIds.has(lead.id)}
@@ -497,7 +512,7 @@ function Pipeline() {
   );
 }
 
-function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enriching, expanded, onExpand, scoreColor, retirementColor }) {
+function LeadRow({ lead, selected, onToggle, onEnrich, onResearch, onApprove, onDelete, enriching, expanded, onExpand, scoreColor, retirementColor }) {
   const emails = lead.emails_found || [];
   const hasEmail = emails.length > 0;
 
@@ -607,6 +622,16 @@ function LeadRow({ lead, selected, onToggle, onEnrich, onApprove, onDelete, enri
                 {enriching ? 'Enriching...' : 'Enrich'}
               </button>
             )}
+            {lead.website && (
+              <button
+                className="btn btn-sm"
+                style={{ background: '#EDE9FE', color: '#7C3AED' }}
+                onClick={onResearch}
+                title="Deep AI research using Firecrawl"
+              >
+                Research
+              </button>
+            )}
             {['enriched', 'qualified'].includes(lead.status) && (
               <button className="btn btn-success btn-sm" onClick={onApprove}>
                 Approve
@@ -703,18 +728,6 @@ function Detail({ label, value, link }) {
       ) : (
         <span>{value}</span>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div
-      className={`card stat-card-compact${color ? ' stat-card-accent' : ''}`}
-      style={color ? { '--stat-accent': color } : undefined}
-    >
-      <div className="stat-label">{label}</div>
-      <div className="stat-value" style={{ color: color || 'var(--text)' }}>{value}</div>
     </div>
   );
 }

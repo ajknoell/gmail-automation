@@ -1002,6 +1002,40 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
             return 'important'
         return None
 
+    @staticmethod
+    def _build_business_context(business_profile) -> str:
+        """Build prompt instructions from workspace BusinessProfile."""
+        if not business_profile:
+            return ""
+
+        parts = []
+        if business_profile.company_name:
+            parts.append(f"YOUR COMPANY: {business_profile.company_name}")
+        if business_profile.tagline:
+            parts.append(f"TAGLINE: {business_profile.tagline}")
+        if business_profile.description:
+            parts.append(f"WHAT YOU DO: {business_profile.description}")
+
+        capabilities = business_profile.get_capabilities()
+        if capabilities:
+            cap_names = [c.get('name', '') for c in capabilities if c.get('name')]
+            if cap_names:
+                parts.append(f"YOUR SERVICES/CAPABILITIES: {', '.join(cap_names)}")
+
+        target_market = business_profile.get_target_market()
+        if target_market:
+            industries = target_market.get('industries', [])
+            if industries:
+                parts.append(f"TARGET INDUSTRIES: {', '.join(industries)}")
+            geos = target_market.get('geographies', [])
+            if geos:
+                parts.append(f"TARGET GEOGRAPHIES: {', '.join(geos)}")
+
+        if not parts:
+            return ""
+
+        return "YOUR BUSINESS CONTEXT (this is who YOU are and what YOU offer — tailor the email to reflect this):\n" + "\n".join(parts)
+
     def personalize_email(
         self,
         template_subject: str,
@@ -1015,6 +1049,7 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         team_contacts: list = None,
         competitors: list = None,
         competitor_location: str = '',
+        business_profile=None,
     ) -> Dict[str, str]:
         """Generate personalized email using Claude."""
 
@@ -1265,6 +1300,9 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
         # Build data-driven insights block (confidence-gated)
         insights_instructions = self._build_insights_instructions(learned_insights, full=True)
 
+        # Build business context from workspace profile
+        business_context = self._build_business_context(business_profile)
+
         # Build website observations note outside f-string (Python 3.9 doesn't allow backslashes in f-string expressions)
         if website_insights:
             _wi_note = (
@@ -1300,6 +1338,8 @@ Return exactly 1 issue. Focus on the single most compelling observation. """
 
 {style_instructions if style_instructions else "Write in a casual but professional tone. Keep it brief and human."}
 
+{business_context}
+
 {insights_instructions}
 
 RECIPIENT PROFILE:
@@ -1325,7 +1365,7 @@ TEMPLATE STRUCTURE RULE (THIS IS THE MOST IMPORTANT RULE — VIOLATION MEANS FAI
 - The ONLY changes you may make:
   (1) Fix obvious typos
   (2) Adjust the greeting to use the correct first name
-  (3) Swap industry/business-type words to match the recipient's actual business. For example, if the template says "electrical contractors" but the company is a steel fabricator, change "electrical contractors" to "steel fabricators" and "electricians" to "steel fabricators". Match the language to what the company actually does.
+  (3) Swap industry/business-type words to match the recipient's actual business. If the template says one industry type but the recipient is in a different field, adjust the language accordingly.
 - Everything else must be preserved from the template.
 
 SUBJECT LINE RULE (CRITICAL):
@@ -1337,7 +1377,7 @@ STYLE REQUIREMENTS:
 2. Use specific details from the research notes to show genuine interest
 3. Keep the tone casual and human
 4. Lead with VALUE — show what's possible for their business, not what's wrong with it
-5. Every observation should tie back to a business benefit (more customers, more trust, stronger brand)
+5. Every observation should tie back to a relevant business benefit for the recipient
 6. Close casually, not with aggressive sales language
 7. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
@@ -1356,7 +1396,7 @@ HUMILITY RULE:
 - NEVER try to sound smarter than the recipient about their own business
 - NEVER contradict what their website clearly states (e.g. don't say "visitors won't know what you do" if the site explains it)
 - NEVER call their tagline, slogan, or headline "generic" if it contains their company name or a play on it. Businesses use puns and wordplay in branding (e.g. "Abodie" → "Your Humble Abodie Awaits"). Criticizing branded wordplay shows you didn't understand their name.
-- NEVER imply the business might be inactive, closed, or not booking — directly or indirectly. Phrases like "visitors might wonder if you're still taking on projects" or "homeowners may question if you're still in business" are just as insulting as saying it yourself. The business IS active. Focus on helping them look their best, not casting doubt.
+- NEVER imply the business might be inactive, closed, or not booking — directly or indirectly. Phrases like "visitors might wonder if you're still active" or "customers may question if you're still in business" are just as insulting as saying it yourself. The business IS active. Focus on helping them look their best, not casting doubt.
 - Show you've done homework, but stay humble — they're the expert
 - Keep observations respectful and accurate. When in doubt, acknowledge what they're doing well before suggesting opportunities
 
@@ -1632,7 +1672,8 @@ Return ONLY valid JSON in this exact format:
         recipient: Dict,
         context: str,
         writing_style: str = None,
-        learned_insights: Dict = None
+        learned_insights: Dict = None,
+        business_profile=None,
     ) -> Dict[str, str]:
         """Generate a quick one-off email with writing style support."""
 
@@ -1670,9 +1711,14 @@ Return ONLY valid JSON in this exact format:
         # Build data-driven insights block for quick email (confidence-gated)
         insights_instructions = self._build_insights_instructions(learned_insights, full=True)
 
+        # Build business context from workspace profile
+        business_context = self._build_business_context(business_profile)
+
         prompt = f"""You are ghostwriting a personalized outreach email. Write exactly like the person whose style is described below.
 
 {style_instructions if style_instructions else "Write in a casual but professional tone. Keep it brief and human."}
+
+{business_context}
 
 {insights_instructions}
 
@@ -1691,15 +1737,15 @@ CRITICAL REQUIREMENTS:
 3. Keep it the specified length (default: 2-4 sentences)
 4. Sound human, not like a mass email
 5. Lead with genuine interest in THEIR work — acknowledge what they're building
-6. Show the VALUE you can bring — paint a picture of how their business benefits (more customers, stronger online presence, more trust from visitors)
+6. Show the VALUE you can bring — paint a picture of how their business benefits from what you offer (reference YOUR BUSINESS CONTEXT above if provided)
 7. Close casually and warmly, not aggressively
 8. NEVER use em dashes (—), en dashes (–), or double hyphens (--). Use commas, periods, or semicolons instead. Dashes are a telltale sign of AI-generated text.
 
 TONE GUIDANCE:
 - Be friendly and respectful — you're reaching out to help them grow, not to point out problems
-- Always tie suggestions to business outcomes: "could help you get more leads", "give homeowners confidence to call"
+- Always tie suggestions to business outcomes relevant to YOUR offering and THEIR business
 - Focus on what's POSSIBLE for them, not what's currently wrong
-- Sound like a helpful neighbor who sees potential, not a salesperson looking for flaws
+- Sound like someone genuinely interested in helping them grow, not a salesperson looking for flaws
 
 ABSOLUTE RULES:
 - NEVER fabricate facts, meetings, or connections not in the notes

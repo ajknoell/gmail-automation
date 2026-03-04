@@ -73,9 +73,18 @@ def get_contact(contact_id):
     if not contact:
         return jsonify({'error': 'Contact not found'}), 404
 
+    # Find emails where this contact is recipient OR sender (for gmail_sync received)
     logs = (
         EmailLog.query
-        .filter_by(recipient_email=contact.email)
+        .filter(
+            db.or_(
+                EmailLog.recipient_email == contact.email,
+                db.and_(
+                    EmailLog.sender_email == contact.email,
+                    EmailLog.source == 'gmail_sync',
+                ),
+            )
+        )
         .order_by(EmailLog.created_at.desc())
         .all()
     )
@@ -83,7 +92,12 @@ def get_contact(contact_id):
     email_history = []
     for log in logs:
         entry = log.to_dict()
-        if log.campaign_id:
+        if log.source == 'gmail_sync':
+            if log.direction == 'received':
+                entry['source'] = 'Gmail (received)'
+            else:
+                entry['source'] = 'Gmail (sent)'
+        elif log.campaign_id:
             campaign = Campaign.query.get(log.campaign_id)
             entry['source'] = campaign.name if campaign else f'Campaign #{log.campaign_id}'
         else:

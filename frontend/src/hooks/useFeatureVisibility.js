@@ -22,6 +22,7 @@ export function useFeatureVisibility() {
         'replies',
         'quick_send',
         'campaigns',
+        'follow_ups',
         'templates',
         'contacts',
         'listings',
