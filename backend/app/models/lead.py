@@ -53,6 +53,18 @@ class Lead(db.Model):
     year_founded = db.Column(db.String(10))
     enrichment_data = db.Column(db.Text)  # JSON blob for extra data
 
+    # Cowork M&A enrichment fields
+    location_count = db.Column(db.Integer)  # Number of business locations detected
+    total_review_volume = db.Column(db.Integer)  # Google + Yelp reviews combined
+    review_velocity = db.Column(db.Float)  # Reviews per year (growth proxy)
+    years_in_operation = db.Column(db.Integer)  # Computed from license date or year_founded
+    license_number = db.Column(db.String(100))
+    license_status = db.Column(db.String(50))  # active, expired, suspended
+    license_issue_date = db.Column(db.Date)
+    owner_name = db.Column(db.String(200))  # From license records or website
+    data_sources = db.Column(db.Text)  # JSON array: ["google", "yelp", "cslb_ca"]
+    thesis_fit_score = db.Column(db.Integer)  # 0-100, scored against acquisition thesis
+
     # Scoring
     score = db.Column(db.Integer)  # 0-100
     score_breakdown = db.Column(db.Text)  # JSON
@@ -105,7 +117,21 @@ class Lead(db.Model):
             return {}
 
     def set_score_breakdown(self, data):
+        """Store score breakdown as JSON."""
         self.score_breakdown = json.dumps(data) if data else None
+
+    def get_data_sources(self):
+        """Return parsed data sources list or empty list."""
+        if not self.data_sources:
+            return []
+        try:
+            return json.loads(self.data_sources)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def set_data_sources(self, sources):
+        """Store data sources list as JSON."""
+        self.data_sources = json.dumps(sources) if sources else None
 
     def to_dict(self):
         return {
@@ -138,6 +164,16 @@ class Lead(db.Model):
             'source': self.source,
             'campaign_id': self.campaign_id,
             'contact_id': self.contact_id,
+            'location_count': self.location_count,
+            'total_review_volume': self.total_review_volume,
+            'review_velocity': self.review_velocity,
+            'years_in_operation': self.years_in_operation,
+            'license_number': self.license_number,
+            'license_status': self.license_status,
+            'license_issue_date': self.license_issue_date.isoformat() if self.license_issue_date else None,
+            'owner_name': self.owner_name,
+            'data_sources': self.get_data_sources(),
+            'thesis_fit_score': self.thesis_fit_score,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'enriched_at': self.enriched_at.isoformat() if self.enriched_at else None,
             'approved_at': self.approved_at.isoformat() if self.approved_at else None,

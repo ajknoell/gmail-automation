@@ -22,6 +22,8 @@ class Campaign(db.Model):
     attachments = db.Column(db.Text)  # JSON array of attachment metadata
     auto_send_enabled = db.Column(db.Boolean, default=False)
     auto_send_threshold = db.Column(db.Float, default=0.8)
+    archetype_id = db.Column(db.Integer, db.ForeignKey('outreach_archetypes.id'), nullable=True)
+    thesis_id = db.Column(db.Integer, db.ForeignKey('acquisition_theses.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     started_at = db.Column(db.DateTime)
     completed_at = db.Column(db.DateTime)
@@ -52,6 +54,8 @@ class Campaign(db.Model):
             'attachments': self.get_attachments(),
             'auto_send_enabled': self.auto_send_enabled or False,
             'auto_send_threshold': self.auto_send_threshold if self.auto_send_threshold is not None else 0.8,
+            'archetype_id': self.archetype_id,
+            'thesis_id': self.thesis_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'started_at': self.started_at.isoformat() if self.started_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None

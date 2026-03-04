@@ -192,6 +192,11 @@ class EnrichmentService:
         results['retirement_score'] = retirement_result['score']
         results['retirement_label'] = retirement_result['label']
 
+        # Step 2.75: Cowork M&A enrichment — review aggregation, years, locations
+        cls._compute_review_volume(lead)
+        cls._compute_years_in_operation(lead)
+        cls._aggregate_data_sources(lead)
+
         # Step 3: Calculate lead score
         score, breakdown = cls.calculate_score(lead)
         lead.score = score
@@ -216,6 +221,67 @@ class EnrichmentService:
         lead.set_enrichment_data(extra)
 
         return results
+
+    @classmethod
+    def _compute_review_volume(cls, lead: 'Lead') -> None:
+        """Aggregate Google + Yelp review counts and compute review velocity."""
+        google_reviews = lead.review_count or 0
+        enrichment = lead.get_enrichment_data()
+        yelp_reviews = enrichment.get('yelp_review_count', 0)
+
+        total = google_reviews + yelp_reviews
+        if total > 0:
+            lead.total_review_volume = total
+
+        # Compute velocity if we know the founding year
+        year_str = lead.year_founded
+        if total > 0 and year_str:
+            try:
+                founded = int(year_str)
+                years_active = max(1, datetime.utcnow().year - founded)
+                lead.review_velocity = round(total / years_active, 1)
+            except (ValueError, TypeError):
+                pass
+
+    @classmethod
+    def _compute_years_in_operation(cls, lead: 'Lead') -> None:
+        """Compute years in operation from license issue date or year founded."""
+        current_year = datetime.utcnow().year
+
+        # Prefer license issue date (most reliable)
+        if lead.license_issue_date:
+            lead.years_in_operation = current_year - lead.license_issue_date.year
+            return
+
+        # Fall back to year_founded from website
+        if lead.year_founded:
+            try:
+                founded = int(lead.year_founded)
+                if 1900 <= founded <= current_year:
+                    lead.years_in_operation = current_year - founded
+            except (ValueError, TypeError):
+                pass
+
+    @classmethod
+    def _aggregate_data_sources(cls, lead: 'Lead') -> None:
+        """Track which data sources contributed to this lead's data."""
+        sources = set(lead.get_data_sources())
+
+        if lead.place_id:
+            sources.add('google')
+        enrichment = lead.get_enrichment_data()
+        if enrichment.get('yelp_review_count') or enrichment.get('yelp_url'):
+            sources.add('yelp')
+        if lead.linkedin_url:
+            sources.add('linkedin')
+        if lead.license_number:
+            # Source is stored in license data format: "cslb_ca", "tdlr_tx", etc.
+            license_source = enrichment.get('license_source')
+            if license_source:
+                sources.add(license_source)
+
+        if sources:
+            lead.set_data_sources(sorted(sources))
 
     @classmethod
     def scrape_company_website(cls, website_url):

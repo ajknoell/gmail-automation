@@ -50,6 +50,10 @@ def create_app(config_class=None):
     from app.routes.agents import agents_bp
     from app.routes.deals import deals_bp
     from app.routes.apollo import apollo_bp
+    from app.routes.thesis import thesis_bp
+    from app.routes.archetypes import archetypes_bp
+    from app.routes.reports import reports_bp
+    from app.routes.cowork import cowork_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
@@ -76,6 +80,10 @@ def create_app(config_class=None):
     app.register_blueprint(agents_bp, url_prefix='/api/agents')
     app.register_blueprint(deals_bp, url_prefix='/api/deals')
     app.register_blueprint(apollo_bp, url_prefix='/api/apollo')
+    app.register_blueprint(thesis_bp, url_prefix='/api/thesis')
+    app.register_blueprint(archetypes_bp, url_prefix='/api/archetypes')
+    app.register_blueprint(reports_bp, url_prefix='/api/reports')
+    app.register_blueprint(cowork_bp, url_prefix='/api/cowork')
 
     # Create database tables and run migrations
     with app.app_context():
@@ -283,6 +291,22 @@ def _run_migrations(app):
     _add_column('campaign_steps', 'variant_label', 'VARCHAR(20)')
     _add_column('campaign_steps', 'variant_pct', 'INTEGER')
     _add_column('step_recipients', 'variant_assignment', 'VARCHAR(50)')
+
+    # Cowork M&A — Lead enrichment fields
+    _add_column('leads', 'location_count', 'INTEGER')
+    _add_column('leads', 'total_review_volume', 'INTEGER')
+    _add_column('leads', 'review_velocity', 'FLOAT')
+    _add_column('leads', 'years_in_operation', 'INTEGER')
+    _add_column('leads', 'license_number', 'VARCHAR(100)')
+    _add_column('leads', 'license_status', 'VARCHAR(50)')
+    _add_column('leads', 'license_issue_date', 'DATE')
+    _add_column('leads', 'owner_name', 'VARCHAR(200)')
+    _add_column('leads', 'data_sources', 'TEXT')
+    _add_column('leads', 'thesis_fit_score', 'INTEGER')
+
+    # Cowork M&A — Campaign archetype/thesis links
+    _add_column('campaigns', 'archetype_id', 'INTEGER')
+    _add_column('campaigns', 'thesis_id', 'INTEGER')
 
     # Create index on tracking_id
     try:

@@ -1,12 +1,22 @@
 """
-Discovery routes — manage search criteria and discovered prospects.
+Discovery routes — manage search criteria, discovered prospects, and
+configurable discovery sources (state licenses, Google Maps, Yelp, etc.).
 """
-from flask import Blueprint, request, jsonify, g
+import json
+import logging
+import threading
+from datetime import datetime
+
+from flask import Blueprint, request, jsonify, g, current_app
+
 from app import db
 from app.models.discovery_criteria import DiscoveryCriteria
+from app.models.discovery_source import DiscoverySource, SOURCE_TYPES, SCHEDULE_OPTIONS
 from app.models.contact import Contact
+from app.models.lead import Lead
 from app.models.recipient import Recipient
-import threading
+
+logger = logging.getLogger(__name__)
 
 discovery_bp = Blueprint('discovery', __name__)
 
@@ -316,3 +326,211 @@ def discovery_stats():
         'active_criteria': active_criteria,
         'by_category': {cat: count for cat, count in categories if cat},
     })
+
+
+# ---------- Discovery Sources (Cowork M&A list building) ----------
+
+
+@discovery_bp.route('/sources', methods=['GET'])
+def list_sources() -> tuple:
+    """List configured discovery sources for the workspace."""
+    sources = DiscoverySource.query.filter_by(
+        workspace_id=g.workspace_id
+    ).order_by(DiscoverySource.updated_at.desc()).all()
+    return jsonify({'sources': [s.to_dict() for s in sources]})
+
+
+@discovery_bp.route('/sources/available', methods=['GET'])
+def list_available_scrapers() -> tuple:
+    """List available scraper types and their supported configurations."""
+    from app.services.scrapers.state_license_scraper import get_available_states
+    return jsonify({
+        'state_license_scrapers': get_available_states(),
+        'source_types': SOURCE_TYPES,
+        'schedule_options': SCHEDULE_OPTIONS,
+    })
+
+
+@discovery_bp.route('/sources', methods=['POST'])
+def create_source() -> tuple:
+    """Create a new discovery source.
+
+    Example body for state license source:
+    {
+        "name": "CA HVAC Contractors",
+        "source_type": "state_license",
+        "config": {"state_source_id": "cslb_ca", "license_type": "C-20", "location": "Los Angeles"},
+        "schedule": "weekly",
+        "thesis_id": 1
+    }
+    """
+    data = request.get_json() or {}
+
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'Source name is required'}), 400
+
+    source_type = data.get('source_type')
+    if source_type not in SOURCE_TYPES:
+        return jsonify({'error': f'Invalid source_type. Must be one of: {", ".join(SOURCE_TYPES)}'}), 400
+
+    schedule = data.get('schedule', 'manual')
+    if schedule not in SCHEDULE_OPTIONS:
+        return jsonify({'error': f'Invalid schedule. Must be one of: {", ".join(SCHEDULE_OPTIONS)}'}), 400
+
+    source = DiscoverySource(
+        workspace_id=g.workspace_id,
+        thesis_id=data.get('thesis_id'),
+        name=name,
+        source_type=source_type,
+        schedule=schedule,
+        is_active=data.get('is_active', True),
+    )
+    source.set_config(data.get('config', {}))
+
+    db.session.add(source)
+    db.session.commit()
+    return jsonify(source.to_dict()), 201
+
+
+@discovery_bp.route('/sources/<int:source_id>', methods=['PUT'])
+def update_source(source_id: int) -> tuple:
+    """Update an existing discovery source."""
+    source = DiscoverySource.query.filter_by(
+        id=source_id, workspace_id=g.workspace_id
+    ).first()
+    if not source:
+        return jsonify({'error': 'Source not found'}), 404
+
+    data = request.get_json() or {}
+
+    if 'name' in data:
+        source.name = data['name']
+    if 'config' in data:
+        source.set_config(data['config'])
+    if 'schedule' in data:
+        if data['schedule'] not in SCHEDULE_OPTIONS:
+            return jsonify({'error': f'Invalid schedule'}), 400
+        source.schedule = data['schedule']
+    if 'is_active' in data:
+        source.is_active = data['is_active']
+    if 'thesis_id' in data:
+        source.thesis_id = data['thesis_id']
+
+    db.session.commit()
+    return jsonify(source.to_dict())
+
+
+@discovery_bp.route('/sources/<int:source_id>', methods=['DELETE'])
+def delete_source(source_id: int) -> tuple:
+    """Delete a discovery source."""
+    source = DiscoverySource.query.filter_by(
+        id=source_id, workspace_id=g.workspace_id
+    ).first()
+    if not source:
+        return jsonify({'error': 'Source not found'}), 404
+    db.session.delete(source)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@discovery_bp.route('/sources/<int:source_id>/run', methods=['POST'])
+def run_source(source_id: int) -> tuple:
+    """Trigger an immediate run of a discovery source."""
+    source = DiscoverySource.query.filter_by(
+        id=source_id, workspace_id=g.workspace_id
+    ).first()
+    if not source:
+        return jsonify({'error': 'Source not found'}), 404
+
+    app = current_app._get_current_object()
+    ws_id = g.workspace_id
+    sid = source.id
+
+    def run_in_background() -> None:
+        """Execute the discovery source scraping in a background thread."""
+        with app.app_context():
+            _execute_source(sid, ws_id)
+
+    thread = threading.Thread(target=run_in_background, daemon=True)
+    thread.start()
+
+    return jsonify({'success': True, 'message': f'Running source "{source.name}" in background'})
+
+
+def _execute_source(source_id: int, workspace_id: int) -> None:
+    """Execute a discovery source and create leads from results.
+
+    Args:
+        source_id: ID of the DiscoverySource to run
+        workspace_id: Workspace context
+    """
+    source = DiscoverySource.query.get(source_id)
+    if not source:
+        return
+
+    config = source.get_config()
+    results = []
+
+    try:
+        if source.source_type == 'state_license':
+            from app.services.scrapers.state_license_scraper import search_state_licenses
+            results = search_state_licenses(
+                state_source_id=config.get('state_source_id', ''),
+                license_type=config.get('license_type', ''),
+                location=config.get('location', ''),
+                max_results=config.get('max_results', 50),
+            )
+        # Future: google_maps, yelp, industry_dir handlers
+
+        # Convert results to leads
+        created = 0
+        for biz in results:
+            # Dedup by license number or name+address
+            existing = None
+            if biz.license_number:
+                existing = Lead.query.filter_by(
+                    workspace_id=workspace_id,
+                    license_number=biz.license_number,
+                ).first()
+            if not existing and biz.name:
+                existing = Lead.query.filter_by(
+                    workspace_id=workspace_id,
+                    name=biz.name,
+                    address=biz.address,
+                ).first()
+
+            if existing:
+                continue
+
+            lead = Lead(
+                workspace_id=workspace_id,
+                name=biz.name,
+                address=biz.address,
+                phone=biz.phone,
+                website=biz.website,
+                owner_name=biz.owner_name,
+                license_number=biz.license_number,
+                license_status=biz.license_status,
+                license_issue_date=biz.license_issue_date,
+                business_category=config.get('license_type', ''),
+                source=f'state_license_{biz.source}',
+                status='new',
+            )
+            lead.set_data_sources([biz.source])
+            db.session.add(lead)
+            created += 1
+
+        source.last_run_at = datetime.utcnow()
+        source.last_error = None
+        source.results_count = created
+        source.total_results_count = (source.total_results_count or 0) + created
+        db.session.commit()
+
+        logger.info(f"Discovery source {source.name}: created {created} new leads from {len(results)} results")
+
+    except Exception as e:
+        logger.error(f"Discovery source {source.name} failed: {e}", exc_info=True)
+        source.last_error = str(e)[:500]
+        source.last_run_at = datetime.utcnow()
+        db.session.commit()
