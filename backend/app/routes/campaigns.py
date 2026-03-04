@@ -1239,7 +1239,7 @@ def create_step(id):
         ).update({CampaignStep.position: CampaignStep.position + 1})
         position = requested_pos
     else:
-        position = max_pos + 1
+        position = requested_pos if requested_pos else max_pos + 1
 
     # Handle delay: prefer delay_minutes, fall back to delay_days for backward compat
     delay_minutes = data.get('delay_minutes')
