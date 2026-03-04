@@ -49,6 +49,7 @@ def create_app(config_class=None):
     from app.routes.opportunities import opportunities_bp
     from app.routes.agents import agents_bp
     from app.routes.deals import deals_bp
+    from app.routes.apollo import apollo_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(pipeline_bp, url_prefix='/api/pipeline')
@@ -74,6 +75,7 @@ def create_app(config_class=None):
     app.register_blueprint(opportunities_bp, url_prefix='/api/opportunities')
     app.register_blueprint(agents_bp, url_prefix='/api/agents')
     app.register_blueprint(deals_bp, url_prefix='/api/deals')
+    app.register_blueprint(apollo_bp, url_prefix='/api/apollo')
 
     # Create database tables and run migrations
     with app.app_context():
