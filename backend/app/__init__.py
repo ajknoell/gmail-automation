@@ -563,11 +563,12 @@ def _fix_followup_step_positions(app):
     if Settings.get('followup_positions_fixed'):
         return
 
-    # Follow-up steps at position 1 are identified by having a non-zero delay
-    # (the backfilled Initial Outreach step always has delay_days=0 / delay_minutes=0)
+    # Follow-up steps at position 1 are identified by having a non-zero delay_days
+    # (the backfilled Initial Outreach step always has delay_days=0, while follow-ups
+    # default to delay_days=3; delay_minutes column default of 4320 is unreliable)
     corrupted = CampaignStep.query.filter(
         CampaignStep.position == 1,
-        CampaignStep.delay_minutes > 0,
+        CampaignStep.delay_days > 0,
     ).all()
 
     if not corrupted:
