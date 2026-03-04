@@ -57,7 +57,7 @@ function MapExplorer() {
   const typeDropdownRef = useRef(null);
   const [keywordSearch, setKeywordSearch] = useState('');
   const [searchMode, setSearchMode] = useState('type'); // 'type' or 'keyword'
-  const [radius, setRadius] = useState(3);
+  const [radius, setRadius] = useState(5);
   const [minRating, setMinRating] = useState(0);
 
   // Selected place & info window
@@ -727,8 +727,8 @@ function MapExplorer() {
           <input
             type="range"
             min={1}
-            max={200}
-            step={5}
+            max={30}
+            step={1}
             value={radius}
             onChange={(e) => {
               const v = parseInt(e.target.value);
