@@ -1,5 +1,9 @@
 # Implementation Plan: Add Contacts to Running Campaign Feature
 
+> **Status: Fully Implemented**
+>
+> All backend services, API endpoints, and frontend components described below have been built and integrated. This document is retained as a design reference.
+
 ## 1. Feature Overview
 
 This feature allows users to add new contacts to campaigns that are already running (status: `running` or `sequence_active`). The feature supports three input methods:
