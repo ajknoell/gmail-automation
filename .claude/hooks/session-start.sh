@@ -9,6 +9,7 @@ fi
 echo "Installing backend Python dependencies..."
 cd "$CLAUDE_PROJECT_DIR/backend"
 pip install -r requirements.txt
+pip install ruff  # Code review agent dependency
 
 echo "Installing frontend Node.js dependencies..."
 cd "$CLAUDE_PROJECT_DIR/frontend"

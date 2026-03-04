@@ -4,7 +4,7 @@ import TabBar from '../components/ui/TabBar';
 import {
   getPipelineLeads, getPipelineStats, enrichPipelineLead, bulkEnrichLeads,
   approvePipelineLead, bulkApproveLeads, bulkRejectLeads, deletePipelineLead,
-  getCampaigns, getDiscoveryStats,
+  getCampaigns, createCampaign, getDiscoveryStats,
 } from '../api/client';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -25,8 +25,14 @@ function Prospects() {
   const [discoveryStats, setDiscoveryStats] = useState({});
 
   useEffect(() => {
-    getPipelineStats().then(res => setPipelineStats(res.data)).catch(() => {});
-    getDiscoveryStats().then(res => setDiscoveryStats(res.data)).catch(() => {});
+    const loadStats = () => {
+      getPipelineStats().then(res => setPipelineStats(res.data)).catch(() => {});
+      getDiscoveryStats().then(res => setDiscoveryStats(res.data)).catch(() => {});
+    };
+    loadStats();
+    const handleWsChange = () => loadStats();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   const findCount = discoveryStats.total || 0;
@@ -80,11 +86,17 @@ function ProspectFindTab({ onStatsChange }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    getPipelineLeads({ sort: 'created_at', order: 'desc' })
-      .then(res => setRecentLeads((res.data.leads || []).slice(0, 10)))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const loadRecent = () => {
+      setLoading(true);
+      getPipelineLeads({ sort: 'created_at', order: 'desc' })
+        .then(res => setRecentLeads((res.data.leads || []).slice(0, 10)))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+    loadRecent();
+    const handleWsChange = () => loadRecent();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   return (
@@ -176,6 +188,9 @@ function ProspectReviewTab({ onStatsChange }) {
   const [approveCampaignId, setApproveCampaignId] = useState('');
   const [expandedLead, setExpandedLead] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -196,7 +211,12 @@ function ProspectReviewTab({ onStatsChange }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const filteredLeads = leads.filter(lead => {
     if (!search) return true;
@@ -240,6 +260,8 @@ function ProspectReviewTab({ onStatsChange }) {
   const openApproveModal = (lead) => {
     setApproveEmail((lead.emails_found || [])[0] || '');
     setApproveCampaignId('');
+    setShowNewCampaign(false);
+    setNewCampaignName('');
     setApproveModal(lead);
   };
 
@@ -298,7 +320,7 @@ function ProspectReviewTab({ onStatsChange }) {
           <>
             <span className="toolbar-count">{selected.size} selected</span>
             <button className="btn btn-primary btn-sm" onClick={handleBulkEnrich}>Enrich</button>
-            <button className="btn btn-success btn-sm" onClick={() => { setApproveEmail(''); setApproveCampaignId(''); setApproveModal('bulk'); }}>Approve</button>
+            <button className="btn btn-success btn-sm" onClick={() => { setApproveEmail(''); setApproveCampaignId(''); setShowNewCampaign(false); setNewCampaignName(''); setApproveModal('bulk'); }}>Approve</button>
             <button className="btn btn-danger btn-sm" onClick={handleBulkReject}>Reject</button>
           </>
         )}
@@ -407,10 +429,61 @@ function ProspectReviewTab({ onStatsChange }) {
               )}
               <div className="form-group">
                 <label className="form-label">Add to Campaign (optional)</label>
-                <select className="form-select" value={approveCampaignId} onChange={e => setApproveCampaignId(e.target.value)}>
+                <select className="form-select" value={approveCampaignId} onChange={e => {
+                  if (e.target.value === '__new__') {
+                    setShowNewCampaign(true);
+                    setApproveCampaignId('');
+                  } else {
+                    setShowNewCampaign(false);
+                    setApproveCampaignId(e.target.value);
+                  }
+                }}>
                   <option value="">Don't add to campaign</option>
                   {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.status})</option>)}
+                  <option value="__new__">+ Create new campaign</option>
                 </select>
+                {showNewCampaign && (
+                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Campaign name"
+                      value={newCampaignName}
+                      onChange={e => setNewCampaignName(e.target.value)}
+                      style={{ flex: 1 }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={!newCampaignName.trim() || creatingCampaign}
+                      onClick={async () => {
+                        setCreatingCampaign(true);
+                        try {
+                          const res = await createCampaign({ name: newCampaignName.trim() });
+                          const newCampaign = res.data;
+                          setCampaigns(prev => [newCampaign, ...prev]);
+                          setApproveCampaignId(String(newCampaign.id));
+                          setShowNewCampaign(false);
+                          setNewCampaignName('');
+                          showToast(`Campaign "${newCampaign.name}" created`, 'success');
+                        } catch (err) {
+                          showToast('Failed to create campaign', 'error');
+                        }
+                        setCreatingCampaign(false);
+                      }}
+                    >
+                      {creatingCampaign ? '...' : 'Create'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => { setShowNewCampaign(false); setNewCampaignName(''); }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="modal-footer">
@@ -451,7 +524,12 @@ function ProspectReadyTab({ onStatsChange }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const handleQuickSend = (lead) => {
     const emails = lead.emails_found || [];

@@ -57,7 +57,12 @@ function Pipeline() {
     setLoading(false);
   }, [filter, sort]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const filteredLeads = leads.filter(lead => {
     if (!search) return true;

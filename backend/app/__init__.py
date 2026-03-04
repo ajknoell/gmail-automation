@@ -93,6 +93,9 @@ def create_app(config_class=None):
         # Backfill campaign steps for existing campaigns (one-time)
         _ensure_campaign_steps(app)
 
+        # Fix follow-up steps incorrectly assigned position 1 (one-time)
+        _fix_followup_step_positions(app)
+
     # Workspace resolution middleware
     @app.before_request
     def resolve_workspace():
@@ -544,3 +547,49 @@ def _ensure_campaign_steps(app):
     Settings.set('campaign_steps_backfilled', 'true')
     db.session.commit()
     app.logger.info(f'Backfilled steps for {len(campaigns_without_steps)} existing campaigns')
+
+
+def _fix_followup_step_positions(app):
+    """Fix follow-up steps that were incorrectly assigned position 1.
+
+    A bug in create_step() ignored the requested position when it was greater
+    than max_pos, causing the first follow-up step to get position=1 instead
+    of position=2.  These steps are invisible because the UI and scheduler
+    both filter to position > 1.
+    """
+    from app.models.settings import Settings
+    from app.models.campaign_step import CampaignStep
+
+    if Settings.get('followup_positions_fixed'):
+        return
+
+    # Follow-up steps at position 1 are identified by having a non-zero delay_days
+    # (the backfilled Initial Outreach step always has delay_days=0, while follow-ups
+    # default to delay_days=3; delay_minutes column default of 4320 is unreliable)
+    corrupted = CampaignStep.query.filter(
+        CampaignStep.position == 1,
+        CampaignStep.delay_days > 0,
+    ).all()
+
+    if not corrupted:
+        Settings.set('followup_positions_fixed', 'true')
+        db.session.commit()
+        return
+
+    fixed = 0
+    for step in corrupted:
+        # Shift any existing steps at position >= 2 up by 1 to make room
+        CampaignStep.query.filter(
+            CampaignStep.campaign_id == step.campaign_id,
+            CampaignStep.position >= 2,
+            CampaignStep.id != step.id,
+        ).update({CampaignStep.position: CampaignStep.position + 1})
+        step.position = 2
+        # Fix the name if it was incorrectly set to 'Initial Outreach'
+        if step.name == 'Initial Outreach':
+            step.name = 'Follow-up #1'
+        fixed += 1
+
+    Settings.set('followup_positions_fixed', 'true')
+    db.session.commit()
+    app.logger.info(f'Fixed positions for {fixed} corrupted follow-up steps')

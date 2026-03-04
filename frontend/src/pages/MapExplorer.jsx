@@ -9,9 +9,12 @@ import {
   bulkAddToPipeline,
   getMapSources,
   getCampaigns,
+  createCampaign,
 } from '../api/client';
 import { BUSINESS_TYPE_GROUPS, RATING_OPTIONS } from '../constants/businessTypes';
 import AddToPopover from '../components/AddToPopover';
+
+const MILES_TO_METERS = 1609.344;
 
 // Load the Google Maps JS API via a script tag
 let mapsLoadPromise = null;
@@ -56,7 +59,7 @@ function MapExplorer() {
   const typeDropdownRef = useRef(null);
   const [keywordSearch, setKeywordSearch] = useState('');
   const [searchMode, setSearchMode] = useState('type'); // 'type' or 'keyword'
-  const [radius, setRadius] = useState(5000);
+  const [radius, setRadius] = useState(5);
   const [minRating, setMinRating] = useState(0);
 
   // Selected place & info window
@@ -64,6 +67,9 @@ function MapExplorer() {
 
   // Add to popover / pipeline tracking
   const [campaigns, setCampaigns] = useState([]);
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState(null); // {type, message}
   const [pipelinedIds, setPipelinedIds] = useState(new Set());
   const [popoverPlaceId, setPopoverPlaceId] = useState(null);
@@ -227,7 +233,7 @@ function MapExplorer() {
           query: keywordSearch.trim(),
           lat,
           lng,
-          radius,
+          radius: Math.round(radius * MILES_TO_METERS),
           min_rating: minRating,
           max_results: 20,
         });
@@ -235,7 +241,7 @@ function MapExplorer() {
         searchRes = await searchNearbyPlaces({
           lat,
           lng,
-          radius,
+          radius: Math.round(radius * MILES_TO_METERS),
           types: selectedTypes.length > 0 ? selectedTypes : undefined,
           min_rating: minRating,
           max_results: 20,
@@ -273,7 +279,7 @@ function MapExplorer() {
           query: activeKeyword.trim(),
           lat: center.lat,
           lng: center.lng,
-          radius: newRadius,
+          radius: Math.round(newRadius * MILES_TO_METERS),
           min_rating: newRating,
           max_results: 20,
         });
@@ -281,7 +287,7 @@ function MapExplorer() {
         searchRes = await searchNearbyPlaces({
           lat: center.lat,
           lng: center.lng,
-          radius: newRadius,
+          radius: Math.round(newRadius * MILES_TO_METERS),
           types: activeTypes.length > 0 ? activeTypes : undefined,
           min_rating: newRating,
           max_results: 20,
@@ -718,13 +724,13 @@ function MapExplorer() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>
-            Radius: {radius >= 1000 ? `${(radius / 1000).toFixed(0)}km` : `${radius}m`}
+            Radius: {radius} mi
           </label>
           <input
             type="range"
-            min={1000}
-            max={50000}
-            step={1000}
+            min={1}
+            max={30}
+            step={1}
             value={radius}
             onChange={(e) => {
               const v = parseInt(e.target.value);

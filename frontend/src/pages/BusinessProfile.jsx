@@ -19,7 +19,12 @@ function BusinessProfile() {
   const [keywords, setKeywords] = useState([]);
   const [newKeyword, setNewKeyword] = useState('');
 
-  useEffect(() => { loadProfile(); }, []);
+  useEffect(() => {
+    loadProfile();
+    const handleWsChange = () => loadProfile();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, []);
 
   const loadProfile = async () => {
     setLoading(true);
