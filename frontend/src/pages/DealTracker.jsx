@@ -169,11 +169,17 @@ function DealTracker() {
 
   const [form, setForm] = useState(EMPTY_FORM);
 
-  // Load contacts once on mount (they don't change with filters)
+  // Load contacts on mount and workspace change
   useEffect(() => {
-    getContacts({ per_page: 200 })
-      .then(res => setContacts(res.data?.contacts || res.data || []))
-      .catch(() => {});
+    const loadContacts = () => {
+      getContacts({ per_page: 200 })
+        .then(res => setContacts(res.data?.contacts || res.data || []))
+        .catch(() => {});
+    };
+    loadContacts();
+    const handleWsChange = () => loadContacts();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   const loadData = useCallback(async () => {
@@ -194,7 +200,12 @@ function DealTracker() {
     setLoading(false);
   }, [filter, sort]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const filteredDeals = deals.filter(deal => {
     if (!search) return true;

@@ -49,8 +49,8 @@ class Deal(db.Model):
     stage = db.Column(db.String(30), default='interested', index=True)
 
     # Foreign keys (nullable — deals can exist independently)
-    listing_id = db.Column(db.Integer, db.ForeignKey('listings.id'), nullable=True)
-    contact_id = db.Column(db.Integer, db.ForeignKey('contacts.id'), nullable=True)
+    listing_id = db.Column(db.Integer, db.ForeignKey('listings.id'), nullable=True, index=True)
+    contact_id = db.Column(db.Integer, db.ForeignKey('contacts.id'), nullable=True, index=True)
 
     # Financial fields
     asking_price = db.Column(db.Float)

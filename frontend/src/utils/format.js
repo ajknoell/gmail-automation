@@ -1,5 +1,5 @@
-export function formatPrice(num, fallback = '--') {
-  if (num == null) return fallback;
+export function formatPrice(num, fallback = '') {
+  if (!num && num !== 0) return fallback;
   if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
   return `$${num.toLocaleString()}`;

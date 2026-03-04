@@ -230,6 +230,11 @@ def create_from_listing(listing_id):
     if not site or site.workspace_id != g.workspace_id:
         return jsonify({'error': 'Listing not found'}), 404
 
+    # Check for existing deal from this listing
+    existing = Deal.query.filter_by(listing_id=listing.id, workspace_id=g.workspace_id).first()
+    if existing:
+        return jsonify({'deal': existing.to_dict(), 'existed': True}), 200
+
     data = request.get_json() or {}
 
     stage = data.get('stage', 'interested')
