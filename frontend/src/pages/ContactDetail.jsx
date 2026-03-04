@@ -455,12 +455,13 @@ function ContactDetail() {
         <h3 className="card-title mb-2">Email History ({emailHistory.length})</h3>
 
         {emailHistory.length === 0 ? (
-          <div className="empty-state"><p>No emails sent to this contact yet.</p></div>
+          <div className="empty-state"><p>No emails with this contact yet.</p></div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="table">
               <thead>
                 <tr>
+                  <th></th>
                   <th>Subject</th>
                   <th>Date</th>
                   <th>Source</th>
@@ -472,6 +473,13 @@ function ContactDetail() {
               <tbody>
                 {emailHistory.map((log) => (
                   <tr key={log.id}>
+                    <td style={{ width: '24px', textAlign: 'center', padding: '0.25rem' }}>
+                      {log.direction === 'received' ? (
+                        <span title="Received from contact" style={{ color: '#8B5CF6', fontSize: '0.9rem' }}>&#8592;</span>
+                      ) : (
+                        <span title="Sent to contact" style={{ color: '#3B82F6', fontSize: '0.9rem' }}>&#8594;</span>
+                      )}
+                    </td>
                     <td style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {log.subject}
                     </td>
@@ -484,26 +492,39 @@ function ContactDetail() {
                           {log.source}
                         </Link>
                       ) : (
-                        <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>{log.source}</span>
+                        <span style={{
+                          fontSize: '0.85rem',
+                          color: log.source === 'gmail_sync' || (log.source || '').startsWith('Gmail')
+                            ? '#D4532F'
+                            : '#6B7280',
+                        }}>
+                          {log.source}
+                        </span>
                       )}
                     </td>
                     <td>
-                      {log.opened_at ? (
+                      {log.direction === 'received' ? (
+                        <span style={{ color: '#9CA3AF' }}>-</span>
+                      ) : log.opened_at ? (
                         <span title={new Date(log.opened_at).toLocaleString()} style={{ color: '#3B82F6', fontWeight: 500 }}>
-                          ✓ ({log.open_count})
+                          &#10003; ({log.open_count})
                         </span>
                       ) : <span style={{ color: '#9CA3AF' }}>-</span>}
                     </td>
                     <td>
-                      {log.clicked_at ? (
+                      {log.direction === 'received' ? (
+                        <span style={{ color: '#9CA3AF' }}>-</span>
+                      ) : log.clicked_at ? (
                         <span title={new Date(log.clicked_at).toLocaleString()} style={{ color: '#E8603C', fontWeight: 500 }}>
-                          ✓ ({log.click_count})
+                          &#10003; ({log.click_count})
                         </span>
                       ) : <span style={{ color: '#9CA3AF' }}>-</span>}
                     </td>
                     <td>
-                      {log.replied_at ? (
-                        <span title={new Date(log.replied_at).toLocaleString()} style={{ color: '#10B981', fontWeight: 500 }}>✓</span>
+                      {log.direction === 'received' ? (
+                        <span style={{ color: '#9CA3AF' }}>-</span>
+                      ) : log.replied_at ? (
+                        <span title={new Date(log.replied_at).toLocaleString()} style={{ color: '#10B981', fontWeight: 500 }}>&#10003;</span>
                       ) : <span style={{ color: '#9CA3AF' }}>-</span>}
                     </td>
                   </tr>

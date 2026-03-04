@@ -164,6 +164,11 @@ def create_app(config_class=None):
     signal_interval = app.config.get('SIGNAL_CHECK_INTERVAL', 3600)
     SignalEngine.start_background_polling(app, interval=signal_interval)
 
+    # Start Gmail sync (every 10 minutes - records emails sent/received in Gmail)
+    from app.services.gmail_sync import GmailSyncService
+    gmail_sync_interval = app.config.get('GMAIL_SYNC_INTERVAL', 600)
+    GmailSyncService.start_background_polling(app, interval=gmail_sync_interval)
+
     return app
 
 
@@ -207,6 +212,13 @@ def _run_migrations(app):
     _add_column('email_logs', 'is_html', 'BOOLEAN', default=0)
     _add_column('email_logs', 'bounced_at', 'DATETIME')
     _add_column('email_logs', 'bounce_reason', 'TEXT')
+
+    # Email source/direction tracking
+    _add_column('email_logs', 'source', 'VARCHAR(20)')
+    _add_column('email_logs', 'direction', 'VARCHAR(10)')
+
+    # Gmail sync settings
+    _add_column('email_logs', 'sender_email', 'VARCHAR(255)')
 
     # Contacts migrations
     _add_column('contacts', 'status', "VARCHAR(20)", default="'contacted'")

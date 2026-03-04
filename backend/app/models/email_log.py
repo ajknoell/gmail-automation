@@ -13,6 +13,8 @@ class EmailLog(db.Model):
     subject = db.Column(db.String(200))
     body = db.Column(db.Text)
     status = db.Column(db.String(20))  # sent, failed
+    source = db.Column(db.String(20))  # campaign, quick_send, gmail_sync
+    direction = db.Column(db.String(10))  # sent, received
     error_details = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -21,6 +23,7 @@ class EmailLog(db.Model):
     gmail_thread_id = db.Column(db.String(100))
     gmail_account_id = db.Column(db.Integer)
     recipient_email = db.Column(db.String(255))
+    sender_email = db.Column(db.String(255))
     opened_at = db.Column(db.DateTime)
     open_count = db.Column(db.Integer, default=0)
     clicked_at = db.Column(db.DateTime)
@@ -40,6 +43,8 @@ class EmailLog(db.Model):
             'gmail_message_id': self.gmail_message_id,
             'subject': self.subject,
             'status': self.status,
+            'source': self.source,
+            'direction': self.direction or 'sent',
             'error_details': self.error_details,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'tracking_id': self.tracking_id,
