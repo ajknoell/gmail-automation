@@ -22,6 +22,7 @@ import Signals from './pages/Signals';
 import BusinessProfile from './pages/BusinessProfile';
 import OpportunityFeed from './pages/OpportunityFeed';
 import Prospects from './pages/Prospects';
+import DealTracker from './pages/DealTracker';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
 import QuickSendPanel from './components/QuickSendPanel';
@@ -160,6 +161,7 @@ function App() {
       <Route path="/map-explorer" element={<MapExplorer />} />
       <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/listings" element={<Listings />} />
+      <Route path="/deals" element={<DealTracker />} />
       <Route path="/triggers" element={<Triggers />} />
       <Route path="/signals" element={<Signals />} />
       <Route path="/business-profile" element={<BusinessProfile />} />
@@ -285,6 +287,10 @@ function App() {
                     <span>Listings</span>
                   </NavLink>
                 )}
+                <NavLink to="/deals">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4H14M2 4V12C2 13.1 2.9 14 4 14H12C13.1 14 14 13.1 14 12V4M2 4L4 2H12L14 4M6 7H10M6 10H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span>Deals</span>
+                </NavLink>
                 <NavLink to="/triggers">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1L3 9H8L7 15L13 7H8L9 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Triggers</span>

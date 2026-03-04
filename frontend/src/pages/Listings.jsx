@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   getMonitoredSites,
   createMonitoredSite,
@@ -21,6 +21,7 @@ import {
   parseEmailPreview,
   ingestEmailListing,
   scanEmailAlerts,
+  createDealFromListing,
 } from '../api/client';
 
 // Price presets for quick selection
@@ -98,6 +99,16 @@ function Listings() {
 
   // Debounce keyword search
   const [keywordTimer, setKeywordTimer] = useState(null);
+  const navigate = useNavigate();
+
+  const handleTrackDeal = async (listing) => {
+    try {
+      await createDealFromListing(listing.id);
+      navigate('/deals');
+    } catch (err) {
+      console.error('Failed to create deal:', err);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -1473,6 +1484,13 @@ function Listings() {
                         style={{ fontSize: '12px', padding: '2px 8px' }}
                       >
                         {listing.notes ? 'Notes' : '+ Note'}
+                      </button>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => handleTrackDeal(listing)}
+                        style={{ fontSize: '12px', padding: '2px 8px' }}
+                      >
+                        Track Deal
                       </button>
                     </div>
                   </div>

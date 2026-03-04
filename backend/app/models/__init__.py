@@ -22,6 +22,7 @@ from app.models.lead import Lead
 from app.models.signal import Signal
 from app.models.business_profile import BusinessProfile
 from app.models.signal_source import SignalSource
+from app.models.deal import Deal
 
 __all__ = [
     'Workspace', 'Template', 'Campaign', 'Recipient', 'EmailLog',
@@ -30,5 +31,5 @@ __all__ = [
     'MonitoredSite', 'Listing', 'DealCriteria', 'WebsiteAnalysisLog',
     'CampaignStep', 'StepRecipient', 'ColdCall',
     'DiscoveryCriteria', 'WebsiteTrigger', 'Lead',
-    'Signal', 'BusinessProfile', 'SignalSource',
+    'Signal', 'BusinessProfile', 'SignalSource', 'Deal',
 ]
