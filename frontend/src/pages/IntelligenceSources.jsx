@@ -5,7 +5,7 @@ import {
   getTriggerConfig, signalCollectNow,
 } from '../api/client';
 import { useToast } from '../components/Toast';
-import { SOURCE_DESCRIPTIONS, timeAgo } from '../utils/intelligence';
+import { SOURCE_DESCRIPTIONS, SEVERITY_COLORS, timeAgo } from '../utils/intelligence';
 
 // All source types that can be managed via SignalSource model
 const SIGNAL_SOURCE_TYPES = ['news', 'job_posting', 'funding', 'tech_change'];
