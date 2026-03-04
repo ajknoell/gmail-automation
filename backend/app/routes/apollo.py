@@ -75,6 +75,7 @@ def import_to_contacts() -> tuple:
 
     imported = 0
     skipped = 0
+    new_contacts: list[Contact] = []
 
     for person in data['people']:
         email = (person.get('email') or '').strip().lower()
@@ -102,12 +103,13 @@ def import_to_contacts() -> tuple:
             status='discovered',
         )
         db.session.add(contact)
+        new_contacts.append(contact)
         imported += 1
 
     db.session.commit()
 
     tag_name = data.get('tag')
-    if tag_name and imported > 0:
+    if tag_name and new_contacts:
         tag = Tag.query.filter_by(
             name=tag_name, workspace_id=g.workspace_id
         ).first()
@@ -115,11 +117,6 @@ def import_to_contacts() -> tuple:
             tag = Tag(name=tag_name, workspace_id=g.workspace_id)
             db.session.add(tag)
             db.session.flush()
-
-        new_contacts = Contact.query.filter_by(
-            workspace_id=g.workspace_id,
-            discovery_source='apollo',
-        ).order_by(Contact.created_at.desc()).limit(imported).all()
 
         for c in new_contacts:
             if tag not in c.tags:
@@ -147,7 +144,9 @@ def import_to_campaign() -> tuple:
     if not campaign_id:
         return jsonify({'error': 'campaign_id is required'}), 400
 
-    campaign = Campaign.query.get(campaign_id)
+    campaign = Campaign.query.filter_by(
+        id=campaign_id, workspace_id=g.workspace_id
+    ).first()
     if not campaign:
         return jsonify({'error': 'Campaign not found'}), 404
     if campaign.status not in ('draft', 'paused'):
