@@ -322,7 +322,6 @@ export const getOpportunityFeed = (params) => api.get('/api/opportunities/feed',
 // --- Deals ---
 export const getDeals = (params) => api.get('/api/deals/', { params });
 export const getDealStats = () => api.get('/api/deals/stats');
-export const getDealStages = () => api.get('/api/deals/stages');
 export const getDeal = (id) => api.get(`/api/deals/${id}`);
 export const createDeal = (data) => api.post('/api/deals/', data);
 export const updateDeal = (id, data) => api.put(`/api/deals/${id}`, data);

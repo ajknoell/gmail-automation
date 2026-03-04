@@ -23,6 +23,7 @@ import {
   scanEmailAlerts,
   createDealFromListing,
 } from '../api/client';
+import { formatPrice } from '../utils/format';
 
 // Price presets for quick selection
 const PRICE_PRESETS = [
@@ -34,13 +35,6 @@ const PRICE_PRESETS = [
   { label: '$1M – $5M', min: '1000000', max: '5000000' },
   { label: 'Over $5M', min: '5000000', max: '' },
 ];
-
-function formatPrice(num) {
-  if (!num) return '';
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-  return `$${num}`;
-}
 
 function Listings() {
   const [sites, setSites] = useState([]);

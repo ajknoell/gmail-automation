@@ -3,6 +3,7 @@ Deal Tracker routes — CRUD for tracking live deals through
 the acquisition pipeline (or sales pipeline in other workspaces).
 """
 from flask import Blueprint, request, jsonify, g
+from sqlalchemy.orm import joinedload
 from app import db
 from app.models.deal import Deal, DEAL_STAGES, DEAL_STAGE_LABELS, DEAL_STAGE_COLORS
 from app.models.listing import Listing
@@ -37,16 +38,19 @@ def list_deals():
             Deal.category.ilike(pattern),
         ))
 
-    # Sorting
+    # Sorting (allowlist to prevent arbitrary column access)
+    SORTABLE = {'updated_at', 'created_at', 'asking_price', 'stage_changed_at', 'name'}
     sort_by = request.args.get('sort', 'updated_at')
     order = request.args.get('order', 'desc')
-    sort_col = getattr(Deal, sort_by, Deal.updated_at)
+    if sort_by not in SORTABLE:
+        sort_by = 'updated_at'
+    sort_col = getattr(Deal, sort_by)
     if order == 'asc':
         query = query.order_by(sort_col.asc())
     else:
         query = query.order_by(sort_col.desc())
 
-    deals = query.all()
+    deals = query.options(joinedload(Deal.listing), joinedload(Deal.contact)).all()
     return jsonify({'deals': [d.to_dict() for d in deals]})
 
 
@@ -54,30 +58,32 @@ def list_deals():
 def get_stats():
     """Pipeline stats: counts per stage and total pipeline value."""
     ws_id = g.workspace_id
-    total = Deal.query.filter_by(workspace_id=ws_id).count()
-
-    by_stage = {}
-    for stage in DEAL_STAGES:
-        by_stage[stage] = Deal.query.filter_by(workspace_id=ws_id, stage=stage).count()
-
     active_stages = [s for s in DEAL_STAGES if s not in ('closed_won', 'closed_lost')]
 
-    pipeline_value = db.session.query(db.func.sum(Deal.asking_price)).filter(
-        Deal.workspace_id == ws_id,
-        Deal.stage.in_(active_stages),
-        Deal.asking_price.isnot(None),
-    ).scalar() or 0
+    # Single grouped query for counts + sums per stage
+    rows = db.session.query(
+        Deal.stage,
+        db.func.count(Deal.id),
+        db.func.sum(Deal.asking_price),
+        db.func.sum(Deal.offer_price),
+    ).filter_by(workspace_id=ws_id).group_by(Deal.stage).all()
 
-    offer_value = db.session.query(db.func.sum(Deal.offer_price)).filter(
-        Deal.workspace_id == ws_id,
-        Deal.stage.in_(active_stages),
-        Deal.offer_price.isnot(None),
-    ).scalar() or 0
+    by_stage = {s: 0 for s in DEAL_STAGES}
+    total = 0
+    pipeline_value = 0
+    offer_value = 0
+    won_value = 0
+    active_count = 0
 
-    won_value = db.session.query(db.func.sum(Deal.asking_price)).filter(
-        Deal.workspace_id == ws_id,
-        Deal.stage == 'closed_won',
-    ).scalar() or 0
+    for stage, count, asking_sum, offer_sum in rows:
+        by_stage[stage] = count
+        total += count
+        if stage in active_stages:
+            active_count += count
+            pipeline_value += asking_sum or 0
+            offer_value += offer_sum or 0
+        if stage == 'closed_won':
+            won_value += asking_sum or 0
 
     return jsonify({
         'total': total,
@@ -85,17 +91,8 @@ def get_stats():
         'pipeline_value': pipeline_value,
         'offer_value': offer_value,
         'won_value': won_value,
-        'active_count': sum(by_stage.get(s, 0) for s in active_stages),
+        'active_count': active_count,
     })
-
-
-@deals_bp.route('/stages', methods=['GET'])
-def list_stages():
-    """Return available deal stages for the frontend."""
-    return jsonify([
-        {'value': s, 'label': DEAL_STAGE_LABELS[s], 'color': DEAL_STAGE_COLORS[s]}
-        for s in DEAL_STAGES
-    ])
 
 
 @deals_bp.route('/<int:deal_id>', methods=['GET'])
@@ -119,6 +116,10 @@ def create_deal():
     if stage not in DEAL_STAGES:
         return jsonify({'error': f'Invalid stage. Must be one of: {", ".join(DEAL_STAGES)}'}), 400
 
+    url = (data.get('url') or '').strip() or None
+    if url and not url.startswith(('http://', 'https://')):
+        return jsonify({'error': 'URL must start with http:// or https://'}), 400
+
     deal = Deal(
         workspace_id=g.workspace_id,
         name=name,
@@ -135,7 +136,7 @@ def create_deal():
         broker_email=data.get('broker_email'),
         broker_phone=data.get('broker_phone'),
         source=data.get('source'),
-        url=data.get('url'),
+        url=url,
         location=data.get('location'),
         category=data.get('category'),
         notes=data.get('notes'),
@@ -160,6 +161,13 @@ def update_deal(deal_id):
         return jsonify({'error': 'Deal not found'}), 404
 
     data = request.get_json() or {}
+
+    # Validate URL if provided
+    if 'url' in data:
+        url = (data['url'] or '').strip() or None
+        if url and not url.startswith(('http://', 'https://')):
+            return jsonify({'error': 'URL must start with http:// or https://'}), 400
+        data['url'] = url
 
     updatable = [
         'name', 'listing_id', 'contact_id', 'asking_price', 'offer_price',
@@ -224,10 +232,14 @@ def create_from_listing(listing_id):
 
     data = request.get_json() or {}
 
+    stage = data.get('stage', 'interested')
+    if stage not in DEAL_STAGES:
+        return jsonify({'error': 'Invalid stage'}), 400
+
     deal = Deal(
         workspace_id=g.workspace_id,
         name=data.get('name') or listing.title or 'Untitled Deal',
-        stage=data.get('stage', 'interested'),
+        stage=stage,
         listing_id=listing.id,
         contact_id=data.get('contact_id'),
         asking_price=listing.price_numeric,

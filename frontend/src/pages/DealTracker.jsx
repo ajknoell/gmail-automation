@@ -5,6 +5,8 @@ import {
 } from '../api/client';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+import StatCard from '../components/StatCard';
+import { formatPrice } from '../utils/format';
 
 const STAGES = [
   { value: 'interested', label: 'Interested', color: '#6B7280' },
@@ -21,13 +23,6 @@ const STAGES = [
 const ACTIVE_STAGES = STAGES.filter(s => !['closed_won', 'closed_lost'].includes(s.value));
 const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.value, s]));
 const STAGE_INDEX = Object.fromEntries(STAGES.map((s, i) => [s.value, i]));
-
-function formatPrice(num) {
-  if (num == null) return '--';
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-  return `$${num.toLocaleString()}`;
-}
 
 function daysInStage(isoStr) {
   if (!isoStr) return null;
@@ -66,6 +61,13 @@ function sdeMultiple(askingPrice, sde) {
   if (!askingPrice || !sde) return null;
   return (askingPrice / sde).toFixed(1);
 }
+
+const EMPTY_FORM = {
+  name: '', stage: 'interested', contact_id: '',
+  asking_price: '', offer_price: '', revenue: '', cash_flow: '', sde: '', ebitda: '',
+  broker_name: '', broker_email: '', broker_phone: '',
+  source: '', url: '', location: '', category: '', notes: '', expected_close_date: '',
+};
 
 
 // ─── Pipeline Funnel ────────────────────────────────────────────────
@@ -165,13 +167,14 @@ function DealTracker() {
   const [inlineNote, setInlineNote] = useState(null); // { dealId, text }
   const showToast = useToast();
 
-  const emptyForm = {
-    name: '', stage: 'interested', contact_id: '',
-    asking_price: '', offer_price: '', revenue: '', cash_flow: '', sde: '', ebitda: '',
-    broker_name: '', broker_email: '', broker_phone: '',
-    source: '', url: '', location: '', category: '', notes: '', expected_close_date: '',
-  };
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  // Load contacts once on mount (they don't change with filters)
+  useEffect(() => {
+    getContacts({ per_page: 200 })
+      .then(res => setContacts(res.data?.contacts || res.data || []))
+      .catch(() => {});
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -179,14 +182,12 @@ function DealTracker() {
       const params = { sort: sort.by, order: sort.order };
       if (filter.stage) params.stage = filter.stage;
 
-      const [dealsRes, statsRes, contactsRes] = await Promise.all([
+      const [dealsRes, statsRes] = await Promise.all([
         getDeals(params),
         getDealStats(),
-        getContacts({ per_page: 200 }),
       ]);
       setDeals(dealsRes.data.deals || []);
       setStats(statsRes.data);
-      setContacts(contactsRes.data?.contacts || contactsRes.data || []);
     } catch (err) {
       console.error('Deal tracker load error:', err);
     }
@@ -231,7 +232,7 @@ function DealTracker() {
 
   const openCreateModal = () => {
     setEditingDeal(null);
-    setForm(emptyForm);
+    setForm(EMPTY_FORM);
     setShowFinancials(false);
     setShowBroker(false);
     setShowModal(true);
@@ -417,7 +418,7 @@ function DealTracker() {
       </div>
 
       {/* Deals table */}
-      {deals.length === 0 && !filter.stage ? (
+      {deals.length === 0 && !filter.stage && !search ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon" style={{ fontSize: '2rem' }}>&#128188;</div>
@@ -996,18 +997,6 @@ function Detail({ label, value }) {
     <div style={{ marginBottom: 4 }} className="text-sm">
       <span className="text-light">{label}: </span>
       <span>{value || '--'}</span>
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div
-      className={`card stat-card-compact${color ? ' stat-card-accent' : ''}`}
-      style={color ? { '--stat-accent': color } : undefined}
-    >
-      <div className="stat-label">{label}</div>
-      <div className="stat-value" style={{ color: color || 'var(--text)' }}>{value}</div>
     </div>
   );
 }
