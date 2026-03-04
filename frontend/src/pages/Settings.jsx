@@ -41,6 +41,7 @@ function Settings({ onStatusChange }) {
   const [tavilyKey, setTavilyKey] = useState('');
   const [googlePlacesKey, setGooglePlacesKey] = useState('');
   const [yelpKey, setYelpKey] = useState('');
+  const [apolloKey, setApolloKey] = useState('');
   const [trackingUrl, setTrackingUrl] = useState('');
   const [writingStyle, setWritingStyle] = useState(DEFAULT_WRITING_STYLE);
   const [saving, setSaving] = useState(false);
@@ -228,6 +229,21 @@ function Settings({ onStatusChange }) {
       setSettings(settingsRes.data);
     } catch (error) {
       setMessage('Failed to save Yelp API key');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveApolloKey = async () => {
+    if (!apolloKey.trim()) return;
+    setSaving(true);
+    try {
+      await saveSettings({ apollo_api_key: apolloKey });
+      setMessage('Apollo API key saved! You can now search and import contacts from Apollo.');
+      setApolloKey('');
+      const settingsRes = await getSettings();
+      setSettings(settingsRes.data);
+    } catch (error) {
+      setMessage('Failed to save Apollo API key');
     }
     setSaving(false);
   };
@@ -566,6 +582,39 @@ function Settings({ onStatusChange }) {
             className="btn btn-primary"
             onClick={handleSaveYelpKey}
             disabled={saving || !yelpKey.trim()}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Apollo.io API Key */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Apollo.io API Key (Contact Search) <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
+        <p className="text-sm text-light mb-2">
+          Search and import contacts from Apollo.io into your campaigns or contacts directory.
+          Get your API key from <a href="https://app.apollo.io/#/settings/integrations/api" target="_blank" rel="noopener noreferrer">Apollo Settings</a>.
+        </p>
+
+        {settings.apollo_api_key && (
+          <p className="mb-2">
+            Current key: <code>{settings.apollo_api_key}</code>
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            type="password"
+            className="form-input"
+            placeholder="Apollo API key..."
+            value={apolloKey}
+            onChange={(e) => setApolloKey(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveApolloKey}
+            disabled={saving || !apolloKey.trim()}
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
