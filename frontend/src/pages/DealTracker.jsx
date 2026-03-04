@@ -18,7 +18,9 @@ const STAGES = [
   { value: 'closed_lost', label: 'Closed Lost', color: '#EF4444' },
 ];
 
+const ACTIVE_STAGES = STAGES.filter(s => !['closed_won', 'closed_lost'].includes(s.value));
 const STAGE_MAP = Object.fromEntries(STAGES.map(s => [s.value, s]));
+const STAGE_INDEX = Object.fromEntries(STAGES.map((s, i) => [s.value, i]));
 
 function formatPrice(num) {
   if (num == null) return '--';
@@ -27,15 +29,125 @@ function formatPrice(num) {
   return `$${num.toLocaleString()}`;
 }
 
-function daysAgo(isoStr) {
-  if (!isoStr) return '--';
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return '1 day ago';
-  return `${days} days ago`;
+function daysInStage(isoStr) {
+  if (!isoStr) return null;
+  return Math.floor((Date.now() - new Date(isoStr).getTime()) / 86400000);
 }
 
+function daysLabel(days) {
+  if (days === null) return '--';
+  if (days === 0) return 'Today';
+  if (days === 1) return '1 day';
+  return `${days}d`;
+}
+
+function staleLevel(days, stage) {
+  if (days === null) return 'normal';
+  if (['closed_won', 'closed_lost'].includes(stage)) return 'normal';
+  // Early stages can sit longer; later stages should move faster
+  const earlyStages = ['interested', 'contacted_broker'];
+  if (earlyStages.includes(stage)) {
+    if (days >= 30) return 'danger';
+    if (days >= 14) return 'warning';
+  } else {
+    if (days >= 21) return 'danger';
+    if (days >= 10) return 'warning';
+  }
+  return 'normal';
+}
+
+function getNextStage(currentStage) {
+  const idx = STAGE_INDEX[currentStage];
+  if (idx == null || idx >= STAGES.length - 2) return null; // no next after due_diligence (closed_won/lost are terminal)
+  return STAGES[idx + 1];
+}
+
+function sdeMultiple(askingPrice, sde) {
+  if (!askingPrice || !sde) return null;
+  return (askingPrice / sde).toFixed(1);
+}
+
+
+// ─── Pipeline Funnel ────────────────────────────────────────────────
+function PipelineFunnel({ stats, activeFilter, onFilterStage }) {
+  const byStage = stats?.by_stage || {};
+  const total = ACTIVE_STAGES.reduce((sum, s) => sum + (byStage[s.value] || 0), 0) || 1;
+
+  return (
+    <div className="card mb-2" style={{ padding: '12px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: 8, overflow: 'hidden', height: 36 }}>
+        {ACTIVE_STAGES.map((stage, i) => {
+          const count = byStage[stage.value] || 0;
+          const pct = Math.max((count / total) * 100, count > 0 ? 8 : 3);
+          const isActive = activeFilter === stage.value;
+          return (
+            <button
+              key={stage.value}
+              onClick={() => onFilterStage(isActive ? '' : stage.value)}
+              title={`${stage.label}: ${count} deal${count !== 1 ? 's' : ''}`}
+              style={{
+                flex: `${pct} 0 0%`,
+                height: '100%',
+                background: isActive ? stage.color : `${stage.color}${count > 0 ? '30' : '12'}`,
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                padding: '0 4px',
+                transition: 'all 0.2s',
+                borderRight: i < ACTIVE_STAGES.length - 1 ? '2px solid var(--card-bg)' : 'none',
+                color: isActive ? '#fff' : stage.color,
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              {count > 0 && (
+                <>
+                  <span>{count}</span>
+                  {pct > 12 && <span style={{ opacity: 0.8, fontWeight: 400, fontSize: '0.625rem' }}>{stage.label}</span>}
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {/* Terminal stages */}
+      <div style={{ display: 'flex', gap: 12, marginTop: 8, justifyContent: 'flex-end' }}>
+        {['closed_won', 'closed_lost'].map(sv => {
+          const stage = STAGE_MAP[sv];
+          const count = byStage[sv] || 0;
+          const isActive = activeFilter === sv;
+          return (
+            <button
+              key={sv}
+              onClick={() => onFilterStage(isActive ? '' : sv)}
+              style={{
+                background: isActive ? stage.color : 'transparent',
+                border: `1px solid ${stage.color}40`,
+                borderRadius: 6,
+                padding: '2px 10px',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: isActive ? '#fff' : stage.color,
+                transition: 'all 0.15s',
+              }}
+            >
+              {stage.label} ({count})
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Main Component ─────────────────────────────────────────────────
 function DealTracker() {
   const [deals, setDeals] = useState([]);
   const [stats, setStats] = useState({});
@@ -49,6 +161,8 @@ function DealTracker() {
   const [editingDeal, setEditingDeal] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
   const [showFinancials, setShowFinancials] = useState(false);
+  const [showBroker, setShowBroker] = useState(false);
+  const [inlineNote, setInlineNote] = useState(null); // { dealId, text }
   const showToast = useToast();
 
   const emptyForm = {
@@ -96,10 +210,22 @@ function DealTracker() {
   const handleStageChange = async (dealId, newStage) => {
     try {
       await updateDealStage(dealId, newStage);
-      showToast('Stage updated', 'success');
+      showToast(`Stage updated to ${STAGE_MAP[newStage]?.label || newStage}`, 'success');
       await loadData();
     } catch (err) {
       showToast('Failed to update stage', 'error');
+    }
+  };
+
+  const handleSaveInlineNote = async (dealId) => {
+    if (!inlineNote) return;
+    try {
+      await updateDeal(dealId, { notes: inlineNote.text });
+      showToast('Note saved', 'success');
+      setInlineNote(null);
+      await loadData();
+    } catch (err) {
+      showToast('Failed to save note', 'error');
     }
   };
 
@@ -107,6 +233,7 @@ function DealTracker() {
     setEditingDeal(null);
     setForm(emptyForm);
     setShowFinancials(false);
+    setShowBroker(false);
     setShowModal(true);
   };
 
@@ -133,6 +260,7 @@ function DealTracker() {
       expected_close_date: deal.expected_close_date || '',
     });
     setShowFinancials(Boolean(deal.revenue || deal.cash_flow || deal.sde || deal.ebitda));
+    setShowBroker(Boolean(deal.broker_name || deal.broker_email || deal.broker_phone));
     setShowModal(true);
   };
 
@@ -142,7 +270,6 @@ function DealTracker() {
       return;
     }
     const payload = { ...form };
-    // Convert numeric fields
     for (const f of ['asking_price', 'offer_price', 'revenue', 'cash_flow', 'sde', 'ebitda']) {
       payload[f] = payload[f] === '' ? null : Number(payload[f]);
     }
@@ -183,8 +310,6 @@ function DealTracker() {
     });
   };
 
-  const activeStages = STAGES.filter(s => !['closed_won', 'closed_lost'].includes(s.value));
-
   if (loading) {
     return (
       <div style={{ maxWidth: 1400 }}>
@@ -195,12 +320,15 @@ function DealTracker() {
           </div>
         </div>
         <div className="grid mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="card stat-card-compact">
               <div className="skeleton skeleton-text-sm" style={{ width: '50%' }} />
               <div className="skeleton skeleton-text" style={{ width: '40%', height: '1.5rem' }} />
             </div>
           ))}
+        </div>
+        <div className="card mb-2" style={{ padding: '12px 16px' }}>
+          <div className="skeleton" style={{ height: 36, borderRadius: 8 }} />
         </div>
         <div className="card" style={{ padding: 0 }}>
           {Array.from({ length: 5 }).map((_, i) => (
@@ -233,43 +361,32 @@ function DealTracker() {
 
       {/* Stats */}
       <div className="grid mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-        <StatCard label="Total Deals" value={stats.total || 0} />
-        <StatCard label="Active" value={stats.active_count || 0} color="#3B82F6" />
+        <StatCard label="Active Deals" value={stats.active_count || 0} color="#3B82F6" />
         <StatCard label="Pipeline Value" value={formatPrice(stats.pipeline_value)} color="#E8603C" />
-        <StatCard
-          label="LOI+"
-          value={(stats.by_stage?.loi_submitted || 0) + (stats.by_stage?.under_contract || 0) + (stats.by_stage?.due_diligence || 0)}
-          color="#D97706"
-        />
+        <StatCard label="Total Offers" value={formatPrice(stats.offer_value)} color="#D97706" />
         <StatCard label="Won" value={stats.by_stage?.closed_won || 0} color="#10B981" />
-        <StatCard label="Lost" value={stats.by_stage?.closed_lost || 0} color="#EF4444" />
+        <StatCard label="Won Value" value={formatPrice(stats.won_value)} color="#059669" />
       </div>
 
-      {/* Search */}
-      <div className="card mb-2" style={{ padding: '0.75rem 1rem' }}>
-        <input
-          type="text"
-          className="form-input"
-          placeholder="Search deals by name, broker, source, location..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ border: 'none', padding: 0, boxShadow: 'none' }}
-        />
-      </div>
+      {/* Pipeline Funnel */}
+      <PipelineFunnel
+        stats={stats}
+        activeFilter={filter.stage}
+        onFilterStage={(stage) => setFilter(f => ({ ...f, stage }))}
+      />
 
-      {/* Filters */}
+      {/* Search + Sort */}
       <div className="toolbar">
-        <select
-          className="form-select"
-          style={{ width: 'auto' }}
-          value={filter.stage}
-          onChange={e => setFilter(f => ({ ...f, stage: e.target.value }))}
-        >
-          <option value="">All Stages</option>
-          {STAGES.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Search deals..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ margin: 0 }}
+          />
+        </div>
 
         <select
           className="form-select"
@@ -285,18 +402,28 @@ function DealTracker() {
           <option value="created_at:asc">Oldest First</option>
           <option value="asking_price:desc">Highest Value</option>
           <option value="asking_price:asc">Lowest Value</option>
-          <option value="stage_changed_at:desc">Stage Changed</option>
+          <option value="stage_changed_at:asc">Longest in Stage</option>
         </select>
+
+        {filter.stage && (
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setFilter({ stage: '' })}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            Clear: {STAGE_MAP[filter.stage]?.label}
+          </button>
+        )}
       </div>
 
       {/* Deals table */}
-      {deals.length === 0 ? (
+      {deals.length === 0 && !filter.stage ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon" style={{ fontSize: '2rem' }}>&#128188;</div>
             <p>No deals yet</p>
             <p className="text-sm text-light">
-              Click <strong>New Deal</strong> to start tracking a deal, or create one from the <strong>Listings</strong> page.
+              Click <strong>New Deal</strong> to start tracking a deal, or use the <strong>Track Deal</strong> button on any listing.
             </p>
             <button className="btn btn-primary mt-2" onClick={openCreateModal}>
               New Deal
@@ -324,10 +451,10 @@ function DealTracker() {
                 <th>Deal</th>
                 <th>Stage</th>
                 <th>Asking Price</th>
-                <th>SDE / Revenue</th>
+                <th>Multiple</th>
                 <th>Broker</th>
                 <th>In Stage</th>
-                <th>Actions</th>
+                <th style={{ width: 170 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -340,6 +467,11 @@ function DealTracker() {
                   onStageChange={handleStageChange}
                   onEdit={() => openEditModal(deal)}
                   onDelete={() => handleDelete(deal)}
+                  inlineNote={inlineNote?.dealId === deal.id ? inlineNote : null}
+                  onStartNote={(text) => setInlineNote({ dealId: deal.id, text })}
+                  onChangeNote={(text) => setInlineNote({ dealId: deal.id, text })}
+                  onSaveNote={() => handleSaveInlineNote(deal.id)}
+                  onCancelNote={() => setInlineNote(null)}
                 />
               ))}
             </tbody>
@@ -356,6 +488,7 @@ function DealTracker() {
               <button className="modal-close" onClick={() => setShowModal(false)}>&times;</button>
             </div>
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* Essential fields — always visible */}
               <div className="form-group">
                 <label className="form-label">Deal Name *</label>
                 <input
@@ -364,32 +497,8 @@ function DealTracker() {
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. Joe's Plumbing - Bergen County"
+                  autoFocus
                 />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Stage</label>
-                  <select
-                    className="form-select"
-                    value={form.stage}
-                    onChange={e => setForm(f => ({ ...f, stage: e.target.value }))}
-                  >
-                    {STAGES.map(s => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Source</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={form.source}
-                    onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
-                    placeholder="e.g. BizBuySell, broker, referral"
-                  />
-                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -404,30 +513,82 @@ function DealTracker() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Offer Price ($)</label>
+                  <label className="form-label">Source</label>
                   <input
-                    type="number"
+                    type="text"
                     className="form-input"
-                    value={form.offer_price}
-                    onChange={e => setForm(f => ({ ...f, offer_price: e.target.value }))}
-                    placeholder="450000"
+                    value={form.source}
+                    onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
+                    placeholder="e.g. BizBuySell, broker"
                   />
                 </div>
               </div>
 
-              {/* Financial Details Toggle */}
-              <div style={{ marginBottom: '12px' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setShowFinancials(!showFinancials)}
-                  style={{ fontSize: '0.75rem' }}
-                >
-                  {showFinancials ? 'Hide' : 'Show'} Financial Details
-                </button>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Location</label>
+                  <input type="text" className="form-input" value={form.location}
+                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                    placeholder="e.g. Bergen County, NJ" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <input type="text" className="form-input" value={form.category}
+                    onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                    placeholder="e.g. Plumbing, HVAC" />
+                </div>
               </div>
 
-              {showFinancials && (
+              {editingDeal && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Stage</label>
+                    <select
+                      className="form-select"
+                      value={form.stage}
+                      onChange={e => setForm(f => ({ ...f, stage: e.target.value }))}
+                    >
+                      {STAGES.map(s => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Offer Price ($)</label>
+                    <input type="number" className="form-input" value={form.offer_price}
+                      onChange={e => setForm(f => ({ ...f, offer_price: e.target.value }))}
+                      placeholder="450000" />
+                  </div>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <textarea
+                  className="form-input"
+                  rows={2}
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Quick notes about this deal..."
+                  style={{ resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Collapsible: Financial Details */}
+              <CollapsibleFormSection
+                label="Financial Details"
+                open={showFinancials}
+                onToggle={() => setShowFinancials(!showFinancials)}
+                hint={!showFinancials && (form.sde || form.revenue) ? `SDE: ${form.sde || '--'} | Rev: ${form.revenue || '--'}` : null}
+              >
+                {!editingDeal && (
+                  <div className="form-group">
+                    <label className="form-label">Offer Price ($)</label>
+                    <input type="number" className="form-input" value={form.offer_price}
+                      onChange={e => setForm(f => ({ ...f, offer_price: e.target.value }))}
+                      placeholder="450000" />
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label className="form-label">Revenue ($)</label>
@@ -450,83 +611,61 @@ function DealTracker() {
                       onChange={e => setForm(f => ({ ...f, ebitda: e.target.value }))} />
                   </div>
                 </div>
-              )}
+              </CollapsibleFormSection>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">Location</label>
-                  <input type="text" className="form-input" value={form.location}
-                    onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                    placeholder="e.g. Bergen County, NJ" />
+              {/* Collapsible: Broker & Contact */}
+              <CollapsibleFormSection
+                label="Broker & Contact"
+                open={showBroker}
+                onToggle={() => setShowBroker(!showBroker)}
+                hint={!showBroker && form.broker_name ? form.broker_name : null}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Broker Name</label>
+                    <input type="text" className="form-input" value={form.broker_name}
+                      onChange={e => setForm(f => ({ ...f, broker_name: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Broker Email</label>
+                    <input type="email" className="form-input" value={form.broker_email}
+                      onChange={e => setForm(f => ({ ...f, broker_email: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Broker Phone</label>
+                    <input type="text" className="form-input" value={form.broker_phone}
+                      onChange={e => setForm(f => ({ ...f, broker_phone: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Expected Close Date</label>
+                    <input type="date" className="form-input" value={form.expected_close_date}
+                      onChange={e => setForm(f => ({ ...f, expected_close_date: e.target.value }))} />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Category</label>
-                  <input type="text" className="form-input" value={form.category}
-                    onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    placeholder="e.g. Plumbing, Restaurant" />
-                </div>
-              </div>
 
-              <h4 style={{ margin: '16px 0 8px', fontSize: '0.8125rem', color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                Broker Info
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">Broker Name</label>
-                  <input type="text" className="form-input" value={form.broker_name}
-                    onChange={e => setForm(f => ({ ...f, broker_name: e.target.value }))} />
+                  <label className="form-label">Linked Contact</label>
+                  <select
+                    className="form-select"
+                    value={form.contact_id}
+                    onChange={e => setForm(f => ({ ...f, contact_id: e.target.value }))}
+                  >
+                    <option value="">None</option>
+                    {contacts.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name || c.email} {c.company ? `(${c.company})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Broker Email</label>
-                  <input type="email" className="form-input" value={form.broker_email}
-                    onChange={e => setForm(f => ({ ...f, broker_email: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Broker Phone</label>
-                  <input type="text" className="form-input" value={form.broker_phone}
-                    onChange={e => setForm(f => ({ ...f, broker_phone: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Expected Close Date</label>
-                  <input type="date" className="form-input" value={form.expected_close_date}
-                    onChange={e => setForm(f => ({ ...f, expected_close_date: e.target.value }))} />
-                </div>
-              </div>
 
-              <div className="form-group">
-                <label className="form-label">Linked Contact</label>
-                <select
-                  className="form-select"
-                  value={form.contact_id}
-                  onChange={e => setForm(f => ({ ...f, contact_id: e.target.value }))}
-                >
-                  <option value="">None</option>
-                  {contacts.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name || c.email} {c.company ? `(${c.company})` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">URL</label>
-                <input type="url" className="form-input" value={form.url}
-                  onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
-                  placeholder="https://..." />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Notes</label>
-                <textarea
-                  className="form-input"
-                  rows={3}
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  placeholder="Add notes about this deal..."
-                  style={{ resize: 'vertical' }}
-                />
-              </div>
+                <div className="form-group">
+                  <label className="form-label">URL</label>
+                  <input type="url" className="form-input" value={form.url}
+                    onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                    placeholder="https://..." />
+                </div>
+              </CollapsibleFormSection>
             </div>
 
             <div className="modal-footer">
@@ -539,7 +678,6 @@ function DealTracker() {
         </div>
       )}
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         open={!!confirmState}
         {...confirmState}
@@ -549,8 +687,57 @@ function DealTracker() {
   );
 }
 
-function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete }) {
+
+// ─── Collapsible Form Section ───────────────────────────────────────
+function CollapsibleFormSection({ label, open, onToggle, hint, children }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '6px 0',
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          color: 'var(--text-light)',
+          width: '100%',
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+          <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        </svg>
+        {label}
+        {hint && <span style={{ fontWeight: 400, marginLeft: 8, opacity: 0.6 }}>{hint}</span>}
+      </button>
+      {open && (
+        <div style={{ paddingTop: 4 }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── Deal Row ───────────────────────────────────────────────────────
+function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete, inlineNote, onStartNote, onChangeNote, onSaveNote, onCancelNote }) {
   const stage = STAGE_MAP[deal.stage] || { label: deal.stage, color: '#6B7280' };
+  const nextStage = getNextStage(deal.stage);
+  const days = daysInStage(deal.stage_changed_at);
+  const staleness = staleLevel(days, deal.stage);
+  const mult = sdeMultiple(deal.asking_price, deal.sde);
+
+  const staleStyles = {
+    normal: {},
+    warning: { color: '#D97706', fontWeight: 500 },
+    danger: { color: '#DC2626', fontWeight: 600 },
+  };
 
   return (
     <>
@@ -558,7 +745,7 @@ function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete }) 
         <td>
           <div style={{ fontWeight: 500 }}>{deal.name}</div>
           <div className="text-sm text-light" style={{ marginTop: 2 }}>
-            {[deal.location, deal.category].filter(Boolean).join(' · ') || ''}
+            {[deal.location, deal.category].filter(Boolean).join(' \u00b7 ') || ''}
           </div>
           {deal.listing_name && (
             <span className="badge" style={{ marginTop: 4, display: 'inline-block', fontSize: '0.6875rem', background: '#DBEAFE', color: '#1E40AF' }}>
@@ -598,12 +785,25 @@ function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete }) 
           )}
         </td>
         <td>
-          {deal.sde != null || deal.revenue != null ? (
-            <div>
-              {deal.sde != null && <div className="text-sm">SDE: {formatPrice(deal.sde)}</div>}
-              {deal.revenue != null && <div className="text-sm text-light">Rev: {formatPrice(deal.revenue)}</div>}
+          {mult ? (
+            <span style={{
+              fontWeight: 600,
+              color: Number(mult) <= 3 ? '#10B981' : Number(mult) <= 4.5 ? '#F59E0B' : '#EF4444',
+              background: Number(mult) <= 3 ? '#10B98118' : Number(mult) <= 4.5 ? '#F59E0B18' : '#EF444418',
+              padding: '2px 8px',
+              borderRadius: 4,
+              fontSize: '0.8125rem',
+            }}>
+              {mult}x
+            </span>
+          ) : (
+            <span className="text-light">--</span>
+          )}
+          {deal.sde != null && (
+            <div className="text-sm text-light" style={{ marginTop: 2 }}>
+              SDE: {formatPrice(deal.sde)}
             </div>
-          ) : <span className="text-light">--</span>}
+          )}
         </td>
         <td>
           {deal.broker_name ? (
@@ -611,12 +811,65 @@ function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete }) 
           ) : <span className="text-light">--</span>}
         </td>
         <td>
-          <span className="text-sm text-light">{daysAgo(deal.stage_changed_at)}</span>
+          <span className="text-sm" style={staleStyles[staleness]}>
+            {daysLabel(days)}
+          </span>
+          {staleness === 'danger' && (
+            <div style={{ fontSize: '0.625rem', color: '#DC2626', marginTop: 2 }}>Stale</div>
+          )}
         </td>
         <td onClick={e => e.stopPropagation()}>
-          <div className="flex gap-1">
-            <button className="btn btn-secondary btn-sm" onClick={onEdit}>Edit</button>
-            <button className="btn btn-danger btn-sm" onClick={onDelete}>Delete</button>
+          <div className="flex gap-1" style={{ alignItems: 'center' }}>
+            {nextStage && (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => onStageChange(deal.id, nextStage.value)}
+                title={`Advance to ${nextStage.label}`}
+                style={{ whiteSpace: 'nowrap', fontSize: '0.6875rem' }}
+              >
+                &#8594; {nextStage.label.length > 12 ? nextStage.label.split(' ')[0] : nextStage.label}
+              </button>
+            )}
+            {!nextStage && !['closed_won', 'closed_lost'].includes(deal.stage) && (
+              <div className="flex gap-1">
+                <button
+                  className="btn btn-success btn-sm"
+                  onClick={() => onStageChange(deal.id, 'closed_won')}
+                  style={{ fontSize: '0.6875rem' }}
+                >
+                  Won
+                </button>
+                <button
+                  className="btn btn-danger btn-sm"
+                  onClick={() => onStageChange(deal.id, 'closed_lost')}
+                  style={{ fontSize: '0.6875rem' }}
+                >
+                  Lost
+                </button>
+              </div>
+            )}
+            <button className="btn btn-secondary btn-sm" onClick={onEdit} style={{ fontSize: '0.6875rem' }}>
+              Edit
+            </button>
+            <button
+              onClick={onDelete}
+              title="Delete deal"
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-light)',
+                padding: '4px',
+                fontSize: '0.875rem',
+                lineHeight: 1,
+                opacity: 0.5,
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+            >
+              &#128465;
+            </button>
           </div>
         </td>
       </tr>
@@ -635,9 +888,9 @@ function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete }) 
                   <Detail label="Cash Flow" value={formatPrice(deal.cash_flow)} />
                   <Detail label="SDE" value={formatPrice(deal.sde)} />
                   <Detail label="EBITDA" value={formatPrice(deal.ebitda)} />
-                  {deal.asking_price && deal.sde ? (
-                    <Detail label="Multiple" value={`${(deal.asking_price / deal.sde).toFixed(1)}x SDE`} />
-                  ) : null}
+                  {mult && (
+                    <Detail label="Multiple" value={`${mult}x SDE`} />
+                  )}
                 </div>
                 <div>
                   <SectionTitle>Broker Info</SectionTitle>
@@ -676,20 +929,51 @@ function DealRow({ deal, expanded, onExpand, onStageChange, onEdit, onDelete }) 
                   <Detail label="Category" value={deal.category} />
                 </div>
                 <div>
-                  <SectionTitle>Dates & Notes</SectionTitle>
+                  <SectionTitle>Dates</SectionTitle>
                   <Detail label="Created" value={deal.created_at ? new Date(deal.created_at).toLocaleDateString() : null} />
                   <Detail label="Last Updated" value={deal.updated_at ? new Date(deal.updated_at).toLocaleDateString() : null} />
                   <Detail label="Stage Changed" value={deal.stage_changed_at ? new Date(deal.stage_changed_at).toLocaleDateString() : null} />
                   <Detail label="Expected Close" value={deal.expected_close_date || null} />
-                  {deal.notes && (
-                    <div style={{ marginTop: 8 }}>
-                      <div className="text-sm text-light" style={{ marginBottom: 4 }}>Notes:</div>
-                      <div className="text-sm" style={{ whiteSpace: 'pre-wrap', background: 'var(--card-bg)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)' }}>
-                        {deal.notes}
-                      </div>
-                    </div>
-                  )}
                 </div>
+              </div>
+
+              {/* Inline notes */}
+              <div style={{ marginTop: 12 }}>
+                <SectionTitle>Notes</SectionTitle>
+                {inlineNote ? (
+                  <div>
+                    <textarea
+                      className="form-input"
+                      rows={3}
+                      value={inlineNote.text}
+                      onChange={e => onChangeNote(e.target.value)}
+                      placeholder="Add notes..."
+                      style={{ resize: 'vertical', fontSize: '0.8125rem', marginBottom: 8 }}
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <button className="btn btn-primary btn-sm" onClick={onSaveNote}>Save Note</button>
+                      <button className="btn btn-secondary btn-sm" onClick={onCancelNote}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={(e) => { e.stopPropagation(); onStartNote(deal.notes || ''); }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border)',
+                      background: 'var(--card-bg)',
+                      cursor: 'text',
+                      minHeight: 40,
+                      fontSize: '0.8125rem',
+                      whiteSpace: 'pre-wrap',
+                      color: deal.notes ? 'var(--text)' : 'var(--text-light)',
+                    }}
+                  >
+                    {deal.notes || 'Click to add notes...'}
+                  </div>
+                )}
               </div>
             </div>
           </td>
