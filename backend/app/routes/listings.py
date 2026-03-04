@@ -1,6 +1,10 @@
+import logging
+
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime
 from app import db
+
+logger = logging.getLogger(__name__)
 from app.models.monitored_site import MonitoredSite
 from app.models.listing import Listing
 from app.models.deal_criteria import DealCriteria
@@ -43,14 +47,14 @@ def create_site():
 
 
 @listings_bp.route('/sites/upload', methods=['POST'])
-def upload_sites():
+def upload_sites() -> tuple:
     """Upload CSV/Excel file with broker sites to monitor.
 
     Accepts multipart/form-data with:
       - file: CSV or Excel file with broker URLs
       - mapping: optional JSON string with field mapping overrides
 
-    Creates MonitoredSite records and immediately scrapes each new site.
+    Creates MonitoredSite records and kicks off background scraping.
     """
     import json as _json
     from app.services.csv_parser import parse_file, detect_site_field_mapping
@@ -140,13 +144,31 @@ def upload_sites():
 
         db.session.commit()
 
-        # Immediately scrape all newly created sites
-        scrape_results = []
+        # Scrape new sites in a background thread to avoid request timeout
         if new_sites:
-            from app.services.listing_scraper import ListingMonitor
-            for site in new_sites:
-                result = ListingMonitor.check_site(site)
-                scrape_results.append(result)
+            import threading
+            from flask import current_app
+
+            site_ids = [s.id for s in new_sites]
+            app = current_app._get_current_object()
+
+            def _scrape_in_background(app_ctx: object, ids: list[int]) -> None:
+                """Run scraping inside an app context."""
+                with app_ctx.app_context():
+                    from app.services.listing_scraper import ListingMonitor
+                    for sid in ids:
+                        site = MonitoredSite.query.get(sid)
+                        if site:
+                            try:
+                                ListingMonitor.check_site(site)
+                            except Exception as e:
+                                logger.warning(f"Background scrape failed for site {sid}: {e}")
+
+            threading.Thread(
+                target=_scrape_in_background,
+                args=(app, site_ids),
+                daemon=True,
+            ).start()
 
         return jsonify({
             'success': True,
@@ -154,7 +176,7 @@ def upload_sites():
             'skipped_duplicate': skipped_dup,
             'skipped_invalid': skipped_invalid,
             'total_processed': len(rows),
-            'scrape_results': scrape_results,
+            'scraping': len(new_sites) > 0,
             'mapping': mapping,
         }), 201
 
