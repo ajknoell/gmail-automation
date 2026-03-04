@@ -6,6 +6,7 @@ import {
 } from '../api/client';
 import { useToast } from '../components/Toast';
 import ConfirmDialog from '../components/ConfirmDialog';
+import StatCard from '../components/StatCard';
 import { scoreColor } from '../utils/colors';
 
 const STATUS_LABELS = {
@@ -703,18 +704,6 @@ function Detail({ label, value, link }) {
       ) : (
         <span>{value}</span>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, color }) {
-  return (
-    <div
-      className={`card stat-card-compact${color ? ' stat-card-accent' : ''}`}
-      style={color ? { '--stat-accent': color } : undefined}
-    >
-      <div className="stat-label">{label}</div>
-      <div className="stat-value" style={{ color: color || 'var(--text)' }}>{value}</div>
     </div>
   );
 }

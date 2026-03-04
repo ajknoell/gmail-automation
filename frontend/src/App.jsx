@@ -22,6 +22,7 @@ import Intelligence from './pages/Intelligence';
 import IntelligenceSources from './pages/IntelligenceSources';
 import BusinessProfile from './pages/BusinessProfile';
 import Prospects from './pages/Prospects';
+import DealTracker from './pages/DealTracker';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
 import QuickSendPanel from './components/QuickSendPanel';
@@ -160,6 +161,7 @@ function App() {
       <Route path="/map-explorer" element={<MapExplorer />} />
       <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/listings" element={<Listings />} />
+      <Route path="/deals" element={<DealTracker />} />
       <Route path="/intelligence" element={<Intelligence />} />
       <Route path="/intelligence/triggers" element={<Triggers />} />
       <Route path="/intelligence/sources" element={<IntelligenceSources />} />
@@ -291,6 +293,16 @@ function App() {
                 <NavLink to="/intelligence">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1V3M8 13V15M1 8H3M13 8H15M3.05 3.05L4.46 4.46M11.54 11.54L12.95 12.95M12.95 3.05L11.54 4.46M4.46 11.54L3.05 12.95M8 5C6.34 5 5 6.34 5 8S6.34 11 8 11 11 9.66 11 8 9.66 5 8 5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   <span>Radar</span>
+                </NavLink>
+                {isFeatureEnabled('listings') && (
+                  <NavLink to="/listings">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Listings</span>
+                  </NavLink>
+                )}
+                <NavLink to="/deals">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4H14M2 4V12C2 13.1 2.9 14 4 14H12C13.1 14 14 13.1 14 12V4M2 4L4 2H12L14 4M6 7H10M6 10H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span>Deals</span>
                 </NavLink>
                 <NavLink to="/intelligence/triggers">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1L3 9H8L7 15L13 7H8L9 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>

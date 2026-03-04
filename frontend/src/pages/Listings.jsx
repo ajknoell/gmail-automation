@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   getMonitoredSites,
   createMonitoredSite,
@@ -21,7 +21,9 @@ import {
   parseEmailPreview,
   ingestEmailListing,
   scanEmailAlerts,
+  createDealFromListing,
 } from '../api/client';
+import { formatPrice } from '../utils/format';
 
 // Price presets for quick selection
 const PRICE_PRESETS = [
@@ -33,13 +35,6 @@ const PRICE_PRESETS = [
   { label: '$1M – $5M', min: '1000000', max: '5000000' },
   { label: 'Over $5M', min: '5000000', max: '' },
 ];
-
-function formatPrice(num) {
-  if (!num) return '';
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-  return `$${num}`;
-}
 
 function Listings() {
   const [sites, setSites] = useState([]);
@@ -98,6 +93,16 @@ function Listings() {
 
   // Debounce keyword search
   const [keywordTimer, setKeywordTimer] = useState(null);
+  const navigate = useNavigate();
+
+  const handleTrackDeal = async (listing) => {
+    try {
+      await createDealFromListing(listing.id);
+      navigate('/deals');
+    } catch (err) {
+      console.error('Failed to create deal:', err);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -1473,6 +1478,13 @@ function Listings() {
                         style={{ fontSize: '12px', padding: '2px 8px' }}
                       >
                         {listing.notes ? 'Notes' : '+ Note'}
+                      </button>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => handleTrackDeal(listing)}
+                        style={{ fontSize: '12px', padding: '2px 8px' }}
+                      >
+                        Track Deal
                       </button>
                     </div>
                   </div>
