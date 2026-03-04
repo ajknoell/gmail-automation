@@ -114,7 +114,7 @@ function StepConfig({ step, canEdit, templates, onUpdateStep }) {
         {!step.variant_group && (
           <div>
             <label style={{ fontWeight: 500, fontSize: '0.85rem', display: 'block', marginBottom: '0.25rem' }}>
-              Delay
+              Delay after previous step
             </label>
             <DelayInput
               delayMinutes={step.delay_minutes ?? step.effective_delay_minutes ?? (step.delay_days || 3) * 1440}
@@ -839,11 +839,12 @@ function SequenceBuilder({
                 </select>
               </div>
               <div>
-                <label style={{ fontWeight: 500, fontSize: '0.85rem', display: 'block', marginBottom: '0.25rem' }}>Delay</label>
+                <label style={{ fontWeight: 500, fontSize: '0.85rem', display: 'block', marginBottom: '0.25rem' }}>Delay after previous step</label>
                 <DelayInput
                   delayMinutes={newStepForm.delay_minutes}
                   onChange={(mins) => setNewStepForm((f) => ({ ...f, delay_minutes: mins }))}
                 />
+                <span style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.25rem', display: 'block' }}>Time to wait before sending this follow-up</span>
               </div>
               <div>
                 <label style={{ fontWeight: 500, fontSize: '0.85rem', display: 'block', marginBottom: '0.25rem' }}>Name (optional)</label>

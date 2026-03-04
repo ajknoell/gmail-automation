@@ -151,6 +151,10 @@ export const getCampaignTracking = (id) => api.get(`/api/campaigns/${id}/trackin
 export const getQuickSendHistory = () => api.get('/api/quick-send/history');
 export const triggerReplyCheck = () => api.post('/api/tracking/check-replies');
 
+// Gmail Sync
+export const triggerGmailSync = () => api.post('/api/gmail-sync/trigger');
+export const getGmailSyncStatus = () => api.get('/api/gmail-sync/status');
+
 // Clay Integration
 export const getClaySettings = () => api.get('/api/clay/settings');
 export const saveClaySettings = (data) => api.post('/api/clay/settings', data);
@@ -229,6 +233,13 @@ export const deleteAttachment = (id) => api.delete(`/api/attachments/${id}`);
 // Listing Monitor
 export const getMonitoredSites = () => api.get('/api/listings/sites');
 export const createMonitoredSite = (data) => api.post('/api/listings/sites', data);
+export const uploadBrokerSites = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/api/listings/sites/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
 export const updateMonitoredSite = (id, data) => api.put(`/api/listings/sites/${id}`, data);
 export const deleteMonitoredSite = (id) => api.delete(`/api/listings/sites/${id}`);
 export const checkSiteNow = (id) => api.post(`/api/listings/sites/${id}/check`);
