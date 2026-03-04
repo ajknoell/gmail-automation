@@ -147,13 +147,13 @@ def _build_tools(firecrawl_service, web_search_service):
     return tools, saved_leads, pages_scraped
 
 
-def run_lead_discovery(app, task_id):
-    """
-    Execute lead discovery. Designed to run in a background thread.
+def run_lead_discovery(app, task_id, cancel_event=None):
+    """Execute lead discovery. Designed to run in a background thread.
 
     Args:
         app: Flask app instance (for app context).
         task_id: AgentTask ID to update with results.
+        cancel_event: Optional threading.Event to signal cancellation.
     """
     with app.app_context():
         task = AgentTask.query.get(task_id)
@@ -178,7 +178,8 @@ def run_lead_discovery(app, task_id):
         task.started_at = datetime.utcnow()
         db.session.commit()
 
-        cancel_event = threading.Event()
+        if cancel_event is None:
+            cancel_event = threading.Event()
 
         try:
             from app.services.firecrawl_service import FirecrawlService

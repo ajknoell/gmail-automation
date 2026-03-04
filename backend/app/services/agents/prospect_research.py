@@ -204,14 +204,14 @@ def _build_tools(firecrawl_service, web_search_service=None):
     return tools, saved_profile, pages_scraped
 
 
-def run_prospect_research(app, task_id, lead_id):
-    """
-    Execute prospect research for a lead. Designed to run in a background thread.
+def run_prospect_research(app, task_id, lead_id, cancel_event=None):
+    """Execute prospect research for a lead. Designed to run in a background thread.
 
     Args:
         app: Flask app instance (for app context).
         task_id: AgentTask ID to update with results.
         lead_id: Lead ID to research.
+        cancel_event: Optional threading.Event to signal cancellation.
     """
     with app.app_context():
         task = AgentTask.query.get(task_id)
@@ -233,7 +233,8 @@ def run_prospect_research(app, task_id, lead_id):
         task.started_at = datetime.utcnow()
         db.session.commit()
 
-        cancel_event = threading.Event()
+        if cancel_event is None:
+            cancel_event = threading.Event()
 
         try:
             # Set up services

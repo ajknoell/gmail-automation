@@ -1,12 +1,20 @@
-"""
-Agent routes — manage AI-powered agent tasks (research, discovery, competitive intel).
-"""
+"""Agent routes — manage AI-powered agent tasks (research, discovery, competitive intel)."""
+
+import logging
+import threading
+from datetime import datetime
+
 from flask import Blueprint, request, jsonify, g
+
 from app import db
 from app.models.agent_task import AgentTask, AGENT_TYPES
-import threading
+
+logger = logging.getLogger(__name__)
 
 agents_bp = Blueprint('agents', __name__)
+
+# Registry mapping task_id -> threading.Event for cancellation
+_cancel_events: dict[int, threading.Event] = {}
 
 
 @agents_bp.route('/tasks', methods=['GET'])
@@ -82,22 +90,26 @@ def start_research():
     db.session.add(task)
     db.session.commit()
 
-    # Run in background thread
+    # Run in background thread with cancellation support
     app = current_app._get_current_object()
+    cancel_event = threading.Event()
+    _cancel_events[task.id] = cancel_event
     from app.services.agents.prospect_research import run_prospect_research
 
-    thread = threading.Thread(
-        target=run_prospect_research,
-        args=(app, task.id, lead_id),
-        daemon=True,
-    )
-    thread.start()
+    def _run_and_cleanup() -> None:
+        """Run the agent and clean up the cancel event registry."""
+        try:
+            run_prospect_research(app, task.id, lead_id, cancel_event=cancel_event)
+        finally:
+            _cancel_events.pop(task.id, None)
+
+    threading.Thread(target=_run_and_cleanup, daemon=True).start()
 
     return jsonify(task.to_dict()), 202
 
 
 @agents_bp.route('/discover', methods=['POST'])
-def start_discovery():
+def start_discovery() -> tuple:
     """Start a lead discovery agent."""
     from flask import current_app
 
@@ -123,22 +135,26 @@ def start_discovery():
     db.session.add(task)
     db.session.commit()
 
-    # Run in background thread
+    # Run in background thread with cancellation support
     app = current_app._get_current_object()
+    cancel_event = threading.Event()
+    _cancel_events[task.id] = cancel_event
     from app.services.agents.lead_discovery import run_lead_discovery
 
-    thread = threading.Thread(
-        target=run_lead_discovery,
-        args=(app, task.id),
-        daemon=True,
-    )
-    thread.start()
+    def _run_and_cleanup() -> None:
+        """Run the agent and clean up the cancel event registry."""
+        try:
+            run_lead_discovery(app, task.id, cancel_event=cancel_event)
+        finally:
+            _cancel_events.pop(task.id, None)
+
+    threading.Thread(target=_run_and_cleanup, daemon=True).start()
 
     return jsonify(task.to_dict()), 202
 
 
 @agents_bp.route('/competitive-intel', methods=['POST'])
-def start_competitive_intel():
+def start_competitive_intel() -> tuple:
     """Start a competitive intelligence agent."""
     from flask import current_app
 
@@ -162,23 +178,27 @@ def start_competitive_intel():
     db.session.add(task)
     db.session.commit()
 
-    # Run in background thread
+    # Run in background thread with cancellation support
     app = current_app._get_current_object()
+    cancel_event = threading.Event()
+    _cancel_events[task.id] = cancel_event
     from app.services.agents.competitive_intel import run_competitive_intel
 
-    thread = threading.Thread(
-        target=run_competitive_intel,
-        args=(app, task.id),
-        daemon=True,
-    )
-    thread.start()
+    def _run_and_cleanup() -> None:
+        """Run the agent and clean up the cancel event registry."""
+        try:
+            run_competitive_intel(app, task.id, cancel_event=cancel_event)
+        finally:
+            _cancel_events.pop(task.id, None)
+
+    threading.Thread(target=_run_and_cleanup, daemon=True).start()
 
     return jsonify(task.to_dict()), 202
 
 
 @agents_bp.route('/tasks/<int:task_id>/cancel', methods=['POST'])
-def cancel_task(task_id):
-    """Cancel a running task."""
+def cancel_task(task_id: int) -> tuple:
+    """Cancel a running task by signalling its cancel event."""
     task = AgentTask.query.filter_by(
         id=task_id, workspace_id=g.workspace_id
     ).first_or_404()
@@ -186,8 +206,13 @@ def cancel_task(task_id):
     if task.status not in ('pending', 'running'):
         return jsonify({'error': f'Cannot cancel task in {task.status} status'}), 400
 
+    # Signal the background thread to stop
+    cancel_event = _cancel_events.pop(task.id, None)
+    if cancel_event:
+        cancel_event.set()
+
     task.status = 'cancelled'
-    task.completed_at = __import__('datetime').datetime.utcnow()
+    task.completed_at = datetime.utcnow()
     db.session.commit()
 
     return jsonify(task.to_dict())
