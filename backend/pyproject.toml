@@ -1,0 +1,27 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "B",     # flake8-bugbear
+    "S",     # flake8-bandit (security)
+    "I",     # isort (import sorting)
+    "UP",    # pyupgrade
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific rules
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S101",  # use of assert (OK in non-test code for this project)
+    "S104",  # binding to all interfaces
+    "S105",  # hardcoded password (will flag config.py dev key -- acknowledge)
+    "B008",  # function call in default argument (Flask patterns use this)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/__init__.py" = ["E402"]  # Module level import not at top of file (Flask pattern)

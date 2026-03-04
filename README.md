@@ -80,6 +80,34 @@ veloro/
     └── package.json
 ```
 
+## Code Quality
+
+Veloro uses a continuous code review system powered by Claude Code hooks and automated linting.
+
+### Automated Review (Claude Code Hooks)
+
+When using Claude Code, every file edit automatically triggers quality checks:
+- **Python files**: Linted with [ruff](https://docs.astral.sh/ruff/) for style, security, and bug detection
+- **JavaScript/JSX files**: Linted with ESLint with React hooks and refresh plugins
+
+These hooks are defined in `.claude/settings.json` and run transparently after each edit.
+
+### On-Demand Review
+
+Run a full project review at any time:
+
+```bash
+./scripts/review.sh
+```
+
+### Quality Standards
+
+See [CLAUDE.md](CLAUDE.md) for the complete code review checklist including:
+- Python type annotation and docstring requirements
+- Security review checklist (SSRF, SQL injection, XSS, secrets)
+- Performance review checklist (N+1 queries, pagination, async)
+- Architecture guidelines for models, routes, and services
+
 ## Usage
 
 ### Creating a Campaign
