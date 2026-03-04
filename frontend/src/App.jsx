@@ -23,6 +23,7 @@ import IntelligenceSources from './pages/IntelligenceSources';
 import BusinessProfile from './pages/BusinessProfile';
 import Prospects from './pages/Prospects';
 import DealTracker from './pages/DealTracker';
+import ApolloSearch from './pages/ApolloSearch';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import MobileLayout from './components/MobileLayout';
 import QuickSendPanel from './components/QuickSendPanel';
@@ -46,7 +47,7 @@ function WorkflowIndicator() {
   const path = location.pathname;
 
   const getActiveStep = () => {
-    if (path.startsWith('/prospects') || path === '/discovery' || path === '/map-explorer' || path === '/pipeline') return 'find';
+    if (path.startsWith('/prospects') || path === '/discovery' || path === '/map-explorer' || path === '/pipeline' || path === '/apollo') return 'find';
     if (path === '/contacts' || path.startsWith('/contacts/')) return 'enrich';
     if (path.startsWith('/campaigns') || path === '/replies' || path === '/templates' || path === '/quick-send') return 'outreach';
     if (path === '/insights' || path === '/' || path === '/brief') return 'track';
@@ -168,6 +169,7 @@ function App() {
       <Route path="/triggers" element={<Navigate to="/intelligence/triggers" replace />} />
       <Route path="/signals" element={<Navigate to="/intelligence" replace />} />
       <Route path="/opportunities" element={<Navigate to="/intelligence" replace />} />
+      <Route path="/apollo" element={<ApolloSearch />} />
       <Route path="/business-profile" element={<BusinessProfile />} />
       <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
     </Routes>
@@ -263,6 +265,10 @@ function App() {
                     <span>Listings</span>
                   </NavLink>
                 )}
+                <NavLink to="/apollo">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 15M8 1L14 15M4.5 10H11.5M8 1V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span>Apollo</span>
+                </NavLink>
               </div>
 
               {/* OUTREACH */}

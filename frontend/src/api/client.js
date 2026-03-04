@@ -157,6 +157,12 @@ export const saveClaySettings = (data) => api.post('/api/clay/settings', data);
 export const getClayWebhookUrl = () => api.get('/api/clay/webhook-url');
 export const exportToClay = (campaignId) => api.post(`/api/clay/export/${campaignId}`);
 
+// Apollo Integration
+export const getApolloStatus = () => api.get('/api/apollo/status');
+export const searchApollo = (filters) => api.post('/api/apollo/search', filters);
+export const importApolloToContacts = (data) => api.post('/api/apollo/import/contacts', data);
+export const importApolloToCampaign = (data) => api.post('/api/apollo/import/campaign', data);
+
 // Contacts Directory
 export const getContacts = (params) => api.get('/api/contacts', { params });
 export const getContact = (id) => api.get(`/api/contacts/${id}`);
