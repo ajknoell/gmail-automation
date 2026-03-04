@@ -5,12 +5,15 @@ sent outside of Veloro (directly via Gmail), and records them as EmailLog
 entries so the contact's email history is complete.
 """
 
+import logging
 import threading
 import time
 import base64
 import re
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
+
+logger = logging.getLogger(__name__)
 
 
 class GmailSyncService:
@@ -105,7 +108,8 @@ class GmailSyncService:
         synced = 0
         try:
             messages = cls._list_messages(gmail, query)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to list sent messages: {e}")
             return 0
 
         for msg_meta in messages:
@@ -179,7 +183,8 @@ class GmailSyncService:
                 # Rate limit
                 time.sleep(0.05)
 
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to process sent message {msg_id}: {e}")
                 continue
 
         if synced > 0:
@@ -199,7 +204,8 @@ class GmailSyncService:
         synced = 0
         try:
             messages = cls._list_messages(gmail, query)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to list received messages: {e}")
             return 0
 
         for msg_meta in messages:
@@ -268,7 +274,8 @@ class GmailSyncService:
 
                 time.sleep(0.05)
 
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to process received message {msg_id}: {e}")
                 continue
 
         if synced > 0:

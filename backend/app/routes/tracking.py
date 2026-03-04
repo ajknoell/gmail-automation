@@ -147,9 +147,13 @@ def gmail_sync_status():
     from app.models import Settings
     last_run = Settings.get('gmail_sync_last_run')
 
-    # Count synced emails
-    synced_sent = EmailLog.query.filter_by(source='gmail_sync', direction='sent').count()
-    synced_received = EmailLog.query.filter_by(source='gmail_sync', direction='received').count()
+    # Count synced emails for this workspace only
+    synced_sent = EmailLog.query.filter_by(
+        source='gmail_sync', direction='sent', workspace_id=g.workspace_id
+    ).count()
+    synced_received = EmailLog.query.filter_by(
+        source='gmail_sync', direction='received', workspace_id=g.workspace_id
+    ).count()
 
     return jsonify({
         'last_sync': last_run,
