@@ -1503,6 +1503,12 @@ def list_step_recipients(id, step_id):
         logs = EmailLog.query.filter(EmailLog.id.in_(log_ids)).all()
         logs_by_id = {l.id: l for l in logs}
 
+    # For follow-up steps, get prior reply/bounce status
+    step = CampaignStep.query.get(step_id)
+    prior_reply_map = {}
+    if step and step.position > 1:
+        prior_reply_map = _get_replied_or_bounced_recipient_ids(id)
+
     result = []
     for sr in step_recipients:
         data = sr.to_dict()
@@ -1516,6 +1522,8 @@ def list_step_recipients(id, step_id):
                 'replied_at': log.replied_at.isoformat() if log.replied_at else None,
                 'bounced_at': log.bounced_at.isoformat() if log.bounced_at else None,
             }
+        if sr.recipient_id in prior_reply_map:
+            data['prior_reply_status'] = prior_reply_map[sr.recipient_id]
         result.append(data)
 
     return jsonify(result)
@@ -1545,6 +1553,23 @@ def generate_step_preview(id, step_id):
         if tavily_key:
             from app.services.web_search import WebSearchService
             web_search = WebSearchService(tavily_key)
+
+    # For follow-up steps, skip recipients who already replied or bounced
+    skipped_count = 0
+    if step.position > 1:
+        excluded = _get_replied_or_bounced_recipient_ids(campaign.id)
+        if excluded:
+            pending_srs = StepRecipient.query.filter_by(
+                step_id=step_id, status='pending'
+            ).all()
+            for sr in pending_srs:
+                if sr.recipient_id in excluded:
+                    sr.status = 'skipped'
+                    sr.skip_reason = excluded[sr.recipient_id]
+                    skipped_count += 1
+            if skipped_count:
+                step.skipped_count = (step.skipped_count or 0) + skipped_count
+                db.session.commit()
 
     # Find step recipients that need generation
     unpersonalized = (
@@ -1667,6 +1692,7 @@ def generate_step_preview(id, step_id):
         'generated': generated,
         'failed': failed,
         'remaining': remaining,
+        'skipped_replied': skipped_count,
     })
 
 
@@ -1812,6 +1838,22 @@ def start_step(id, step_id):
     if step.status == 'running':
         return jsonify({'error': 'Step is already running'}), 400
 
+    # For follow-up steps, skip recipients who replied or bounced since generation
+    if step.position > 1:
+        excluded = _get_replied_or_bounced_recipient_ids(campaign.id)
+        if excluded:
+            ready_srs = StepRecipient.query.filter_by(
+                step_id=step_id,
+            ).filter(
+                StepRecipient.status.in_(['ready', 'approved']),
+            ).all()
+            for sr in ready_srs:
+                if sr.recipient_id in excluded:
+                    sr.status = 'skipped'
+                    sr.skip_reason = excluded[sr.recipient_id]
+                    step.skipped_count = (step.skipped_count or 0) + 1
+            db.session.commit()
+
     # Get approved recipients with content
     approved_srs = StepRecipient.query.filter_by(
         step_id=step_id,
@@ -1850,6 +1892,31 @@ def start_step(id, step_id):
 
 
 # ---- Step helper functions ----
+
+
+def _get_replied_or_bounced_recipient_ids(campaign_id):
+    """Return a dict of recipient_id -> reason for recipients that replied or bounced.
+
+    Used to filter follow-up steps so they only target non-responders.
+    """
+    logs = (
+        EmailLog.query
+        .filter_by(campaign_id=campaign_id)
+        .filter(
+            db.or_(
+                EmailLog.replied_at.isnot(None),
+                EmailLog.bounced_at.isnot(None),
+            )
+        )
+        .with_entities(EmailLog.recipient_id, EmailLog.replied_at, EmailLog.bounced_at)
+        .all()
+    )
+    result = {}
+    for log in logs:
+        if log.recipient_id not in result:
+            result[log.recipient_id] = 'replied' if log.replied_at else 'bounced'
+    return result
+
 
 def _populate_step_recipients(step):
     """Create StepRecipient rows for all recipients in the campaign.
