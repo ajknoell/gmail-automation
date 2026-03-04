@@ -47,6 +47,7 @@ def create_app(config_class=None):
     from app.routes.signals import signals_bp
     from app.routes.profile import profile_bp
     from app.routes.opportunities import opportunities_bp
+    from app.routes.agents import agents_bp
     from app.routes.deals import deals_bp
     from app.routes.apollo import apollo_bp
 
@@ -72,6 +73,7 @@ def create_app(config_class=None):
     app.register_blueprint(signals_bp, url_prefix='/api/signals')
     app.register_blueprint(profile_bp, url_prefix='/api/profile')
     app.register_blueprint(opportunities_bp, url_prefix='/api/opportunities')
+    app.register_blueprint(agents_bp, url_prefix='/api/agents')
     app.register_blueprint(deals_bp, url_prefix='/api/deals')
     app.register_blueprint(apollo_bp, url_prefix='/api/apollo')
 

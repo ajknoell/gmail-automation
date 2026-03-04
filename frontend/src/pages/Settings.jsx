@@ -35,12 +35,13 @@ const DEFAULT_WRITING_STYLE = {
 function Settings({ onStatusChange }) {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState({ gmail_connected: false, anthropic_configured: false });
-  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', google_places_api_key: '', yelp_api_key: '', tracking_base_url: '', writing_style: null });
+  const [settings, setSettings] = useState({ anthropic_api_key: '', tavily_api_key: '', google_places_api_key: '', yelp_api_key: '', firecrawl_api_key: '', tracking_base_url: '', writing_style: null });
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [apiKey, setApiKey] = useState('');
   const [tavilyKey, setTavilyKey] = useState('');
   const [googlePlacesKey, setGooglePlacesKey] = useState('');
   const [yelpKey, setYelpKey] = useState('');
+  const [firecrawlKey, setFirecrawlKey] = useState('');
   const [apolloKey, setApolloKey] = useState('');
   const [trackingUrl, setTrackingUrl] = useState('');
   const [writingStyle, setWritingStyle] = useState(DEFAULT_WRITING_STYLE);
@@ -229,6 +230,21 @@ function Settings({ onStatusChange }) {
       setSettings(settingsRes.data);
     } catch (error) {
       setMessage('Failed to save Yelp API key');
+    }
+    setSaving(false);
+  };
+
+  const handleSaveFirecrawlKey = async () => {
+    if (!firecrawlKey.trim()) return;
+    setSaving(true);
+    try {
+      await saveSettings({ firecrawl_api_key: firecrawlKey });
+      setMessage('Firecrawl API key saved! AI agents can now crawl websites for deep research.');
+      setFirecrawlKey('');
+      const settingsRes = await getSettings();
+      setSettings(settingsRes.data);
+    } catch (error) {
+      setMessage('Failed to save Firecrawl API key');
     }
     setSaving(false);
   };
@@ -582,6 +598,39 @@ function Settings({ onStatusChange }) {
             className="btn btn-primary"
             onClick={handleSaveYelpKey}
             disabled={saving || !yelpKey.trim()}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      {/* Firecrawl API Key (AI Agents) */}
+      <div className="card mb-4">
+        <h3 className="card-title mb-2">Firecrawl API Key (AI Agents) <span style={{ fontSize: '12px', background: '#F0FDF4', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, marginLeft: '8px' }}>Shared</span></h3>
+        <p className="text-sm text-light mb-2">
+          Powers AI agents for deep prospect research, lead discovery, and competitive intelligence.
+          Get a key at <a href="https://firecrawl.dev" target="_blank" rel="noopener noreferrer">firecrawl.dev</a>.
+        </p>
+
+        {settings.firecrawl_api_key && (
+          <p className="mb-2">
+            Current key: <code>{settings.firecrawl_api_key.slice(0, 8)}...{settings.firecrawl_api_key.slice(-4)}</code>
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            type="password"
+            className="form-input"
+            placeholder="fc-..."
+            value={firecrawlKey}
+            onChange={(e) => setFirecrawlKey(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            className="btn btn-primary"
+            onClick={handleSaveFirecrawlKey}
+            disabled={saving || !firecrawlKey.trim()}
           >
             {saving ? 'Saving...' : 'Save'}
           </button>

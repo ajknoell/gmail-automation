@@ -22,6 +22,7 @@ import Intelligence from './pages/Intelligence';
 import IntelligenceSources from './pages/IntelligenceSources';
 import BusinessProfile from './pages/BusinessProfile';
 import Prospects from './pages/Prospects';
+import Agents from './pages/Agents';
 import DealTracker from './pages/DealTracker';
 import ApolloSearch from './pages/ApolloSearch';
 import WorkspaceSelector from './components/WorkspaceSelector';
@@ -171,6 +172,7 @@ function App() {
       <Route path="/opportunities" element={<Navigate to="/intelligence" replace />} />
       <Route path="/apollo" element={<ApolloSearch />} />
       <Route path="/business-profile" element={<BusinessProfile />} />
+      <Route path="/agents" element={<Agents />} />
       <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
     </Routes>
   );
