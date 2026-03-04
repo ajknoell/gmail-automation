@@ -18,9 +18,9 @@ import Discovery from './pages/Discovery';
 import DailyBrief from './pages/DailyBrief';
 import Triggers from './pages/Triggers';
 import Pipeline from './pages/Pipeline';
-import Signals from './pages/Signals';
+import Intelligence from './pages/Intelligence';
+import IntelligenceSources from './pages/IntelligenceSources';
 import BusinessProfile from './pages/BusinessProfile';
-import OpportunityFeed from './pages/OpportunityFeed';
 import Prospects from './pages/Prospects';
 import DealTracker from './pages/DealTracker';
 import WorkspaceSelector from './components/WorkspaceSelector';
@@ -162,10 +162,13 @@ function App() {
       <Route path="/pipeline" element={<Pipeline />} />
       <Route path="/listings" element={<Listings />} />
       <Route path="/deals" element={<DealTracker />} />
-      <Route path="/triggers" element={<Triggers />} />
-      <Route path="/signals" element={<Signals />} />
+      <Route path="/intelligence" element={<Intelligence />} />
+      <Route path="/intelligence/triggers" element={<Triggers />} />
+      <Route path="/intelligence/sources" element={<IntelligenceSources />} />
+      <Route path="/triggers" element={<Navigate to="/intelligence/triggers" replace />} />
+      <Route path="/signals" element={<Navigate to="/intelligence" replace />} />
+      <Route path="/opportunities" element={<Navigate to="/intelligence" replace />} />
       <Route path="/business-profile" element={<BusinessProfile />} />
-      <Route path="/opportunities" element={<OpportunityFeed />} />
       <Route path="/settings" element={<Settings onStatusChange={setStatus} />} />
     </Routes>
   );
@@ -254,6 +257,12 @@ function App() {
                     <span>Contacts</span>
                   </NavLink>
                 )}
+                {isFeatureEnabled('listings') && (
+                  <NavLink to="/listings">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    <span>Listings</span>
+                  </NavLink>
+                )}
               </div>
 
               {/* OUTREACH */}
@@ -279,8 +288,12 @@ function App() {
                 )}
               </div>
 
-              {/* SIGNALS */}
-              <CollapsibleSection label="Signals" defaultOpen={false}>
+              {/* INTELLIGENCE */}
+              <CollapsibleSection label="Intelligence" defaultOpen={true}>
+                <NavLink to="/intelligence">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1V3M8 13V15M1 8H3M13 8H15M3.05 3.05L4.46 4.46M11.54 11.54L12.95 12.95M12.95 3.05L11.54 4.46M4.46 11.54L3.05 12.95M8 5C6.34 5 5 6.34 5 8S6.34 11 8 11 11 9.66 11 8 9.66 5 8 5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  <span>Radar</span>
+                </NavLink>
                 {isFeatureEnabled('listings') && (
                   <NavLink to="/listings">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2H7V7H2V2ZM9 2H14V7H9V2ZM2 9H7V14H2V9ZM9 9H14V14H9V9Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
@@ -291,13 +304,13 @@ function App() {
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4H14M2 4V12C2 13.1 2.9 14 4 14H12C13.1 14 14 13.1 14 12V4M2 4L4 2H12L14 4M6 7H10M6 10H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   <span>Deals</span>
                 </NavLink>
-                <NavLink to="/triggers">
+                <NavLink to="/intelligence/triggers">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9 1L3 9H8L7 15L13 7H8L9 1Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
                   <span>Triggers</span>
                 </NavLink>
-                <NavLink to="/signals">
+                <NavLink to="/intelligence/sources">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 12C4 10 4 6 2 4M6 10.5C7 9.5 7 6.5 6 5.5M10 9C10.5 8.5 10.5 7.5 10 7M14 8C14 8 14 8 14 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  <span>Signals</span>
+                  <span>Sources</span>
                 </NavLink>
               </CollapsibleSection>
             </nav>

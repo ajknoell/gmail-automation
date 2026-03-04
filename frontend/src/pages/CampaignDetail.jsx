@@ -40,6 +40,7 @@ import {
 import AttachmentPicker from '../components/AttachmentPicker';
 import RichTextEditor from '../components/RichTextEditor';
 import SequenceBuilder from '../components/SequenceBuilder';
+import { useFeatureVisibility } from '../hooks/useFeatureVisibility';
 import ColdCallModal from '../components/ColdCallModal';
 import AddContactToRunningCampaignModal from '../components/AddContactToRunningCampaignModal';
 
@@ -157,6 +158,7 @@ function MoveModal({ campaigns, selectedCount, onMove, onClose, isMoving }) {
 
 function CampaignDetail() {
   const { id } = useParams();
+  const { isFeatureEnabled } = useFeatureVisibility();
   const [campaign, setCampaign] = useState(null);
   const [recipients, setRecipients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1206,7 +1208,7 @@ function CampaignDetail() {
       )}
 
       {/* Follow-up Sequence Builder */}
-      {recipients.length > 0 && (
+      {recipients.length > 0 && isFeatureEnabled('follow_ups') && (
         <SequenceBuilder
           campaignId={id}
           steps={steps}

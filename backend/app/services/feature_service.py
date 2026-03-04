@@ -22,6 +22,10 @@ FEATURES = {
         'display_name': 'Campaigns',
         'enabled_by_default': True,
     },
+    'follow_ups': {
+        'display_name': 'Follow-up Steps',
+        'enabled_by_default': True,
+    },
     'templates': {
         'display_name': 'Templates',
         'enabled_by_default': True,

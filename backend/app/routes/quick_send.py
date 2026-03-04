@@ -90,10 +90,17 @@ def generate_quick_email():
 
     claude = ClaudeService(api_key)
 
+    # Load business profile for workspace context
+    from app.models.business_profile import BusinessProfile
+    business_profile = BusinessProfile.query.filter_by(workspace_id=g.workspace_id).first()
+
     try:
         if template_id:
-            # Template-based generation
-            template = Template.query.get(template_id)
+            # Template-based generation (validate workspace ownership)
+            template = Template.query.filter(
+                Template.id == template_id,
+                db.or_(Template.workspace_id == g.workspace_id, Template.workspace_id.is_(None))
+            ).first()
             if not template:
                 return jsonify({'error': 'Template not found'}), 404
 
@@ -163,6 +170,7 @@ def generate_quick_email():
                 website_insights=website_insights,
                 learned_insights=learned_insights,
                 team_contacts=team_contacts,
+                business_profile=business_profile,
             )
             result['website_status'] = website_status
             result['spam_check'] = check_spam_score(
@@ -175,7 +183,8 @@ def generate_quick_email():
                 recipient=recipient,
                 context=context,
                 writing_style=writing_style_raw,
-                learned_insights=learned_insights
+                learned_insights=learned_insights,
+                business_profile=business_profile,
             )
             result['spam_check'] = check_spam_score(
                 result.get('subject', ''), result.get('body', '')

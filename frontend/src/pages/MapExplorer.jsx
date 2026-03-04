@@ -9,8 +9,11 @@ import {
   bulkAddToPipeline,
   getMapSources,
   getCampaigns,
+  createCampaign,
 } from '../api/client';
 import { BUSINESS_TYPE_GROUPS, RATING_OPTIONS } from '../constants/businessTypes';
+
+const MILES_TO_METERS = 1609.344;
 
 // Load the Google Maps JS API via a script tag
 let mapsLoadPromise = null;
@@ -55,7 +58,7 @@ function MapExplorer() {
   const typeDropdownRef = useRef(null);
   const [keywordSearch, setKeywordSearch] = useState('');
   const [searchMode, setSearchMode] = useState('type'); // 'type' or 'keyword'
-  const [radius, setRadius] = useState(5000);
+  const [radius, setRadius] = useState(5);
   const [minRating, setMinRating] = useState(0);
 
   // Selected place & info window
@@ -70,6 +73,9 @@ function MapExplorer() {
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
+  const [showNewCampaign, setShowNewCampaign] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
   const [pipelineMsg, setPipelineMsg] = useState(null); // {type, message}
 
   // Map refs
@@ -218,7 +224,7 @@ function MapExplorer() {
           query: keywordSearch.trim(),
           lat,
           lng,
-          radius,
+          radius: Math.round(radius * MILES_TO_METERS),
           min_rating: minRating,
           max_results: 20,
         });
@@ -226,7 +232,7 @@ function MapExplorer() {
         searchRes = await searchNearbyPlaces({
           lat,
           lng,
-          radius,
+          radius: Math.round(radius * MILES_TO_METERS),
           types: selectedTypes.length > 0 ? selectedTypes : undefined,
           min_rating: minRating,
           max_results: 20,
@@ -264,7 +270,7 @@ function MapExplorer() {
           query: activeKeyword.trim(),
           lat: center.lat,
           lng: center.lng,
-          radius: newRadius,
+          radius: Math.round(newRadius * MILES_TO_METERS),
           min_rating: newRating,
           max_results: 20,
         });
@@ -272,7 +278,7 @@ function MapExplorer() {
         searchRes = await searchNearbyPlaces({
           lat: center.lat,
           lng: center.lng,
-          radius: newRadius,
+          radius: Math.round(newRadius * MILES_TO_METERS),
           types: activeTypes.length > 0 ? activeTypes : undefined,
           min_rating: newRating,
           max_results: 20,
@@ -298,6 +304,8 @@ function MapExplorer() {
     setAddCampaignId('');
     setAddNotes(`Found via Map Explorer${place.rating ? ` - Rating: ${place.rating}/5` : ''}`);
     setAddResult(null);
+    setShowNewCampaign(false);
+    setNewCampaignName('');
   };
 
   const handleAddToOutreach = async () => {
@@ -720,13 +728,13 @@ function MapExplorer() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
           <label style={{ fontSize: '0.8rem', color: '#374151', fontWeight: 500 }}>
-            Radius: {radius >= 1000 ? `${(radius / 1000).toFixed(0)}km` : `${radius}m`}
+            Radius: {radius} mi
           </label>
           <input
             type="range"
-            min={1000}
-            max={50000}
-            step={1000}
+            min={1}
+            max={30}
+            step={1}
             value={radius}
             onChange={(e) => {
               const v = parseInt(e.target.value);
@@ -1091,7 +1099,15 @@ function MapExplorer() {
                 </label>
                 <select
                   value={addCampaignId}
-                  onChange={(e) => setAddCampaignId(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') {
+                      setShowNewCampaign(true);
+                      setAddCampaignId('');
+                    } else {
+                      setShowNewCampaign(false);
+                      setAddCampaignId(e.target.value);
+                    }
+                  }}
                   style={{
                     width: '100%',
                     padding: '0.5rem 0.75rem',
@@ -1108,7 +1124,71 @@ function MapExplorer() {
                       {c.name} ({c.status})
                     </option>
                   ))}
+                  <option value="__new__">+ Create new campaign</option>
                 </select>
+                {showNewCampaign && (
+                  <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="Campaign name"
+                      value={newCampaignName}
+                      onChange={(e) => setNewCampaignName(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem 0.75rem',
+                        border: '1px solid #D1D5DB',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.85rem',
+                        boxSizing: 'border-box',
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      disabled={!newCampaignName.trim() || creatingCampaign}
+                      onClick={async () => {
+                        setCreatingCampaign(true);
+                        try {
+                          const res = await createCampaign({ name: newCampaignName.trim() });
+                          const newCampaign = res.data;
+                          setCampaigns(prev => [newCampaign, ...prev]);
+                          setAddCampaignId(String(newCampaign.id));
+                          setShowNewCampaign(false);
+                          setNewCampaignName('');
+                        } catch (err) {
+                          setAddResult({ type: 'error', message: 'Failed to create campaign' });
+                        }
+                        setCreatingCampaign(false);
+                      }}
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        border: 'none',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.85rem',
+                        background: '#3B82F6',
+                        color: '#fff',
+                        cursor: !newCampaignName.trim() || creatingCampaign ? 'not-allowed' : 'pointer',
+                        opacity: !newCampaignName.trim() || creatingCampaign ? 0.5 : 1,
+                      }}
+                    >
+                      {creatingCampaign ? '...' : 'Create'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowNewCampaign(false); setNewCampaignName(''); }}
+                      style={{
+                        padding: '0.5rem 0.75rem',
+                        border: '1px solid #D1D5DB',
+                        borderRadius: '0.375rem',
+                        fontSize: '0.85rem',
+                        background: '#fff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
