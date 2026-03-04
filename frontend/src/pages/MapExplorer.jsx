@@ -727,8 +727,8 @@ function MapExplorer() {
           <input
             type="range"
             min={1}
-            max={30}
-            step={1}
+            max={200}
+            step={5}
             value={radius}
             onChange={(e) => {
               const v = parseInt(e.target.value);
