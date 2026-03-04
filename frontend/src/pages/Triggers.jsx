@@ -35,7 +35,12 @@ function Triggers() {
   const [outreachPreview, setOutreachPreview] = useState(null);
   const [filterType, setFilterType] = useState('');
 
-  useEffect(() => { loadAll(); }, [filterType]);
+  useEffect(() => {
+    loadAll();
+    const handleWsChange = () => loadAll();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [filterType]);
 
   const loadAll = async () => {
     setLoading(true);

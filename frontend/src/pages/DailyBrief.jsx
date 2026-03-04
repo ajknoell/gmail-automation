@@ -8,6 +8,9 @@ function DailyBrief() {
 
   useEffect(() => {
     loadBrief();
+    const handleWsChange = () => loadBrief();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   const loadBrief = async () => {

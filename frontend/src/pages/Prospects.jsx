@@ -25,8 +25,14 @@ function Prospects() {
   const [discoveryStats, setDiscoveryStats] = useState({});
 
   useEffect(() => {
-    getPipelineStats().then(res => setPipelineStats(res.data)).catch(() => {});
-    getDiscoveryStats().then(res => setDiscoveryStats(res.data)).catch(() => {});
+    const loadStats = () => {
+      getPipelineStats().then(res => setPipelineStats(res.data)).catch(() => {});
+      getDiscoveryStats().then(res => setDiscoveryStats(res.data)).catch(() => {});
+    };
+    loadStats();
+    const handleWsChange = () => loadStats();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   const findCount = discoveryStats.total || 0;
@@ -80,11 +86,17 @@ function ProspectFindTab({ onStatsChange }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    getPipelineLeads({ sort: 'created_at', order: 'desc' })
-      .then(res => setRecentLeads((res.data.leads || []).slice(0, 10)))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const loadRecent = () => {
+      setLoading(true);
+      getPipelineLeads({ sort: 'created_at', order: 'desc' })
+        .then(res => setRecentLeads((res.data.leads || []).slice(0, 10)))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+    loadRecent();
+    const handleWsChange = () => loadRecent();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
   }, []);
 
   return (
@@ -196,7 +208,12 @@ function ProspectReviewTab({ onStatsChange }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const filteredLeads = leads.filter(lead => {
     if (!search) return true;
@@ -451,7 +468,12 @@ function ProspectReadyTab({ onStatsChange }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+    const handleWsChange = () => loadData();
+    window.addEventListener('workspace-changed', handleWsChange);
+    return () => window.removeEventListener('workspace-changed', handleWsChange);
+  }, [loadData]);
 
   const handleQuickSend = (lead) => {
     const emails = lead.emails_found || [];
