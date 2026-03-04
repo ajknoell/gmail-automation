@@ -459,6 +459,11 @@ def _get_learned_insights():
             pass
     return None
 
+def _get_business_profile():
+    """Helper to get the workspace's business profile."""
+    from app.models.business_profile import BusinessProfile
+    return BusinessProfile.query.filter_by(workspace_id=g.workspace_id).first()
+
 def _get_learned_website_insights():
     """Helper to get learned website analysis insights from workspace settings."""
     raw = WorkspaceSettings.get(g.workspace_id, 'learned_website_insights')
@@ -507,6 +512,7 @@ def regenerate_recipient_preview(id, recipient_id):
     claude = ClaudeService(api_key)
     writing_style = _get_writing_style()
     learned_insights = _get_learned_insights()
+    business_profile = _get_business_profile()
 
     try:
         # Fetch and analyze recipient's website
@@ -572,6 +578,7 @@ def regenerate_recipient_preview(id, recipient_id):
             team_contacts=team_contacts,
             competitors=competitors,
             competitor_location=competitor_location,
+            business_profile=business_profile,
         )
         recipient.personalized_subject = result.get('subject', campaign.template.subject)
         recipient.personalized_body = result.get('body', campaign.template.body)
@@ -1537,6 +1544,7 @@ def generate_step_preview(id, step_id):
     claude = ClaudeService(api_key)
     writing_style = _get_writing_style()
     learned_insights = _get_learned_insights()
+    business_profile = _get_business_profile()
 
     # Web search service if needed
     web_search = None
@@ -1631,6 +1639,7 @@ def generate_step_preview(id, step_id):
                         writing_style=writing_style,
                         campaign_context=campaign.campaign_context,
                         learned_insights=learned_insights,
+                        business_profile=business_profile,
                     )
                     sr.personalized_subject = result.get('subject', template.subject)
                     sr.personalized_body = result.get('body', template.body)
@@ -1732,6 +1741,7 @@ def regenerate_step_recipient(id, step_id, sr_id):
     claude = ClaudeService(api_key)
     writing_style = _get_writing_style()
     learned_insights = _get_learned_insights()
+    business_profile = _get_business_profile()
 
     try:
         if step.step_type == 'ai_followup':
@@ -1789,6 +1799,7 @@ def regenerate_step_recipient(id, step_id, sr_id):
                 writing_style=writing_style,
                 campaign_context=campaign.campaign_context,
                 learned_insights=learned_insights,
+                business_profile=business_profile,
             )
             sr.personalized_subject = result.get('subject', template.subject)
             sr.personalized_body = result.get('body', template.body)
