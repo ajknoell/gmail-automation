@@ -58,7 +58,7 @@ Veloro combines prospect discovery, AI email personalization (via Claude), multi
 ```
                     ┌─────────────────┐
                     │   React SPA     │
-                    │   (Vite, :5173) │
+                    │   (Vite, :5174) │
                     └────────┬────────┘
                              │ HTTP / SSE
                     ┌────────▼────────┐
@@ -690,7 +690,7 @@ cd frontend
 npm install
 npm run dev
 ```
-Frontend runs at `http://localhost:5173`
+Frontend runs at `http://localhost:5174`
 
 ### 3. Gmail API Configuration
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -729,11 +729,11 @@ AI model improvements make the platform *better*, not obsolete. Claude is an ing
 
 ## Roadmap
 
-### Planned: Add Contacts to Running Campaigns
-Add new contacts to campaigns mid-execution via directory selection, manual entry, or CSV bulk import. New contacts start at step 1 with proper enrollment timing. See `PLAN.md` for full implementation spec.
+### Implemented: Add Contacts to Running Campaigns
+Add new contacts to campaigns mid-execution via directory selection, manual entry, or CSV bulk import. New contacts start at step 1 with proper enrollment timing.
 
-### Planned: Workspace Feature Visibility
-Per-workspace feature toggling so different workspaces can show/hide features (e.g., hide Listings for a business outreach workspace). Admin-only controls with data preservation. See `WORKSPACE_FEATURE_VISIBILITY_PLAN.md` for full spec.
+### Implemented: Workspace Feature Visibility
+Per-workspace feature toggling so different workspaces can show/hide features (e.g., hide Listings for a business outreach workspace). Admin-only controls with data preservation.
 
 ### Future Opportunities
 - Conditional branching (if opened but didn't reply, send variant B)
