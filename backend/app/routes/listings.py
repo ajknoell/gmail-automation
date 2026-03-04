@@ -1,6 +1,10 @@
+import logging
+
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime
 from app import db
+
+logger = logging.getLogger(__name__)
 from app.models.monitored_site import MonitoredSite
 from app.models.listing import Listing
 from app.models.deal_criteria import DealCriteria
@@ -40,6 +44,147 @@ def create_site():
     db.session.commit()
 
     return jsonify(site.to_dict()), 201
+
+
+@listings_bp.route('/sites/upload', methods=['POST'])
+def upload_sites() -> tuple:
+    """Upload CSV/Excel file with broker sites to monitor.
+
+    Accepts multipart/form-data with:
+      - file: CSV or Excel file with broker URLs
+      - mapping: optional JSON string with field mapping overrides
+
+    Creates MonitoredSite records and kicks off background scraping.
+    """
+    import json as _json
+    from app.services.csv_parser import parse_file, detect_site_field_mapping
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'No file selected'}), 400
+
+    try:
+        content = file.read()
+        headers, rows = parse_file(content, file.filename)
+
+        # Auto-detect column mapping
+        mapping = detect_site_field_mapping(headers)
+
+        # Allow client to override auto-detected mapping
+        user_mapping = request.form.get('mapping')
+        if user_mapping:
+            mapping.update(_json.loads(user_mapping))
+
+        # URL column is required
+        if 'url' not in mapping:
+            return jsonify({
+                'error': (
+                    f'Could not detect a URL column. '
+                    f'Found columns: {", ".join(headers)}. '
+                    f'Please ensure your file has a column named "url", "website", or "link".'
+                ),
+                'headers': headers,
+                'mapping': mapping,
+            }), 400
+
+        if not rows:
+            return jsonify({'error': 'File contains no data rows'}), 400
+
+        # Build set of existing URLs for duplicate detection
+        existing_urls = {
+            s.url.lower().strip().rstrip('/')
+            for s in MonitoredSite.query.filter_by(workspace_id=g.workspace_id).all()
+        }
+
+        created = 0
+        skipped_dup = 0
+        skipped_invalid = 0
+        new_sites = []
+
+        for row in rows:
+            url = row.get(mapping.get('url', ''), '').strip()
+            if not url:
+                skipped_invalid += 1
+                continue
+
+            # Auto-prepend https:// for bare domains
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+
+            # Duplicate check
+            normalized = url.lower().strip().rstrip('/')
+            if normalized in existing_urls:
+                skipped_dup += 1
+                continue
+
+            name = row.get(mapping.get('name', ''), '').strip() or url
+            scraper_type = row.get(mapping.get('scraper_type', ''), '').strip() or 'generic'
+
+            interval_str = row.get(mapping.get('check_interval_hours', ''), '').strip()
+            try:
+                check_interval = int(float(interval_str)) if interval_str else 24
+            except (ValueError, TypeError):
+                check_interval = 24
+
+            site = MonitoredSite(
+                workspace_id=g.workspace_id,
+                name=name,
+                url=url,
+                scraper_type=scraper_type if scraper_type in ('auto', 'generic', 'bizbuysell') else 'generic',
+                check_interval_hours=max(1, check_interval),
+                is_active=True,
+            )
+            db.session.add(site)
+            existing_urls.add(normalized)
+            new_sites.append(site)
+            created += 1
+
+        db.session.commit()
+
+        # Scrape new sites in a background thread to avoid request timeout
+        if new_sites:
+            import threading
+            from flask import current_app
+
+            site_ids = [s.id for s in new_sites]
+            app = current_app._get_current_object()
+
+            def _scrape_in_background(app_ctx: object, ids: list[int]) -> None:
+                """Run scraping inside an app context."""
+                with app_ctx.app_context():
+                    from app.services.listing_scraper import ListingMonitor
+                    for sid in ids:
+                        site = MonitoredSite.query.get(sid)
+                        if site:
+                            try:
+                                ListingMonitor.check_site(site)
+                            except Exception as e:
+                                logger.warning(f"Background scrape failed for site {sid}: {e}")
+
+            threading.Thread(
+                target=_scrape_in_background,
+                args=(app, site_ids),
+                daemon=True,
+            ).start()
+
+        return jsonify({
+            'success': True,
+            'created': created,
+            'skipped_duplicate': skipped_dup,
+            'skipped_invalid': skipped_invalid,
+            'total_processed': len(rows),
+            'scraping': len(new_sites) > 0,
+            'mapping': mapping,
+        }), 201
+
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to import file: {str(e)}'}), 500
 
 
 @listings_bp.route('/sites/<int:site_id>', methods=['PUT'])

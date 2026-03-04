@@ -223,6 +223,13 @@ export const deleteAttachment = (id) => api.delete(`/api/attachments/${id}`);
 // Listing Monitor
 export const getMonitoredSites = () => api.get('/api/listings/sites');
 export const createMonitoredSite = (data) => api.post('/api/listings/sites', data);
+export const uploadBrokerSites = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api.post('/api/listings/sites/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
 export const updateMonitoredSite = (id, data) => api.put(`/api/listings/sites/${id}`, data);
 export const deleteMonitoredSite = (id) => api.delete(`/api/listings/sites/${id}`);
 export const checkSiteNow = (id) => api.post(`/api/listings/sites/${id}/check`);

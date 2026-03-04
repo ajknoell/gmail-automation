@@ -88,6 +88,52 @@ def detect_field_mapping(headers: List[str]) -> Dict[str, str]:
 
     return mapping
 
+
+def detect_site_field_mapping(headers: List[str]) -> Dict[str, str]:
+    """Auto-detect column mappings for broker site CSV uploads.
+
+    Maps CSV headers to MonitoredSite fields: url, name, scraper_type, check_interval_hours.
+    """
+    mapping = {}
+
+    url_patterns = ['url', 'website', 'link', 'site_url', 'listing_url',
+                    'listings_url', 'site', 'homepage', 'webpage', 'domain',
+                    'broker_url', 'broker_website']
+    name_patterns = ['name', 'site_name', 'broker', 'broker_name',
+                     'company', 'firm', 'brokerage']
+    scraper_patterns = ['scraper', 'scraper_type', 'parser']
+    interval_patterns = ['interval', 'check_interval', 'check_interval_hours',
+                         'frequency', 'hours']
+    # Columns that indicate URL data — used to avoid misidentifying URL columns as name
+    url_indicators = ['url', 'website', 'link', 'domain', 'homepage', 'webpage']
+
+    for header in headers:
+        lower = header.lower().strip()
+        normalized = lower.replace('-', '_').replace(' ', '_')
+
+        if 'url' not in mapping:
+            if any(p == lower or p == normalized for p in url_patterns):
+                mapping['url'] = header
+            elif 'url' in lower or 'website' in lower or 'link' in lower:
+                mapping['url'] = header
+
+        if 'name' not in mapping:
+            if any(p == lower or p == normalized for p in name_patterns):
+                # Skip columns that look like URL fields (e.g. website_url)
+                if not any(ind in lower for ind in url_indicators):
+                    mapping['name'] = header
+
+        if 'scraper_type' not in mapping:
+            if any(p == lower or p == normalized for p in scraper_patterns):
+                mapping['scraper_type'] = header
+
+        if 'check_interval_hours' not in mapping:
+            if any(p == lower or p == normalized for p in interval_patterns):
+                mapping['check_interval_hours'] = header
+
+    return mapping
+
+
 US_STATES = {
     'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
     'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
