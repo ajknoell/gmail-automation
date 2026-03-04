@@ -3,30 +3,14 @@ import {
   getTriggers, createTriggerOutreach, dismissTrigger,
   getTriggerStats, triggerCheckNow,
 } from '../api/client';
-
-const TRIGGER_LABELS = {
-  ssl_expiry: 'SSL Expiring',
-  content_change: 'Content Changed',
-  review_change: 'Reviews Changed',
-  downtime: 'Site Down',
-  copyright_outdated: 'Copyright Outdated',
-};
-
-const TRIGGER_ICONS = {
-  ssl_expiry: '🔒',
-  content_change: '📝',
-  review_change: '⭐',
-  downtime: '🔴',
-  copyright_outdated: '📅',
-};
-
-const SEVERITY_COLORS = {
-  critical: '#EF4444',
-  important: '#F59E0B',
-  info: '#6B7280',
-};
+import { useToast } from '../components/Toast';
+import {
+  TRIGGER_LABELS, TRIGGER_ICONS, SEVERITY_COLORS,
+  getHumanSummary, timeAgo,
+} from '../utils/intelligence';
 
 function Triggers() {
+  const showToast = useToast();
   const [triggers, setTriggers] = useState([]);
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
@@ -63,10 +47,10 @@ function Triggers() {
     setChecking(true);
     try {
       await triggerCheckNow();
-      alert('Trigger check started in background.');
+      showToast('Scanning contact websites \u2014 this may take a minute.', 'info');
       setTimeout(loadAll, 5000);
     } catch (err) {
-      alert('Check failed: ' + (err.response?.data?.error || err.message));
+      showToast('Check failed: ' + (err.response?.data?.error || err.message), 'error');
     }
     setChecking(false);
   };
@@ -78,7 +62,7 @@ function Triggers() {
       setOutreachPreview(res.data);
       loadAll();
     } catch (err) {
-      alert('Generation failed: ' + (err.response?.data?.error || err.message));
+      showToast('Generation failed: ' + (err.response?.data?.error || err.message), 'error');
     }
     setGeneratingId(null);
   };
@@ -88,7 +72,7 @@ function Triggers() {
       await dismissTrigger(triggerId);
       await loadAll();
     } catch (err) {
-      alert('Failed to dismiss trigger: ' + (err.response?.data?.error || err.message));
+      showToast('Failed to dismiss: ' + (err.response?.data?.error || err.message), 'error');
     }
   };
 
@@ -100,6 +84,10 @@ function Triggers() {
           {checking ? 'Checking...' : 'Check Now'}
         </button>
       </div>
+
+      <p style={{ color: 'var(--text-light)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+        Website issues detected on your contacts' sites &mdash; each one is a natural reason to reach out.
+      </p>
 
       {/* Stats */}
       <div className="stats-row">
@@ -132,10 +120,29 @@ function Triggers() {
       {loading ? (
         <p style={{ color: 'var(--text-light)' }}>Loading...</p>
       ) : triggers.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem', color: 'var(--text-light)' }}>
-          <p style={{ fontWeight: 500, marginBottom: '0.25rem' }}>No active triggers detected.</p>
-          <p style={{ fontSize: '0.875rem' }}>
-            Triggers are detected when contact websites have changes like SSL expiry, downtime, or outdated content.
+        <div className="card" style={{ padding: '2.5rem 1.5rem', color: 'var(--text-light)' }}>
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{'\u{1F310}'}</div>
+            <p style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text)' }}>Website Monitoring</p>
+            <p style={{ fontSize: '0.875rem', maxWidth: '420px', margin: '0 auto', lineHeight: 1.5 }}>
+              Veloro automatically scans your contacts' websites for issues that create natural outreach opportunities.
+            </p>
+          </div>
+          <div style={{ maxWidth: '380px', margin: '0 auto', fontSize: '0.875rem' }}>
+            {[
+              { icon: '\u{1F512}', text: 'SSL certificates about to expire' },
+              { icon: '\u{1F534}', text: 'Website downtime or errors' },
+              { icon: '\u{1F4C5}', text: 'Outdated copyright years' },
+              { icon: '\u{1F4DD}', text: 'Significant content changes' },
+            ].map(item => (
+              <div key={item.text} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.375rem' }}>
+                <span>{item.icon}</span>
+                <span>{item.text}</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ textAlign: 'center', fontSize: '0.8125rem', marginTop: '1.25rem' }}>
+            Add contacts with websites, then click <strong>Check Now</strong> to start scanning.
           </p>
         </div>
       ) : (
@@ -159,14 +166,13 @@ function Triggers() {
                     <strong>{t.contact_name || t.contact_email}</strong>
                     {t.contact_company && <span style={{ color: 'var(--text-light)' }}> - {t.contact_company}</span>}
                   </div>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--text-light)' }}>
-                    Detected: {t.detected_at ? new Date(t.detected_at).toLocaleDateString() : '-'}
+                  {/* Human-readable summary */}
+                  <div style={{ fontSize: '0.8125rem', color: '#374151', marginTop: '0.25rem', lineHeight: 1.5 }}>
+                    {getHumanSummary(t)}
                   </div>
-                  {t.current_value && (
-                    <div style={{ fontSize: '0.8125rem', color: '#374151', marginTop: '0.25rem' }}>
-                      {typeof t.current_value === 'object' ? JSON.stringify(t.current_value) : t.current_value}
-                    </div>
-                  )}
+                  <div style={{ fontSize: '0.75rem', color: '#9CA3AF', marginTop: '0.25rem' }}>
+                    {timeAgo(t.detected_at || t.created_at)} &middot; via Website Monitor
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                   {!t.actioned && (
