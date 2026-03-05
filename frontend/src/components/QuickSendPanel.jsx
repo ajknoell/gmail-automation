@@ -38,6 +38,9 @@ function QuickSendPanel({ open, onClose, prefill }) {
         company: prefill.company || prev.company,
         website: prefill.website || prev.website,
       }));
+      setGeneratedEmail(null);
+      setContext('');
+      setCustomFields({});
     }
   }, [prefill, open]);
 

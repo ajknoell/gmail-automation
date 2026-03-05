@@ -306,6 +306,25 @@ function ProspectReviewTab({ onStatsChange }) {
     });
   };
 
+  const handleDeleteOne = (lead) => {
+    setConfirmState({
+      title: `Remove ${lead.name}?`,
+      message: 'This lead will be permanently deleted.',
+      confirmLabel: 'Delete', confirmClass: 'btn-danger',
+      onConfirm: async () => {
+        setConfirmState(null);
+        try {
+          await deletePipelineLead(lead.id);
+          showToast('Lead removed', 'info');
+          await loadData();
+          onStatsChange();
+        } catch {
+          showToast('Failed to remove lead', 'error');
+        }
+      },
+    });
+  };
+
   if (loading) return <div className="card"><p className="text-light" style={{ padding: '2rem', textAlign: 'center' }}>Loading leads...</p></div>;
 
   return (
@@ -394,6 +413,7 @@ function ProspectReviewTab({ onStatsChange }) {
                         {['enriched', 'qualified'].includes(lead.status) && (
                           <button className="btn btn-success btn-sm" onClick={() => openApproveModal(lead)}>Approve</button>
                         )}
+                        <button className="btn btn-danger btn-sm" onClick={() => handleDeleteOne(lead)}>Remove</button>
                       </div>
                     </td>
                   </tr>
@@ -505,6 +525,7 @@ function ProspectReadyTab({ onStatsChange }) {
   const [leads, setLeads] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [confirmState, setConfirmState] = useState(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -541,6 +562,25 @@ function ProspectReadyTab({ onStatsChange }) {
         website: lead.website || '',
       }
     }));
+  };
+
+  const handleDelete = (lead) => {
+    setConfirmState({
+      title: `Remove ${lead.name}?`,
+      message: 'This lead will be permanently deleted.',
+      confirmLabel: 'Delete', confirmClass: 'btn-danger',
+      onConfirm: async () => {
+        setConfirmState(null);
+        try {
+          await deletePipelineLead(lead.id);
+          showToast('Lead removed', 'info');
+          await loadData();
+          if (onStatsChange) onStatsChange();
+        } catch {
+          showToast('Failed to remove lead', 'error');
+        }
+      },
+    });
   };
 
   if (loading) return <div className="card"><p className="text-light" style={{ padding: '2rem', textAlign: 'center' }}>Loading...</p></div>;
@@ -596,12 +636,15 @@ function ProspectReadyTab({ onStatsChange }) {
                     </div>
                   )}
 
-                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                  <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     {emails.length > 0 && (
                       <button className="btn btn-primary btn-sm" onClick={() => handleQuickSend(lead)}>
                         Quick Send
                       </button>
                     )}
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(lead)}>
+                      Remove
+                    </button>
                     <span className={`badge badge-${lead.status}`} style={{ alignSelf: 'center' }}>
                       {STATUS_LABELS[lead.status]}
                     </span>
@@ -612,6 +655,8 @@ function ProspectReadyTab({ onStatsChange }) {
           </div>
         </>
       )}
+
+      <ConfirmDialog open={!!confirmState} {...confirmState} onCancel={() => setConfirmState(null)} />
     </div>
   );
 }
